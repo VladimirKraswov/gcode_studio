@@ -37,18 +37,9 @@ import type { GCodeStudioProject } from "./types/project";
 
 const UNDO_HISTORY_LIMIT = 10;
 
-type HistoryProjectState = Pick<
+type HistoryCadState = Pick<
   GCodeStudioProject,
-  | "fileName"
-  | "source"
-  | "stock"
-  | "showMaterialRemoval"
-  | "placementMode"
-  | "detailLevel"
-  | "activeTab"
-  | "editDocument"
-  | "selection"
-  | "cadView"
+  "editDocument" | "selection" | "cadView"
 >;
 
 const DEFAULT_STOCK: StockDimensions = {
@@ -79,19 +70,19 @@ const TAB_META: Record<
 };
 
 export default function App() {
+  const [source, setSource] = useState(DEMO_GCODE);
+  const [fileName, setFileName] = useState("demo.gcode");
+  const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
+  const [showMaterialRemoval, setShowMaterialRemoval] = useState(true);
+  const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
+  const [detailLevel, setDetailLevel] = useState(5);
+  const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
 
-  const initialProjectState = useMemo<HistoryProjectState>(
+  const initialCadState = useMemo<HistoryCadState>(
     () => ({
-      source: DEMO_GCODE,
       editDocument: createEmptySketchDocument(),
-      fileName: "demo.gcode",
-      stock: DEFAULT_STOCK,
-      showMaterialRemoval: true,
-      placementMode: "origin",
-      detailLevel: 5,
-      activeTab: "view",
       selection: createSelection(),
       cadView: createDefaultView(),
     }),
@@ -99,27 +90,16 @@ export default function App() {
   );
 
   const {
-    state: historyState,
-    setState: setHistoryState,
+    state: cadHistoryState,
+    setState: setCadHistoryState,
     checkpoint: checkpointHistory,
     undo,
     redo,
     canUndo,
     canRedo,
-  } = useUndoRedo<HistoryProjectState>(initialProjectState, UNDO_HISTORY_LIMIT);
+  } = useUndoRedo<HistoryCadState>(initialCadState, UNDO_HISTORY_LIMIT);
 
-  const {
-    source,
-    editDocument,
-    fileName,
-    stock,
-    showMaterialRemoval,
-    placementMode,
-    detailLevel,
-    activeTab,
-    selection,
-    cadView,
-  } = historyState;
+  const { editDocument, selection, cadView } = cadHistoryState;
 
   function resolveUpdate<T>(update: SetStateAction<T>, prev: T): T {
     return typeof update === "function"
@@ -127,12 +107,12 @@ export default function App() {
       : update;
   }
 
-  function updateField<K extends keyof HistoryProjectState>(
+  function updateCadField<K extends keyof HistoryCadState>(
     key: K,
-    update: SetStateAction<HistoryProjectState[K]>,
+    update: SetStateAction<HistoryCadState[K]>,
     options?: { record?: boolean },
   ) {
-    setHistoryState(
+    setCadHistoryState(
       (prev) => ({
         ...prev,
         [key]: resolveUpdate(update, prev[key]),
@@ -141,44 +121,24 @@ export default function App() {
     );
   }
 
-  const setSource: Dispatch<SetStateAction<string>> = (update) =>
-    updateField("source", update);
-
   const setEditDocument: Dispatch<SetStateAction<SketchDocument>> = (update) =>
-    updateField("editDocument", update);
+    updateCadField("editDocument", update);
 
   const setEditDocumentSilently: Dispatch<SetStateAction<SketchDocument>> = (
     update,
-  ) => updateField("editDocument", update, { record: false });
+  ) => updateCadField("editDocument", update, { record: false });
 
-  const setFileName: Dispatch<SetStateAction<string>> = (update) =>
-    updateField("fileName", update);
-
-  const setStock: Dispatch<SetStateAction<StockDimensions>> = (update) =>
-    updateField("stock", update);
-
-  const setShowMaterialRemoval: Dispatch<SetStateAction<boolean>> = (update) =>
-    updateField("showMaterialRemoval", update);
-
-  const setPlacementMode: Dispatch<SetStateAction<PlacementMode>> = (update) =>
-    updateField("placementMode", update);
-
-  const setDetailLevel: Dispatch<SetStateAction<number>> = (update) =>
-    updateField("detailLevel", update);
-
-  const setActiveTab: Dispatch<SetStateAction<MainTab>> = (update) =>
-    updateField("activeTab", update);
-
-  const setSelection = (next: SelectionState) => updateField("selection", next);
+  const setSelection = (next: SelectionState) =>
+    updateCadField("selection", next);
 
   const setSelectionSilently = (next: SelectionState) =>
-    updateField("selection", next, { record: false });
+    updateCadField("selection", next, { record: false });
 
   const setCadView: Dispatch<SetStateAction<ViewTransform>> = (update) =>
-    updateField("cadView", update);
+    updateCadField("cadView", update);
 
   const setCadViewSilently: Dispatch<SetStateAction<ViewTransform>> = (update) =>
-    updateField("cadView", update, { record: false });
+    updateCadField("cadView", update, { record: false });
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -222,12 +182,9 @@ export default function App() {
   }, [undo, redo]);
 
   function applyGeneratedGCodeFromEdit(gcode: string) {
-    setHistoryState((prev) => ({
-      ...prev,
-      source: gcode,
-      fileName: "edit-generated.gcode",
-      activeTab: "gcode",
-    }));
+    setSource(gcode);
+    setFileName("edit-generated.gcode");
+    setActiveTab("gcode");
     resetPlayback();
     setCameraResetKey((value) => value + 1);
   }
@@ -260,14 +217,15 @@ export default function App() {
       const text = await file.text();
       const project = parseProjectFile(text);
 
-      setHistoryState({
-        fileName: project.fileName || "project.gcode",
-        source: project.source || "",
-        stock: project.stock,
-        showMaterialRemoval: project.showMaterialRemoval,
-        placementMode: project.placementMode,
-        detailLevel: project.detailLevel,
-        activeTab: project.activeTab,
+      setFileName(project.fileName || "project.gcode");
+      setSource(project.source || "");
+      setStock(project.stock);
+      setShowMaterialRemoval(project.showMaterialRemoval);
+      setPlacementMode(project.placementMode);
+      setDetailLevel(project.detailLevel);
+      setActiveTab(project.activeTab);
+
+      setCadHistoryState({
         editDocument: project.editDocument,
         selection: project.selection,
         cadView: project.cadView,
@@ -288,21 +246,15 @@ export default function App() {
     if (!file) return;
 
     const text = await file.text();
-    setHistoryState((prev) => ({
-      ...prev,
-      source: text || "",
-      fileName: file.name || "loaded.gcode",
-    }));
+    setSource(text || "");
+    setFileName(file.name || "loaded.gcode");
     resetPlayback();
     setCameraResetKey((value) => value + 1);
   }
 
   function loadDemo() {
-    setHistoryState((prev) => ({
-      ...prev,
-      source: DEMO_GCODE,
-      fileName: "demo.gcode",
-    }));
+    setSource(DEMO_GCODE);
+    setFileName("demo.gcode");
     resetPlayback();
     setCameraResetKey((value) => value + 1);
   }

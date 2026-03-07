@@ -2,7 +2,10 @@ import { cadToScreenPoint } from "../../../utils/coordinates";
 import type { ViewTransform } from "../model/view";
 import type { SketchPolylinePoint } from "../model/types";
 import type { DraftShape } from "../geometry/draftGeometry";
-import { getRectangleFromDraft, getCircleFromDraft } from "../geometry/draftGeometry";
+import {
+  getCircleFromDraft,
+  getRectangleFromDraft,
+} from "../geometry/draftGeometry";
 
 type DraftOverlayProps = {
   draft: DraftShape;
@@ -11,7 +14,12 @@ type DraftOverlayProps = {
   view: ViewTransform;
 };
 
-export function DraftOverlay({ draft, polylineDraft, documentHeight, view }: DraftOverlayProps) {
+export function DraftOverlay({
+  draft,
+  polylineDraft,
+  documentHeight,
+  view,
+}: DraftOverlayProps) {
   return (
     <>
       {polylineDraft.length > 1 && (
@@ -33,7 +41,12 @@ export function DraftOverlay({ draft, polylineDraft, documentHeight, view }: Dra
 
       {draft?.type === "rectangle" && (() => {
         const rect = getRectangleFromDraft(draft);
-        const p = cadToScreenPoint({ x: rect.x, y: rect.y + rect.height }, documentHeight, view);
+        const p = cadToScreenPoint(
+          { x: rect.x, y: rect.y + rect.height },
+          documentHeight,
+          view,
+        );
+
         return (
           <rect
             x={p.x}
@@ -43,27 +56,32 @@ export function DraftOverlay({ draft, polylineDraft, documentHeight, view }: Dra
             fill="rgba(37,99,235,0.12)"
             stroke="#2563eb"
             strokeDasharray="6 4"
+            strokeWidth={1.5}
             rx={8}
           />
         );
       })()}
 
-      {draft?.type === "rectangle" && (() => {
-        const rect = getRectangleFromDraft(draft);
-        const p = cadToScreenPoint({ x: rect.x, y: rect.y + rect.height }, documentHeight, view);
+      {draft?.type === "circle" && (() => {
+        const circle = getCircleFromDraft(draft);
+        const p = cadToScreenPoint(
+          { x: circle.cx, y: circle.cy },
+          documentHeight,
+          view,
+        );
+
         return (
-          <rect
-            x={p.x}
-            y={p.y}
-            width={rect.width * view.scale}
-            height={rect.height * view.scale}
+          <circle
+            cx={p.x}
+            cy={p.y}
+            r={circle.radius * view.scale}
             fill="rgba(37,99,235,0.12)"
             stroke="#2563eb"
             strokeDasharray="6 4"
+            strokeWidth={1.5}
           />
         );
       })()}
     </>
   );
 }
-
