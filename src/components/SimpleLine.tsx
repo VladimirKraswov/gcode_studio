@@ -21,13 +21,26 @@ export function SimpleLine({
       toScenePoint(start),
       toScenePoint(end),
     ]);
-  }, [end, start]);
+  }, [start, end]);
+
+  const material = useMemo(() => {
+    return new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+    });
+  }, [color, opacity]);
+
+  const line = useMemo(() => {
+    return new THREE.Line(geometry, material);
+  }, [geometry, material]);
 
   useEffect(() => {
-    return () => geometry.dispose();
-  }, [geometry]);
+    return () => {
+      geometry.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
 
-  return (
-    <primitive object={new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity }))} />
-  );
+  return <primitive object={line} />;
 }

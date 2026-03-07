@@ -61,9 +61,9 @@ export function PathScene({
     [placement],
   );
 
-  const cornerScene = useMemo(
-    () => toScenePoint({ x: placement.left, y: placement.bottom, z: 0 }),
-    [placement],
+  const machineZeroScene = useMemo(
+    () => toScenePoint({ x: 0, y: 0, z: 0 }),
+    [],
   );
 
   const axesHelper = useMemo(() => {
@@ -164,7 +164,7 @@ export function PathScene({
 
   return (
     <Canvas
-      camera={{ position: [-155.74, 311.41, -200.47], fov: 50 }}
+      camera={{ position: [0, 300, 0], fov: 50 }}
       shadows={{ type: THREE.PCFShadowMap }}
     >
       <color attach="background" args={["#f8fafc"]} />
@@ -255,18 +255,23 @@ export function PathScene({
         cutting={currentState.position.z <= 0}
         toScenePoint={toScenePoint}
       />
-
-      <OrbitControls
-        ref={controlsRef}
-        key={cameraResetKey}
-        makeDefault
-        target={[cornerScene.x, cornerScene.y, cornerScene.z]}
-        enableDamping
-        dampingFactor={0.08}
-        screenSpacePanning
-        minDistance={10}
-        maxDistance={1000}
-      />
+<OrbitControls
+  ref={controlsRef}
+  key={cameraResetKey}
+  makeDefault
+  target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
+  enableDamping
+  dampingFactor={0.08}
+  screenSpacePanning
+  minDistance={10}
+  maxDistance={3000}
+  enableRotate
+  mouseButtons={{
+    LEFT: THREE.MOUSE.PAN,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN,
+  }}
+/>
 
       <CameraDebug controlsRef={controlsRef} onUpdate={onCameraUpdate} />
     </Canvas>

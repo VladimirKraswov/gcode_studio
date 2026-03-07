@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T10:42:33.143Z
+generated: 2026-03-07T11:46:52.242Z
 
 
 
@@ -31,6 +31,25 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+path: /.vite/deps/_metadata.json
+----------------------------------------
+{
+  "hash": "d4825b9f",
+  "configHash": "e8848eef",
+  "lockfileHash": "e3b0c442",
+  "browserHash": "dcbc8999",
+  "optimized": {},
+  "chunks": {}
+}
+
+
+path: /.vite/deps/package.json
+----------------------------------------
+{
+  "type": "module"
+}
 
 
 path: /.vscode/c_cpp_properties.json
@@ -402,197 +421,179 @@ path: /package.json
 
 path: /src/App.tsx
 ----------------------------------------
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { fmt, segmentLength } from "./utils";
-import * as THREE from "three";
+import { useState } from "react";
+import type { ChangeEvent } from "react";
+import type { CameraInfo, PlacementMode, StockDimensions } from "./types/gcode";
+import { DEMO_GCODE } from "./constants/demo";
+import { GCodeEditorTab } from "./components/GCodeEditorTab";
 import { PathScene } from "./components/PathScene";
 import { RightInfoPanel } from "./components/RightInfoPanel";
-import { GCodeEditorTab } from "./components/GCodeEditorTab";
-import type { PlacementMode } from "./utils";
-import { DEMO_GCODE } from "./constants/demo";
+import { useCurrentState } from "./hooks/useCurrentState";
+import { useGCodeWorker } from "./hooks/useGCodeWorker";
+import { usePlayback } from "./hooks/usePlayback";
+
+const DEFAULT_STOCK: StockDimensions = {
+  width: 300,
+  height: 180,
+  thickness: 3,
+};
 
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
   const [fileName, setFileName] = useState("demo.gcode");
-  const [progress, setProgress] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
   const [cameraResetKey, setCameraResetKey] = useState(0);
-  const [stock, setStock] = useState({ width: 300, height: 180, thickness: 3 });
+  const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
   const [showMaterialRemoval, setShowMaterialRemoval] = useState(true);
-  const [parsed, setParsed] = useState<any>(null);
-  const [isParsing, setIsParsing] = useState(false);
-  const workerRef = useRef<Worker | null>(null);
   const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
-  const [detailLevel, setDetailLevel] = useState<number>(5);
-  const [cameraInfo, setCameraInfo] = useState<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const [detailLevel, setDetailLevel] = useState(5);
+  const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
-  useEffect(() => {
-    workerRef.current = new Worker(new URL("./workers/gcodeParser.worker.ts", import.meta.url));
-    workerRef.current.onmessage = (e) => {
-      setParsed(e.data);
-      setIsParsing(false);
-    };
-    return () => workerRef.current?.terminate();
-  }, []);
+  const { parsed, isParsing } = useGCodeWorker(source);
+  const {
+    progress,
+    setProgress,
+    playing,
+    setPlaying,
+    speed,
+    setSpeed,
+    resetPlayback,
+  } = usePlayback();
 
-  useEffect(() => {
-    if (!source) return;
-    setIsParsing(true);
-    workerRef.current?.postMessage({ gcodeText: source });
-  }, [source]);
+  const currentState = useCurrentState(parsed, progress);
 
-  const metrics = useMemo(() => {
-    if (!parsed) return { cumulative: [], totalLength: 0 };
-    let totalLength = 0;
-    const cumulative = parsed.segments.map((seg: any) => {
-      const len = segmentLength(seg);
-      totalLength += len;
-      return { len, total: totalLength };
-    });
-    return { cumulative, totalLength };
-  }, [parsed]);
-
-  const currentState = useMemo(() => {
-    if (!parsed?.segments.length) {
-      return {
-        index: -1,
-        position: { x: 0, y: 0, z: 0 },
-        mode: "-",
-        lineNumber: 0,
-        segment: null,
-      };
-    }
-
-    const { cumulative, totalLength } = metrics;
-    if (progress <= 0) {
-      const first = parsed.segments[0];
-      return {
-        index: 0,
-        position: { ...first.start },
-        mode: first.mode,
-        lineNumber: first.lineNumber,
-        segment: first,
-      };
-    }
-
-    if (totalLength <= 0) {
-      const last = parsed.segments[parsed.segments.length - 1];
-      return {
-        index: parsed.segments.length - 1,
-        position: { ...last.end },
-        lineNumber: last.lineNumber,
-        mode: last.mode,
-        segment: last,
-      };
-    }
-
-    const target = (progress / 100) * totalLength;
-
-    for (let i = 0; i < parsed.segments.length; i += 1) {
-      const seg = parsed.segments[i];
-      const prevTotal = i === 0 ? 0 : cumulative[i - 1].total;
-      const currentTotal = cumulative[i].total;
-
-      if (target <= currentTotal || i === parsed.segments.length - 1) {
-        const len = Math.max(cumulative[i].len, 0.000001);
-        const t = Math.min(Math.max((target - prevTotal) / len, 0), 1);
-        return {
-          index: i,
-          position: {
-            x: seg.start.x + (seg.end.x - seg.start.x) * t,
-            y: seg.start.y + (seg.end.y - seg.start.y) * t,
-            z: seg.start.z + (seg.end.z - seg.start.z) * t,
-          },
-          mode: seg.mode,
-          lineNumber: seg.lineNumber,
-          segment: seg,
-        };
-      }
-    }
-
-    const last = parsed.segments[parsed.segments.length - 1];
-    return {
-      index: parsed.segments.length - 1,
-      position: { ...last.end },
-      mode: last.mode,
-      lineNumber: last.lineNumber,
-      segment: last,
-    };
-  }, [metrics, parsed, progress]);
-
-  useEffect(() => {
-    if (!playing) return undefined;
-    const id = window.setInterval(() => {
-      setProgress((prev) => {
-        const next = prev + 0.2 * speed;
-        if (next >= 100) {
-          setPlaying(false);
-          return 100;
-        }
-        return next;
-      });
-    }, 16);
-    return () => window.clearInterval(id);
-  }, [playing, speed]);
-
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
+
     const text = await file.text();
+
     setSource(text || "");
     setFileName(file.name || "loaded.gcode");
-    setProgress(0);
-    setPlaying(false);
-    setCameraResetKey((v) => v + 1);
+    resetPlayback();
+    setCameraResetKey((value) => value + 1);
+  }
+
+  function loadDemo() {
+    setSource(DEMO_GCODE);
+    setFileName("demo.gcode");
+    resetPlayback();
+    setCameraResetKey((value) => value + 1);
   }
 
   if (!parsed || isParsing) {
     return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f8fafc",
+        }}
+      >
         <div style={{ textAlign: "center" }}>
           <h2>GCode Studio</h2>
-          <p>{isParsing ? "Парсинг G‑кода... Это может занять несколько секунд." : "Загрузите G‑код"}</p>
+          <p>
+            {isParsing
+              ? "Парсинг G-code... Это может занять несколько секунд."
+              : "Загрузите G-code"}
+          </p>
+
           {!isParsing && (
-            <input type="file" accept=".gcode,.nc,.tap,.txt" onChange={handleFileChange} />
+            <input
+              type="file"
+              accept=".gcode,.nc,.tap,.txt"
+              onChange={handleFileChange}
+            />
           )}
         </div>
       </div>
     );
   }
 
-  const b = parsed.bounds;
-
   return (
-    <div style={{ minHeight: "100vh", background: "#f8fafc", padding: 20, color: "#0f172a", fontFamily: "Arial, sans-serif" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr 320px", gap: 20, maxWidth: 1800, margin: "0 auto" }}>
-        {/* Левая панель – настройки */}
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#f8fafc",
+        padding: 20,
+        color: "#0f172a",
+        fontFamily: "Arial, sans-serif",
+      }}
+    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "360px 1fr 320px",
+          gap: 20,
+          maxWidth: 1800,
+          margin: "0 auto",
+        }}
+      >
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <div
+            style={{
+              background: "white",
+              borderRadius: 16,
+              padding: 16,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            }}
+          >
             <h2 style={{ marginTop: 0, marginBottom: 16 }}>GCode Studio</h2>
 
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 14, marginBottom: 6 }}>Загрузка G-code</div>
-              <input type="file" accept=".gcode,.nc,.tap,.txt" onChange={handleFileChange} />
+              <input
+                type="file"
+                accept=".gcode,.nc,.tap,.txt"
+                onChange={handleFileChange}
+              />
             </div>
 
-            <div style={{ background: "#f1f5f9", borderRadius: 12, padding: 12, fontSize: 14, marginBottom: 12 }}>
+            <div
+              style={{
+                background: "#f1f5f9",
+                borderRadius: 12,
+                padding: 12,
+                fontSize: 14,
+                marginBottom: 12,
+              }}
+            >
               <div style={{ fontWeight: 700, marginBottom: 4 }}>Файл</div>
               <div style={{ wordBreak: "break-all" }}>{fileName}</div>
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              <button onClick={() => setPlaying((v) => !v)}>{playing ? "Пауза" : "Старт"}</button>
-              <button onClick={() => { setPlaying(false); setProgress(0); }}>В начало</button>
-              <button onClick={() => { setSource(DEMO_GCODE); setFileName("demo.gcode"); setProgress(0); setPlaying(false); setCameraResetKey((v) => v + 1); }}>Демо</button>
-              <button onClick={() => setCameraResetKey((v) => v + 1)}>Сброс вида</button>
+              <button type="button" onClick={() => setPlaying((value) => !value)}>
+                {playing ? "Пауза" : "Старт"}
+              </button>
+
+              <button type="button" onClick={resetPlayback}>
+                В начало
+              </button>
+
+              <button type="button" onClick={loadDemo}>
+                Демо
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCameraResetKey((value) => value + 1)}
+              >
+                Сброс вида
+              </button>
             </div>
 
             <div style={{ marginBottom: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
               <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Заготовка</div>
 
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Позиционирование заготовки</div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                Позиционирование заготовки
+              </div>
+
               <label style={{ display: "block", marginBottom: 4 }}>
                 <input
                   type="radio"
@@ -603,6 +604,7 @@ export default function App() {
                 />{" "}
                 Левый нижний угол
               </label>
+
               <label style={{ display: "block", marginBottom: 4 }}>
                 <input
                   type="radio"
@@ -621,20 +623,32 @@ export default function App() {
                     type="number"
                     min="1"
                     value={stock.width}
-                    onChange={(e) => setStock((s) => ({ ...s, width: Math.max(1, Number(e.target.value) || 1) }))}
+                    onChange={(event) =>
+                      setStock((prev) => ({
+                        ...prev,
+                        width: Math.max(1, Number(event.target.value) || 1),
+                      }))
+                    }
                     style={{ width: "100%" }}
                   />
                 </label>
+
                 <label style={{ fontSize: 12 }}>
                   Высота, мм
                   <input
                     type="number"
                     min="1"
                     value={stock.height}
-                    onChange={(e) => setStock((s) => ({ ...s, height: Math.max(1, Number(e.target.value) || 1) }))}
+                    onChange={(event) =>
+                      setStock((prev) => ({
+                        ...prev,
+                        height: Math.max(1, Number(event.target.value) || 1),
+                      }))
+                    }
                     style={{ width: "100%" }}
                   />
                 </label>
+
                 <label style={{ fontSize: 12 }}>
                   Толщина, мм
                   <input
@@ -642,19 +656,40 @@ export default function App() {
                     min="0.1"
                     step="0.1"
                     value={stock.thickness}
-                    onChange={(e) => setStock((s) => ({ ...s, thickness: Math.max(0.1, Number(e.target.value) || 0.1) }))}
+                    onChange={(event) =>
+                      setStock((prev) => ({
+                        ...prev,
+                        thickness: Math.max(0.1, Number(event.target.value) || 0.1),
+                      }))
+                    }
                     style={{ width: "100%" }}
                   />
                 </label>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 14, fontWeight: 600 }}>
-                <input type="checkbox" checked={showMaterialRemoval} onChange={(e) => setShowMaterialRemoval(e.target.checked)} />
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  marginTop: 10,
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={showMaterialRemoval}
+                  onChange={(event) => setShowMaterialRemoval(event.target.checked)}
+                />
                 Показывать снятие материала
               </label>
 
               <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Качество меша</div>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                  Качество меша
+                </div>
+
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span style={{ fontSize: 12 }}>1</span>
                   <input
@@ -663,7 +698,7 @@ export default function App() {
                     max="10"
                     step="1"
                     value={detailLevel}
-                    onChange={(e) => setDetailLevel(Number(e.target.value))}
+                    onChange={(event) => setDetailLevel(Number(event.target.value))}
                     style={{ flex: 1 }}
                   />
                   <span style={{ fontSize: 12 }}>10</span>
@@ -672,27 +707,73 @@ export default function App() {
             </div>
 
             <div style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 14,
+                  marginBottom: 6,
+                }}
+              >
                 <span>Прогресс</span>
                 <span>{progress.toFixed(1)}%</span>
               </div>
-              <input type="range" min="0" max="100" step="0.1" value={progress} onChange={(e) => setProgress(Number(e.target.value))} style={{ width: "100%" }} />
+
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={progress}
+                onChange={(event) => setProgress(Number(event.target.value))}
+                style={{ width: "100%" }}
+              />
             </div>
 
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 14,
+                  marginBottom: 6,
+                }}
+              >
                 <span>Скорость</span>
                 <span>{speed.toFixed(1)}x</span>
               </div>
-              <input type="range" min="0.2" max="5" step="0.1" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} style={{ width: "100%" }} />
+
+              <input
+                type="range"
+                min="0.2"
+                max="5"
+                step="0.1"
+                value={speed}
+                onChange={(event) => setSpeed(Number(event.target.value))}
+                style={{ width: "100%" }}
+              />
             </div>
           </div>
         </div>
 
-        {/* Центральная панель – 3D сцена */}
-        <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+        <div
+          style={{
+            background: "white",
+            borderRadius: 16,
+            padding: 16,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          }}
+        >
           <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
-          <div style={{ height: 760, borderRadius: 16, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+
+          <div
+            style={{
+              height: 760,
+              borderRadius: 16,
+              overflow: "hidden",
+              border: "1px solid #e2e8f0",
+            }}
+          >
             <PathScene
               parsed={parsed}
               currentState={currentState}
@@ -700,30 +781,44 @@ export default function App() {
               cameraResetKey={cameraResetKey}
               stock={stock}
               showMaterialRemoval={showMaterialRemoval}
-              totalLength={metrics.totalLength}
+              totalLength={parsed.totalLength}
               placementMode={placementMode}
               detailLevel={detailLevel}
               onCameraUpdate={setCameraInfo}
             />
           </div>
-          <div style={{ marginTop: 12, fontSize: 14, color: "#64748b", display: "flex", justifyContent: "space-between" }}>
+
+          <div
+            style={{
+              marginTop: 12,
+              fontSize: 14,
+              color: "#64748b",
+              display: "flex",
+              justifyContent: "space-between",
+            }}
+          >
             <span>ЛКМ — вращение, ПКМ — панорама, колесо мыши — масштаб.</span>
-            <button onClick={() => setShowEditor(!showEditor)}>
-              {showEditor ? "Показать информацию" : "Редактор G‑кода"}
+            <button type="button" onClick={() => setShowEditor((value) => !value)}>
+              {showEditor ? "Показать информацию" : "Редактор G-code"}
             </button>
           </div>
         </div>
 
-        {/* Правая панель – либо информация, либо редактор */}
         {showEditor ? (
-          <GCodeEditorTab source={source} setSource={setSource} fileName={fileName} onClose={() => setShowEditor(false)} />
+          <GCodeEditorTab
+            source={source}
+            setSource={setSource}
+            fileName={fileName}
+            onClose={() => setShowEditor(false)}
+          />
         ) : (
           <RightInfoPanel
-            bounds={b}
+            bounds={parsed.bounds}
             stock={stock}
             parsedStats={parsed.stats}
             currentState={currentState}
             cameraInfo={cameraInfo}
+            totalLength={parsed.totalLength}
           />
         )}
       </div>
@@ -742,42 +837,62 @@ path: /src/components/AutoFitCamera.tsx
 import { useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
-import { toScenePoint, getStockPlacement } from "../utils";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
+import { toScenePoint } from "../utils";
 
-interface AutoFitCameraProps {
-  bounds: any;
-  stock: any;
-  placementMode: any;
-  cameraResetKey: any;
-}
+type AutoFitCameraProps = {
+  bounds: Bounds;
+  stock: StockDimensions;
+  placementMode: PlacementMode;
+  cameraResetKey: number;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+};
 
-export function AutoFitCamera({ bounds, stock, placementMode, cameraResetKey }: AutoFitCameraProps) {
+export function AutoFitCamera({
+  bounds,
+  stock,
+  placementMode,
+  cameraResetKey,
+  controlsRef,
+}: AutoFitCameraProps) {
   const { camera } = useThree();
 
   useEffect(() => {
     const sizeX = Math.max(stock.width, bounds.maxX - bounds.minX, 1);
     const sizeY = Math.max(stock.height, bounds.maxY - bounds.minY, 1);
-    const sizeZ = Math.max(stock.thickness + Math.max(0, bounds.maxZ), bounds.maxZ - bounds.minZ, 1);
+    const sizeZ = Math.max(
+      stock.thickness + Math.max(0, bounds.maxZ),
+      bounds.maxZ - bounds.minZ,
+      1,
+    );
+
+    const maxHorizontalSize = Math.max(sizeX, sizeY);
     const maxSize = Math.max(sizeX, sizeY, sizeZ);
 
-    const placement = getStockPlacement(bounds, stock, placementMode);
-    const centerGcode = placement.centerGcode;
-    const cornerGcode = { x: placement.left, y: placement.bottom, z: 0 }; // левый нижний угол на поверхности
-    const centerScene = toScenePoint(centerGcode);
-    const cornerScene = toScenePoint(cornerGcode);
+    const targetScene = toScenePoint({ x: 0, y: 0, z: 0 });
+    const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
 
-    // Направление от угла к центру
-    const dir = new THREE.Vector3().subVectors(centerScene, cornerScene).normalize();
-    // Позиция камеры: угол + направление * расстояние
-    const distance = maxSize * 2.5;
-    const cameraPos = cornerScene.clone().add(dir.multiplyScalar(distance));
+    // Небольшой фиксированный наклон:
+    // +Y = сверху, +Z = лёгкий наклон "спереди"
+    const cameraPosition = new THREE.Vector3(
+      targetScene.x,
+      targetScene.y + distance,
+      targetScene.z + distance * -0.22,
+    );
 
-    camera.position.copy(cameraPos);
+    camera.position.copy(cameraPosition);
+    camera.up.set(0, 0, 1);
     camera.near = 0.1;
-    camera.far = Math.max(2000, maxSize * 20);
-    camera.lookAt(cornerScene);
+    camera.far = Math.max(4000, distance * 10);
+    camera.lookAt(targetScene);
     camera.updateProjectionMatrix();
-  }, [camera, bounds, stock, placementMode, cameraResetKey]);
+
+    if (controlsRef.current) {
+      controlsRef.current.target.copy(targetScene);
+      controlsRef.current.update();
+    }
+  }, [bounds, camera, cameraResetKey, controlsRef, placementMode, stock]);
 
   return null;
 }
@@ -787,77 +902,56 @@ path: /src/components/CameraDebug.tsx
 ----------------------------------------
 import { useEffect } from "react";
 import { useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
-import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import type { CameraInfo } from "../types/gcode";
 
 type CameraDebugProps = {
-  onUpdate: (info: { position: THREE.Vector3; target: THREE.Vector3 }) => void;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+  onUpdate: (info: CameraInfo) => void;
 };
 
-export function CameraDebug({ onUpdate }: CameraDebugProps) {
-  const { camera, controls } = useThree();
+export function CameraDebug({ controlsRef, onUpdate }: CameraDebugProps) {
+  const { camera } = useThree();
 
   useEffect(() => {
-    if (!controls) return;
+    const controls = controlsRef.current;
+    if (!controls) {
+      return;
+    }
 
     const handleChange = () => {
       onUpdate({
         position: camera.position.clone(),
-        target: (controls as any).target.clone(), // OrbitControls имеет свойство target
+        target: controls.target.clone(),
       });
     };
 
-    // Вызвать сразу для начальных значений
     handleChange();
+    controls.addEventListener("change", handleChange);
 
-    (controls as OrbitControlsImpl).addEventListener('change', handleChange);
-    return () => (controls as OrbitControlsImpl).removeEventListener('change', handleChange);
-  }, [camera, controls, onUpdate]);
-
-  return null;
-}
-
-
-path: /src/components/FixedCamera.tsx
-----------------------------------------
-import { useEffect } from "react";
-import { useThree } from "@react-three/fiber";
-
-type FixedCameraProps = {
-  cameraResetKey: number;
-};
-
-export function FixedCamera({ cameraResetKey }: FixedCameraProps) {
-  const { camera, controls } = useThree();
-
-  useEffect(() => {
-    if (!controls) return;
-
-    // Устанавливаем фиксированную позицию и цель
-    camera.position.set(-155.74, 311.41, -200.47);
-    (controls as any).target.set(-152.94, 27.98, 60.09);
-    (controls as any).update();
-
-    console.log('Camera reset to fixed position');
-  }, [cameraResetKey, camera, controls]);
+    return () => {
+      controls.removeEventListener("change", handleChange);
+    };
+  }, [camera, controlsRef, onUpdate]);
 
   return null;
 }
 
 
-path: /src/components/GCodeEditorPanel.tsx
+path: /src/components/GCodeEditor.tsx
 ----------------------------------------
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { EditorSelection } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
+import { EditorView, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
+import { downloadTextFile } from "../utils";
 
-type GCodeEditorPanelProps = {
+type GCodeEditorProps = {
   source: string;
   setSource: (src: string) => void;
   fileName: string;
+  header?: React.ReactNode;
 };
 
 const COMMON_COMMANDS = [
@@ -875,11 +969,12 @@ const COMMON_COMMANDS = [
   "F",
 ];
 
-export function GCodeEditorPanel({
+export function GCodeEditor({
   source,
   setSource,
   fileName,
-}: GCodeEditorPanelProps) {
+  header,
+}: GCodeEditorProps) {
   const editorRef = useRef<ReactCodeMirrorRef | null>(null);
   const localValueRef = useRef(source);
   const [editorValue, setEditorValue] = useState(source);
@@ -891,6 +986,11 @@ export function GCodeEditorPanel({
       setEditorValue(source);
     }
   }, [source, isDirty]);
+
+  const handleSave = useCallback(() => {
+    const outputName = fileName.replace(/\.gcode$/i, "") + "_edited.gcode";
+    downloadTextFile(localValueRef.current, outputName);
+  }, [fileName]);
 
   const extensions = useMemo(
     () => [
@@ -929,7 +1029,7 @@ export function GCodeEditorPanel({
         },
       ]),
     ],
-    []
+    [handleSave],
   );
 
   const handleChange = useCallback((value: string) => {
@@ -939,35 +1039,19 @@ export function GCodeEditorPanel({
   }, []);
 
   const handleApply = useCallback(() => {
-    const value = localValueRef.current;
-    setSource(value);
+    setSource(localValueRef.current);
     setIsDirty(false);
   }, [setSource]);
 
-  const handleSave = useCallback(() => {
-    const blob = new Blob([localValueRef.current], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName.replace(/\.gcode$/i, "") + "_edited.gcode";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    URL.revokeObjectURL(url);
-  }, [fileName]);
-
   const handleAddCommand = useCallback((cmd: string) => {
     const view = editorRef.current?.view;
-    if (!view) return;
+    if (!view) {
+      return;
+    }
 
-    const sel = view.state.selection.main;
-    const from = sel.from;
-    const to = sel.to;
-
+    const selection = view.state.selection.main;
+    const from = selection.from;
+    const to = selection.to;
     const needsLeadingBreak =
       from > 0 && view.state.doc.sliceString(from - 1, from) !== "\n";
 
@@ -999,7 +1083,7 @@ export function GCodeEditorPanel({
         minHeight: 0,
       }}
     >
-      <h3 style={{ marginTop: 0 }}>Редактор G-code</h3>
+      {header}
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
@@ -1064,13 +1148,35 @@ export function GCodeEditorPanel({
 }
 
 
+path: /src/components/GCodeEditorPanel.tsx
+----------------------------------------
+import { GCodeEditor } from "./GCodeEditor";
+
+type GCodeEditorPanelProps = {
+  source: string;
+  setSource: (src: string) => void;
+  fileName: string;
+};
+
+export function GCodeEditorPanel({
+  source,
+  setSource,
+  fileName,
+}: GCodeEditorPanelProps) {
+  return (
+    <GCodeEditor
+      source={source}
+      setSource={setSource}
+      fileName={fileName}
+      header={<h3 style={{ marginTop: 0 }}>Редактор G-code</h3>}
+    />
+  );
+}
+
+
 path: /src/components/GCodeEditorTab.tsx
 ----------------------------------------
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import CodeMirror from "@uiw/react-codemirror";
-import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { EditorSelection } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
+import { GCodeEditor } from "./GCodeEditor";
 
 type GCodeEditorTabProps = {
   source: string;
@@ -1079,137 +1185,33 @@ type GCodeEditorTabProps = {
   onClose: () => void;
 };
 
-const COMMON_COMMANDS = ["G0", "G1", "G90", "G91", "G21", "G20", "M3", "M5", "M6 T", "G04 P", "S", "F"];
-
-export function GCodeEditorTab({ source, setSource, fileName, onClose }: GCodeEditorTabProps) {
-  const editorRef = useRef<ReactCodeMirrorRef | null>(null);
-  const localValueRef = useRef(source);
-  const [editorValue, setEditorValue] = useState(source);
-  const [isDirty, setIsDirty] = useState(false);
-
-  useEffect(() => {
-    if (!isDirty) {
-      localValueRef.current = source;
-      setEditorValue(source);
-    }
-  }, [source, isDirty]);
-
-  const extensions = useMemo(
-    () => [
-      lineNumbers(),
-      highlightActiveLineGutter(),
-      EditorView.lineWrapping,
-      EditorView.editable.of(true),
-      EditorView.theme({
-        "&": { height: "100%", fontSize: "12px" },
-        ".cm-scroller": { overflow: "auto", fontFamily: "monospace" },
-        ".cm-content": { fontFamily: "monospace", whiteSpace: "pre" },
-        ".cm-focused": { outline: "none" },
-        ".cm-editor": { borderRadius: "8px" },
-      }),
-      keymap.of([
-        {
-          key: "Mod-s",
-          preventDefault: true,
-          run: () => { handleSave(); return true; },
-        },
-      ]),
-    ],
-    []
-  );
-
-  const handleChange = useCallback((value: string) => {
-    localValueRef.current = value;
-    setEditorValue(value);
-    setIsDirty(true);
-  }, []);
-
-  const handleApply = useCallback(() => {
-    setSource(localValueRef.current);
-    setIsDirty(false);
-  }, [setSource]);
-
-  const handleSave = useCallback(() => {
-    const blob = new Blob([localValueRef.current], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName.replace(/\.gcode$/i, "") + "_edited.gcode";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }, [fileName]);
-
-  const handleAddCommand = useCallback((cmd: string) => {
-    const view = editorRef.current?.view;
-    if (!view) return;
-
-    const sel = view.state.selection.main;
-    const from = sel.from;
-    const to = sel.to;
-    const needsLeadingBreak = from > 0 && view.state.doc.sliceString(from - 1, from) !== "\n";
-    const text = needsLeadingBreak ? `\n${cmd}` : cmd;
-
-    view.dispatch({
-      changes: { from, to, insert: text },
-      selection: EditorSelection.cursor(from + text.length),
-      scrollIntoView: true,
-    });
-
-    const nextValue = view.state.doc.toString();
-    localValueRef.current = nextValue;
-    setEditorValue(nextValue);
-    setIsDirty(true);
-    view.focus();
-  }, []);
-
+export function GCodeEditorTab({
+  source,
+  setSource,
+  fileName,
+  onClose,
+}: GCodeEditorTabProps) {
   return (
-    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h3 style={{ margin: 0 }}>Редактор G-code</h3>
-        <button onClick={onClose} style={{ padding: "4px 8px" }}>Закрыть</button>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Часто используемые команды</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {COMMON_COMMANDS.map((cmd) => (
-            <button key={cmd} type="button" onClick={() => handleAddCommand(cmd)} style={{ padding: "4px 8px", fontSize: 12 }}>
-              {cmd}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ flex: 1, minHeight: 0, border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-        <CodeMirror
-          ref={editorRef}
-          value={editorValue}
-          height="100%"
-          extensions={extensions}
-          basicSetup={{
-            foldGutter: false,
-            dropCursor: false,
-            allowMultipleSelections: false,
-            indentOnInput: false,
-            syntaxHighlighting: false,
-            bracketMatching: false,
-            closeBrackets: false,
-            autocompletion: false,
-            highlightActiveLine: true,
-            highlightSelectionMatches: false,
-            searchKeymap: true,
+    <GCodeEditor
+      source={source}
+      setSource={setSource}
+      fileName={fileName}
+      header={
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 12,
           }}
-          onChange={handleChange}
-        />
-      </div>
-
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button type="button" onClick={handleApply} style={{ flex: 1 }}>Применить</button>
-        <button type="button" onClick={handleSave} style={{ flex: 1 }}>Сохранить как...</button>
-      </div>
-    </div>
+        >
+          <h3 style={{ margin: 0 }}>Редактор G-code</h3>
+          <button type="button" onClick={onClose} style={{ padding: "4px 8px" }}>
+            Закрыть
+          </button>
+        </div>
+      }
+    />
   );
 }
 
@@ -1218,15 +1220,16 @@ path: /src/components/MaterialRemovalMesh.tsx
 ----------------------------------------
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { toSceneCoords, getStockPlacement, AXIS_MAP } from "../utils";
+import type { ParsedGCode, PlacementMode, StockDimensions } from "../types/gcode";
+import { AXIS_MAP, clamp, getStockPlacement, toSceneCoords } from "../utils";
 
-type Props = {
-  parsed: any;
-  stock: any;
+type MaterialRemovalMeshProps = {
+  parsed: ParsedGCode;
+  stock: StockDimensions;
   progress: number;
   totalLength: number;
-  placementMode: any;
-  detailLevel?: number; // от 1 до 10, где 1 - низкое качество, 10 - максимальное
+  placementMode: PlacementMode;
+  detailLevel?: number;
 };
 
 export function MaterialRemovalMesh({
@@ -1236,35 +1239,29 @@ export function MaterialRemovalMesh({
   totalLength,
   placementMode,
   detailLevel = 5,
-}: Props) {
+}: MaterialRemovalMeshProps) {
   const { bounds, segments } = parsed;
-  const width = stock.width;
-  const depth = stock.height;
-  const thickness = stock.thickness;
+  const { width, height: depth, thickness } = stock;
   const invertX = AXIS_MAP.invertX;
 
-  // Преобразуем число 1..10 в параметры сетки и плотности
-  const level = Math.min(10, Math.max(1, detailLevel)); // ограничиваем диапазон
-  const t = (level - 1) / 9; // 0..1
+  const level = clamp(detailLevel, 1, 10);
+  const t = (level - 1) / 9;
 
-  // Линейная интерполяция между минимальными и максимальными значениями
-  const gridX = Math.floor(100 + t * 900); // от 100 до 1000
+  const gridX = Math.floor(100 + t * 900);
   const gridY = Math.floor(100 + t * 900);
-  const stepDensity = 1 + t * 9; // от 1.0 до 10.0
-  const recomputeNormals = level >= 6; // включаем нормали с 6 уровня
+  const stepDensity = 1 + t * 9;
+  const recomputeNormals = level >= 6;
 
   const placement = useMemo(
     () => getStockPlacement(bounds, stock, placementMode),
-    [bounds, stock, placementMode]
+    [bounds, placementMode, stock],
   );
-
-  const { left, bottom, centerGcode } = placement;
 
   const geometry = useMemo(() => {
     const plane = new THREE.PlaneGeometry(width, depth, gridX - 1, gridY - 1);
     plane.rotateX(-Math.PI / 2);
     return plane;
-  }, [width, depth, gridX, gridY]);
+  }, [depth, gridX, gridY, width]);
 
   useEffect(() => {
     return () => geometry.dispose();
@@ -1274,7 +1271,7 @@ export function MaterialRemovalMesh({
     const arr = new Float32Array(gridX * gridY);
     arr.fill(0);
     return arr;
-  }, [gridX, gridY]); // зависимость от gridX/Y гарантирует создание нового массива при изменении разрешения
+  }, [gridX, gridY]);
 
   const material = useMemo(
     () =>
@@ -1285,7 +1282,7 @@ export function MaterialRemovalMesh({
         side: THREE.DoubleSide,
         flatShading: !recomputeNormals,
       }),
-    [recomputeNormals]
+    [recomputeNormals],
   );
 
   useEffect(() => {
@@ -1294,10 +1291,7 @@ export function MaterialRemovalMesh({
 
     let accumulated = 0;
 
-    const clamp = (v: number, min: number, max: number) =>
-      Math.max(min, Math.min(max, v));
-
-    for (let s = 0; s < segments.length; s++) {
+    for (let s = 0; s < segments.length; s += 1) {
       const seg = segments[s];
 
       const dx = seg.end.x - seg.start.x;
@@ -1309,29 +1303,34 @@ export function MaterialRemovalMesh({
       const segEnd = accumulated + distance;
       accumulated = segEnd;
 
-      if (seg.mode !== "G1" || !seg.isCutting) continue;
+      if (seg.mode !== "G1" || !seg.isCutting) {
+        continue;
+      }
 
       const steps = Math.max(2, Math.ceil(distance * stepDensity));
-
       const limitT =
         segEnd <= targetLength
           ? 1
           : segStart < targetLength
-          ? (targetLength - segStart) / distance
-          : -1;
+            ? (targetLength - segStart) / distance
+            : -1;
 
-      if (limitT < 0) break;
+      if (limitT < 0) {
+        break;
+      }
 
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        if (t > limitT) break;
+      for (let i = 0; i <= steps; i += 1) {
+        const stepT = i / steps;
+        if (stepT > limitT) {
+          break;
+        }
 
-        const x = seg.start.x + dx * t;
-        const y = seg.start.y + dy * t;
-        const z = seg.start.z + dz * t;
+        const x = seg.start.x + dx * stepT;
+        const y = seg.start.y + dy * stepT;
+        const z = seg.start.z + dz * stepT;
 
-        const localX = x - left;
-        const localY = y - bottom;
+        const localX = x - placement.left;
+        const localY = y - placement.bottom;
 
         if (localX < 0 || localX > width || localY < 0 || localY > depth) {
           continue;
@@ -1348,40 +1347,42 @@ export function MaterialRemovalMesh({
         }
       }
 
-      if (segEnd > targetLength) break;
+      if (segEnd > targetLength) {
+        break;
+      }
     }
 
-    const pos = geometry.attributes.position as THREE.BufferAttribute;
-    const array = pos.array as Float32Array;
+    const positionAttribute = geometry.attributes.position as THREE.BufferAttribute;
+    const array = positionAttribute.array as Float32Array;
 
-    for (let i = 0; i < heights.length; i++) {
-      array[i * 3 + 1] = heights[i]; // Y координата (после rotateX)
+    for (let i = 0; i < heights.length; i += 1) {
+      array[i * 3 + 1] = heights[i];
     }
 
-    pos.needsUpdate = true;
+    positionAttribute.needsUpdate = true;
 
     if (recomputeNormals) {
       geometry.computeVertexNormals();
     }
   }, [
-    progress,
-    totalLength,
-    segments,
-    heights,
-    geometry,
-    width,
     depth,
-    thickness,
-    left,
-    bottom,
-    invertX,
+    geometry,
     gridX,
     gridY,
-    stepDensity,
+    heights,
+    invertX,
+    placement.bottom,
+    placement.left,
+    progress,
     recomputeNormals,
+    segments,
+    stepDensity,
+    thickness,
+    totalLength,
+    width,
   ]);
 
-  const center = toSceneCoords(centerGcode);
+  const center = toSceneCoords(placement.centerGcode);
 
   return (
     <group position={[center.x, 0, center.z]}>
@@ -1393,107 +1394,173 @@ export function MaterialRemovalMesh({
 
 path: /src/components/PathScene.tsx
 ----------------------------------------
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Text, Line } from "@react-three/drei";
+import { Line, OrbitControls, Text } from "@react-three/drei";
 import * as THREE from "three";
-import { toScenePoint, toSceneCoords, getStockPlacement } from "../utils";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import type {
+  CameraInfo,
+  CurrentState,
+  ParsedGCode,
+  PlacementMode,
+  StockDimensions,
+} from "../types/gcode";
+import { getStockPlacement, toSceneCoords, toScenePoint } from "../utils";
 import { AutoFitCamera } from "./AutoFitCamera";
-import { WorkArea } from "./WorkArea";
-import { StockWireframe } from "./StockWireframe";
-import { MaterialRemovalMesh } from "./MaterialRemovalMesh";
-import { SimpleLine } from "./SimpleLine";
-import { ProgressBillboard } from "./ProgressBillboard";
-import ToolHead from "./ToolHead";
 import { CameraDebug } from "./CameraDebug";
-import { FixedCamera } from "./FixedCamera";
+import { MaterialRemovalMesh } from "./MaterialRemovalMesh";
+import { ProgressBillboard } from "./ProgressBillboard";
+import { SimpleLine } from "./SimpleLine";
+import { StockWireframe } from "./StockWireframe";
+import ToolHead from "./ToolHead";
+import { WorkArea } from "./WorkArea";
 
-export function PathScene({ parsed, currentState, progress, cameraResetKey, stock, showMaterialRemoval, totalLength, placementMode, detailLevel, onCameraUpdate }: {
-  parsed: any;
-  currentState: any;
+type PathSceneProps = {
+  parsed: ParsedGCode;
+  currentState: CurrentState;
   progress: number;
   cameraResetKey: number;
-  stock: any;
+  stock: StockDimensions;
   showMaterialRemoval: boolean;
   totalLength: number;
-  placementMode: any;
+  placementMode: PlacementMode;
   detailLevel: number;
-  onCameraUpdate: (camera: any) => void;
-}) {
-  const orbitTarget = useMemo(() => {
-    return toScenePoint({
-      x: (parsed.bounds.minX + parsed.bounds.maxX) / 2,
-      y: (parsed.bounds.minY + parsed.bounds.maxY) / 2,
-      z: (parsed.bounds.minZ + parsed.bounds.maxZ) / 2,
-    });
-  }, [parsed.bounds]);
+  onCameraUpdate: (camera: CameraInfo) => void;
+};
 
-  const placement = useMemo(() => getStockPlacement(parsed.bounds, stock, placementMode), [parsed.bounds, stock, placementMode]);
-  const stockCenter = toSceneCoords(placement.centerGcode);
-  const cornerScene = useMemo(() => {
-    return toScenePoint({ x: placement.left, y: placement.bottom, z: 0 });
-  }, [placement]);
+function buildAxisLine(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
+  return [from.clone(), to.clone()];
+}
 
-  // Оси с подписями
+export function PathScene({
+  parsed,
+  currentState,
+  progress,
+  cameraResetKey,
+  stock,
+  showMaterialRemoval,
+  totalLength,
+  placementMode,
+  detailLevel,
+  onCameraUpdate,
+}: PathSceneProps) {
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+
+  const placement = useMemo(
+    () => getStockPlacement(parsed.bounds, stock, placementMode),
+    [parsed.bounds, placementMode, stock],
+  );
+
+  const stockCenter = useMemo(
+    () => toSceneCoords(placement.centerGcode),
+    [placement],
+  );
+
+  const machineZeroScene = useMemo(
+    () => toScenePoint({ x: 0, y: 0, z: 0 }),
+    [],
+  );
+
   const axesHelper = useMemo(() => {
     const length = Math.max(stock.width, stock.height, stock.thickness) * 1.2;
-    if (length <= 0) return null;
-    
-    const origin = toSceneCoords({ x: 0, y: 0, z: 0 });
-    const pointsX = [new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(toSceneCoords({ x: length, y: 0, z: 0 }).x, toSceneCoords({ x: length, y: 0, z: 0 }).y, toSceneCoords({ x: length, y: 0, z: 0 }).z)];
-    const pointsY = [new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(toSceneCoords({ x: 0, y: length, z: 0 }).x, toSceneCoords({ x: 0, y: length, z: 0 }).y, toSceneCoords({ x: 0, y: length, z: 0 }).z)];
-    const pointsZ = [new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(toSceneCoords({ x: 0, y: 0, z: length }).x, toSceneCoords({ x: 0, y: 0, z: length }).y, toSceneCoords({ x: 0, y: 0, z: length }).z)];
+    if (length <= 0) {
+      return null;
+    }
+
+    const origin = toScenePoint({ x: 0, y: 0, z: 0 });
+    const xEnd = toScenePoint({ x: length, y: 0, z: 0 });
+    const yEnd = toScenePoint({ x: 0, y: length, z: 0 });
+    const zEnd = toScenePoint({ x: 0, y: 0, z: length });
 
     return (
       <group>
-        <Line points={pointsX} color="red" lineWidth={2} />
-        <Text position={pointsX[1]} color="red" fontSize={5} anchorX="left" anchorY="middle">X</Text>
-        <Line points={pointsY} color="green" lineWidth={2} />
-        <Text position={pointsY[1]} color="green" fontSize={5} anchorX="left" anchorY="middle">Y</Text>
-        <Line points={pointsZ} color="blue" lineWidth={2} />
-        <Text position={pointsZ[1]} color="blue" fontSize={5} anchorX="left" anchorY="middle">Z</Text>
+        <Line points={buildAxisLine(origin, xEnd)} color="red" lineWidth={2} />
+        <Text position={xEnd} color="red" fontSize={5} anchorX="left" anchorY="middle">
+          X
+        </Text>
+
+        <Line points={buildAxisLine(origin, yEnd)} color="green" lineWidth={2} />
+        <Text position={yEnd} color="green" fontSize={5} anchorX="left" anchorY="middle">
+          Y
+        </Text>
+
+        <Line points={buildAxisLine(origin, zEnd)} color="blue" lineWidth={2} />
+        <Text position={zEnd} color="blue" fontSize={5} anchorX="left" anchorY="middle">
+          Z
+        </Text>
       </group>
     );
   }, [stock]);
 
-  // Пунктирные линейки по рёбрам bounding box
   const rulers = useMemo(() => {
     const { minX, maxX, minY, maxY, minZ, maxZ } = parsed.bounds;
-    if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY) || !isFinite(minZ) || !isFinite(maxZ)) return null;
+
+    if (
+      !Number.isFinite(minX) ||
+      !Number.isFinite(maxX) ||
+      !Number.isFinite(minY) ||
+      !Number.isFinite(maxY) ||
+      !Number.isFinite(minZ) ||
+      !Number.isFinite(maxZ)
+    ) {
+      return null;
+    }
 
     const corners = [
-      [minX, minY, minZ], [maxX, minY, minZ], [maxX, maxY, minZ], [minX, maxY, minZ],
-      [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ]
-    ].map(p => toScenePoint({ x: p[0], y: p[1], z: p[2] }));
+      [minX, minY, minZ],
+      [maxX, minY, minZ],
+      [maxX, maxY, minZ],
+      [minX, maxY, minZ],
+      [minX, minY, maxZ],
+      [maxX, minY, maxZ],
+      [maxX, maxY, maxZ],
+      [minX, maxY, maxZ],
+    ].map(([x, y, z]) => toScenePoint({ x, y, z }));
 
-    if (corners.some(v => !v || !isFinite(v.x) || !isFinite(v.y) || !isFinite(v.z))) return null;
-
-    const edges = [
-      [corners[0], corners[1]], [corners[1], corners[2]], [corners[2], corners[3]], [corners[3], corners[0]],
-      [corners[4], corners[5]], [corners[5], corners[6]], [corners[6], corners[7]], [corners[7], corners[4]],
-      [corners[0], corners[4]], [corners[1], corners[5]], [corners[2], corners[6]], [corners[3], corners[7]]
+    const edges: Array<[THREE.Vector3, THREE.Vector3]> = [
+      [corners[0], corners[1]],
+      [corners[1], corners[2]],
+      [corners[2], corners[3]],
+      [corners[3], corners[0]],
+      [corners[4], corners[5]],
+      [corners[5], corners[6]],
+      [corners[6], corners[7]],
+      [corners[7], corners[4]],
+      [corners[0], corners[4]],
+      [corners[1], corners[5]],
+      [corners[2], corners[6]],
+      [corners[3], corners[7]],
     ];
 
-    return edges.map(([start, end], idx) => {
-      if (start.distanceTo(end) < 0.001) return null;
-      return (
-        <Line
-          key={`ruler-${idx}`}
-          points={[start, end]}
-          color="#94a3b8"
-          lineWidth={1}
-          dashed
-          dashScale={1}
-          dashSize={2}
-          gapSize={1}
-        />
-      );
-    }).filter(Boolean);
+    return edges
+      .map(([start, end], idx) => {
+        if (start.distanceTo(end) < 0.001) {
+          return null;
+        }
+
+        return (
+          <Line
+            key={`ruler-${idx}`}
+            points={[start, end]}
+            color="#94a3b8"
+            lineWidth={1}
+            dashed
+            dashScale={1}
+            dashSize={2}
+            gapSize={1}
+          />
+        );
+      })
+      .filter(Boolean);
   }, [parsed.bounds]);
+
+  const renderSegments = parsed.renderSegments;
+  const renderedDoneCount = Math.floor((progress / 100) * renderSegments.length);
 
   return (
     <Canvas
-      camera={{ position: [-155.74, 311.41, -200.47], fov: 50 }}
+      camera={{ position: [0, 300, 0], fov: 50 }}
       shadows={{ type: THREE.PCFShadowMap }}
     >
       <color attach="background" args={["#f8fafc"]} />
@@ -1507,16 +1574,28 @@ export function PathScene({ parsed, currentState, progress, cameraResetKey, stoc
         shadow-mapSize-height={2048}
         shadow-mapType={THREE.PCFShadowMap}
       />
-      <AutoFitCamera bounds={parsed.bounds} stock={stock} placementMode={placementMode} cameraResetKey={cameraResetKey} />
+
+      <AutoFitCamera
+        bounds={parsed.bounds}
+        stock={stock}
+        placementMode={placementMode}
+        cameraResetKey={cameraResetKey}
+        controlsRef={controlsRef}
+      />
+
       <WorkArea bounds={parsed.bounds} stock={stock} placementMode={placementMode} />
-      
       {axesHelper}
       {rulers}
 
       {showMaterialRemoval && (
         <mesh position={[stockCenter.x, stockCenter.y, stockCenter.z]} receiveShadow>
           <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
-          <meshStandardMaterial color="#c89d67" transparent opacity={0.25} roughness={0.6} />
+          <meshStandardMaterial
+            color="#c89d67"
+            transparent
+            opacity={0.25}
+            roughness={0.6}
+          />
         </mesh>
       )}
 
@@ -1533,7 +1612,7 @@ export function PathScene({ parsed, currentState, progress, cameraResetKey, stoc
         />
       ) : (
         <>
-          {parsed.segments.map((seg: { id: any; start: unknown; end: unknown; mode: string; }) => (
+          {renderSegments.map((seg) => (
             <SimpleLine
               key={`bg-${seg.id}`}
               start={seg.start}
@@ -1542,7 +1621,8 @@ export function PathScene({ parsed, currentState, progress, cameraResetKey, stoc
               opacity={0.55}
             />
           ))}
-          {parsed.segments.slice(0, Math.max(currentState.index, 0)).map((seg: { id: any; start: unknown; end: unknown; mode: string; isCutting: any; }) => (
+
+          {renderSegments.slice(0, Math.max(renderedDoneCount, 0)).map((seg) => (
             <SimpleLine
               key={`done-${seg.id}`}
               start={seg.start}
@@ -1551,6 +1631,7 @@ export function PathScene({ parsed, currentState, progress, cameraResetKey, stoc
               opacity={1}
             />
           ))}
+
           {currentState.segment && (
             <>
               <SimpleLine
@@ -1570,20 +1651,25 @@ export function PathScene({ parsed, currentState, progress, cameraResetKey, stoc
         cutting={currentState.position.z <= 0}
         toScenePoint={toScenePoint}
       />
-      
-      <FixedCamera cameraResetKey={cameraResetKey} />
+<OrbitControls
+  ref={controlsRef}
+  key={cameraResetKey}
+  makeDefault
+  target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
+  enableDamping
+  dampingFactor={0.08}
+  screenSpacePanning
+  minDistance={10}
+  maxDistance={3000}
+  enableRotate
+  mouseButtons={{
+    LEFT: THREE.MOUSE.PAN,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.PAN,
+  }}
+/>
 
-      <OrbitControls
-        key={cameraResetKey}
-        makeDefault
-        target={[cornerScene.x, cornerScene.y, cornerScene.z]}
-        enableDamping
-        dampingFactor={0.08}
-        screenSpacePanning
-        minDistance={10}
-        maxDistance={1000}
-      />
-      <CameraDebug onUpdate={onCameraUpdate} />
+      <CameraDebug controlsRef={controlsRef} onUpdate={onCameraUpdate} />
     </Canvas>
   );
 }
@@ -1592,9 +1678,15 @@ export function PathScene({ parsed, currentState, progress, cameraResetKey, stoc
 path: /src/components/ProgressBillboard.tsx
 ----------------------------------------
 import { Html } from "@react-three/drei";
+import type { Point3 } from "../types/gcode";
 import { toSceneCoords } from "../utils";
 
-export function ProgressBillboard({ position, progress }) {
+type ProgressBillboardProps = {
+  position: Point3;
+  progress: number;
+};
+
+export function ProgressBillboard({ position, progress }: ProgressBillboardProps) {
   const scene = toSceneCoords(position);
 
   return (
@@ -1621,25 +1713,37 @@ export function ProgressBillboard({ position, progress }) {
 
 path: /src/components/RightInfoPanel.tsx
 ----------------------------------------
-import React from "react";
 import { StatCard } from "./StatCard";
-import * as THREE from "three";
+import type { CameraInfo, CurrentState, ParsedStats, Bounds, StockDimensions } from "../types/gcode";
+import { fmt } from "../utils";
 
 type RightInfoPanelProps = {
-  bounds: any;
-  stock: any;
-  parsedStats: any;
-  currentState: any;
-  cameraInfo: { position: THREE.Vector3; target: THREE.Vector3 } | null;
+  bounds: Bounds;
+  stock: StockDimensions;
+  parsedStats: ParsedStats;
+  currentState: CurrentState;
+  cameraInfo: CameraInfo | null;
+  totalLength: number;
 };
 
-function fmt(v: number): string {
-  return Number.isFinite(v) ? v.toFixed(2) : "0.00";
-}
-
-export function RightInfoPanel({ bounds, stock, parsedStats, currentState, cameraInfo }: RightInfoPanelProps) {
+export function RightInfoPanel({
+  bounds,
+  stock,
+  parsedStats,
+  currentState,
+  cameraInfo,
+  totalLength,
+}: RightInfoPanelProps) {
   return (
-    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: 'fit-content' }}>
+    <div
+      style={{
+        background: "white",
+        borderRadius: 16,
+        padding: 16,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+        height: "fit-content",
+      }}
+    >
       <h3 style={{ marginTop: 0, marginBottom: 16 }}>Информация</h3>
 
       <div style={{ marginBottom: 20 }}>
@@ -1648,10 +1752,16 @@ export function RightInfoPanel({ bounds, stock, parsedStats, currentState, camer
           <StatCard label="X" value={`${fmt(bounds.minX)} .. ${fmt(bounds.maxX)} мм`} />
           <StatCard label="Y" value={`${fmt(bounds.minY)} .. ${fmt(bounds.maxY)} мм`} />
           <StatCard label="Z" value={`${fmt(bounds.minZ)} .. ${fmt(bounds.maxZ)} мм`} />
-          <StatCard label="Заготовка" value={`${fmt(stock.width)} × ${fmt(stock.height)} × ${fmt(stock.thickness)} мм`} />
+          <StatCard
+            label="Заготовка"
+            value={`${fmt(stock.width)} × ${fmt(stock.height)} × ${fmt(stock.thickness)} мм`}
+          />
           <StatCard label="Движений" value={String(parsedStats.totalMoves)} />
           <StatCard label="G0" value={String(parsedStats.rapidMoves)} />
           <StatCard label="G1" value={String(parsedStats.workMoves)} />
+          <StatCard label="Режущих" value={String(parsedStats.cuttingMoves)} />
+          <StatCard label="Длина пути" value={`${fmt(totalLength)} мм`} />
+          <StatCard label="Render segments" value={String(parsedStats.renderMoves)} />
         </div>
       </div>
 
@@ -1662,9 +1772,15 @@ export function RightInfoPanel({ bounds, stock, parsedStats, currentState, camer
           <StatCard label="Y" value={`${fmt(currentState.position.y)} мм`} />
           <StatCard label="Z" value={`${fmt(currentState.position.z)} мм`} />
           <StatCard label="Команда" value={currentState.mode} />
+          <StatCard label="Строка" value={String(currentState.lineNumber)} />
         </div>
+
         <div style={{ marginTop: 10 }}>
-          <StatCard label="Текущая строка" value={currentState.segment ? currentState.segment.raw : "-"} mono />
+          <StatCard
+            label="Текущая строка G-code"
+            value={currentState.segment ? currentState.segment.raw : "-"}
+            mono
+          />
         </div>
       </div>
 
@@ -1672,8 +1788,14 @@ export function RightInfoPanel({ bounds, stock, parsedStats, currentState, camer
         <h4 style={{ marginBottom: 12 }}>Камера</h4>
         {cameraInfo ? (
           <>
-            <div>Поворот: {cameraInfo.position.x.toFixed(1)}, {cameraInfo.position.y.toFixed(1)}, {cameraInfo.position.z.toFixed(1)}</div>
-            <div>Позиция: {cameraInfo.target.x.toFixed(1)}, {cameraInfo.target.y.toFixed(1)}, {cameraInfo.target.z.toFixed(1)}</div>
+            <div>
+              Позиция: {cameraInfo.position.x.toFixed(1)}, {cameraInfo.position.y.toFixed(1)},{" "}
+              {cameraInfo.position.z.toFixed(1)}
+            </div>
+            <div>
+              Цель: {cameraInfo.target.x.toFixed(1)}, {cameraInfo.target.y.toFixed(1)},{" "}
+              {cameraInfo.target.z.toFixed(1)}
+            </div>
           </>
         ) : (
           <div>N/A</div>
@@ -1687,33 +1809,75 @@ export function RightInfoPanel({ bounds, stock, parsedStats, currentState, camer
 path: /src/components/SimpleLine.tsx
 ----------------------------------------
 import { useEffect, useMemo } from "react";
-import { toScenePoint } from "../utils";
 import * as THREE from "three";
+import type { Point3 } from "../types/gcode";
+import { toScenePoint } from "../utils";
 
-export function SimpleLine({ start, end, color, opacity = 1 }) {
+type SimpleLineProps = {
+  start: Point3;
+  end: Point3;
+  color: string;
+  opacity?: number;
+};
+
+export function SimpleLine({
+  start,
+  end,
+  color,
+  opacity = 1,
+}: SimpleLineProps) {
   const geometry = useMemo(() => {
-    return new THREE.BufferGeometry().setFromPoints([toScenePoint(start), toScenePoint(end)]);
+    return new THREE.BufferGeometry().setFromPoints([
+      toScenePoint(start),
+      toScenePoint(end),
+    ]);
   }, [start, end]);
 
-  useEffect(() => {
-    return () => geometry.dispose();
-  }, [geometry]);
+  const material = useMemo(() => {
+    return new THREE.LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity,
+    });
+  }, [color, opacity]);
 
-  return (
-    <line geometry={geometry}>
-      <lineBasicMaterial color={color} transparent opacity={opacity} />
-    </line>
-  );
+  const line = useMemo(() => {
+    return new THREE.Line(geometry, material);
+  }, [geometry, material]);
+
+  useEffect(() => {
+    return () => {
+      geometry.dispose();
+      material.dispose();
+    };
+  }, [geometry, material]);
+
+  return <primitive object={line} />;
 }
 
 
 path: /src/components/StatCard.tsx
 ----------------------------------------
-export function StatCard({ label, value, mono = false }) {
+type StatCardProps = {
+  label: string;
+  value: string;
+  mono?: boolean;
+};
+
+export function StatCard({ label, value, mono = false }: StatCardProps) {
   return (
     <div style={{ background: "#f1f5f9", borderRadius: 12, padding: 12 }}>
       <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 600, fontFamily: mono ? "monospace" : "inherit", wordBreak: "break-all" }}>{value}</div>
+      <div
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          fontFamily: mono ? "monospace" : "inherit",
+          wordBreak: "break-all",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -1721,9 +1885,20 @@ export function StatCard({ label, value, mono = false }) {
 
 path: /src/components/StockWireframe.tsx
 ----------------------------------------
-import { toSceneCoords, getStockPlacement } from "../utils";
+import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
+import { getStockPlacement, toSceneCoords } from "../utils";
 
-export function StockWireframe({ bounds, stock, placementMode }: { bounds: any; stock: any; placementMode: any }) {
+type StockWireframeProps = {
+  bounds: Bounds;
+  stock: StockDimensions;
+  placementMode: PlacementMode;
+};
+
+export function StockWireframe({
+  bounds,
+  stock,
+  placementMode,
+}: StockWireframeProps) {
   const placement = getStockPlacement(bounds, stock, placementMode);
   const center = toSceneCoords(placement.centerGcode);
 
@@ -1738,15 +1913,8 @@ export function StockWireframe({ bounds, stock, placementMode }: { bounds: any; 
 
 path: /src/components/ToolHead.tsx
 ----------------------------------------
-// src/components/ToolHead.tsx
-import React from "react";
 import * as THREE from "three";
-
-export type Point3 = {
-  x: number;
-  y: number;
-  z: number;
-};
+import type { Point3 } from "../types/gcode";
 
 type ToolHeadProps = {
   position: Point3;
@@ -1754,7 +1922,11 @@ type ToolHeadProps = {
   toScenePoint: (p: Point3) => THREE.Vector3;
 };
 
-export default function ToolHead({ position, cutting, toScenePoint }: ToolHeadProps) {
+export default function ToolHead({
+  position,
+  cutting,
+  toScenePoint,
+}: ToolHeadProps) {
   const scenePos = toScenePoint(position);
 
   return (
@@ -1775,9 +1947,16 @@ export default function ToolHead({ position, cutting, toScenePoint }: ToolHeadPr
 
 path: /src/components/WorkArea.tsx
 ----------------------------------------
-import { toSceneCoords, getStockPlacement } from "../utils";
+import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
+import { getStockPlacement, toSceneCoords } from "../utils";
 
-export function WorkArea({ bounds, stock, placementMode }: { bounds: any; stock: any; placementMode: any }) {
+type WorkAreaProps = {
+  bounds: Bounds;
+  stock: StockDimensions;
+  placementMode: PlacementMode;
+};
+
+export function WorkArea({ bounds, stock, placementMode }: WorkAreaProps) {
   const placement = getStockPlacement(bounds, stock, placementMode);
   const center = toSceneCoords(placement.centerGcode);
 
@@ -1787,10 +1966,12 @@ export function WorkArea({ bounds, stock, placementMode }: { bounds: any; stock:
         <boxGeometry args={[stock.width + 20, 0.4, stock.height + 20]} />
         <meshStandardMaterial color="#e2e8f0" metalness={0.05} roughness={0.85} />
       </mesh>
+
       <gridHelper
         args={[Math.max(stock.width + 20, stock.height + 20), 20, 0x94a3b8, 0xcbd5e1]}
         position={[center.x, -stock.thickness, center.z]}
       />
+
       <axesHelper args={[25]} />
     </group>
   );
@@ -1820,37 +2001,288 @@ G0 Z5
 `;
 
 
+path: /src/hooks/useCurrentState.ts
+----------------------------------------
+import { useMemo } from "react";
+import type { CurrentState, ParsedGCode } from "../types/gcode";
+import { clamp } from "../utils";
+
+const EMPTY_STATE: CurrentState = {
+  index: -1,
+  position: { x: 0, y: 0, z: 0 },
+  mode: "-",
+  lineNumber: 0,
+  segment: null,
+};
+
+export function useCurrentState(parsed: ParsedGCode | null, progress: number): CurrentState {
+  return useMemo(() => {
+    if (!parsed || parsed.segments.length === 0) {
+      return EMPTY_STATE;
+    }
+
+    const { segments, cumulativeLengths, totalLength } = parsed;
+
+    if (progress <= 0) {
+      const first = segments[0];
+      return {
+        index: 0,
+        position: { ...first.start },
+        mode: first.mode,
+        lineNumber: first.lineNumber,
+        segment: first,
+      };
+    }
+
+    if (totalLength <= 0 || progress >= 100) {
+      const last = segments[segments.length - 1];
+      return {
+        index: segments.length - 1,
+        position: { ...last.end },
+        mode: last.mode,
+        lineNumber: last.lineNumber,
+        segment: last,
+      };
+    }
+
+    const target = (progress / 100) * totalLength;
+
+    let left = 0;
+    let right = cumulativeLengths.length - 1;
+    let foundIndex = right;
+
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2);
+
+      if (target <= cumulativeLengths[mid]) {
+        foundIndex = mid;
+        right = mid - 1;
+      } else {
+        left = mid + 1;
+      }
+    }
+
+    const seg = segments[foundIndex];
+    const prevTotal = foundIndex === 0 ? 0 : cumulativeLengths[foundIndex - 1];
+    const segLength = Math.max(cumulativeLengths[foundIndex] - prevTotal, 0.000001);
+    const t = clamp((target - prevTotal) / segLength, 0, 1);
+
+    return {
+      index: foundIndex,
+      position: {
+        x: seg.start.x + (seg.end.x - seg.start.x) * t,
+        y: seg.start.y + (seg.end.y - seg.start.y) * t,
+        z: seg.start.z + (seg.end.z - seg.start.z) * t,
+      },
+      mode: seg.mode,
+      lineNumber: seg.lineNumber,
+      segment: seg,
+    };
+  }, [parsed, progress]);
+}
+
+
+path: /src/hooks/useGCodeWorker.ts
+----------------------------------------
+import { useEffect, useRef, useState } from "react";
+import type { ParsedGCode } from "../types/gcode";
+
+export function useGCodeWorker(source: string) {
+  const workerRef = useRef<Worker | null>(null);
+  const [parsed, setParsed] = useState<ParsedGCode | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+
+  useEffect(() => {
+    const worker = new Worker(
+      new URL("../workers/gcodeParser.worker.ts", import.meta.url),
+      { type: "module" },
+    );
+
+    worker.onmessage = (event: MessageEvent<ParsedGCode>) => {
+      setParsed(event.data);
+      setIsParsing(false);
+    };
+
+    workerRef.current = worker;
+
+    return () => {
+      worker.terminate();
+      workerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!source.trim()) {
+      setParsed(null);
+      setIsParsing(false);
+      return;
+    }
+
+    setIsParsing(true);
+    workerRef.current?.postMessage({ gcodeText: source });
+  }, [source]);
+
+  return {
+    parsed,
+    isParsing,
+  };
+}
+
+
+path: /src/hooks/usePlayback.ts
+----------------------------------------
+import { useEffect, useState } from "react";
+import { clamp } from "../utils";
+
+export function usePlayback() {
+  const [progress, setProgress] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+
+  useEffect(() => {
+    if (!playing) {
+      return undefined;
+    }
+
+    const id = window.setInterval(() => {
+      setProgress((prev) => {
+        const next = clamp(prev + 0.2 * speed, 0, 100);
+
+        if (next >= 100) {
+          setPlaying(false);
+          return 100;
+        }
+
+        return next;
+      });
+    }, 16);
+
+    return () => window.clearInterval(id);
+  }, [playing, speed]);
+
+  function resetPlayback() {
+    setPlaying(false);
+    setProgress(0);
+  }
+
+  return {
+    progress,
+    setProgress,
+    playing,
+    setPlaying,
+    speed,
+    setSpeed,
+    resetPlayback,
+  };
+}
+
+
 path: /src/main.tsx
 ----------------------------------------
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.tsx'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import "./index.css";
+import App from "./App.tsx";
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />
   </StrictMode>,
-)
+);
+
+
+path: /src/types/gcode.ts
+----------------------------------------
+import type * as THREE from "three";
+
+export type MotionMode = "G0" | "G1";
+export type PlacementMode = "center" | "origin";
+
+export type Point3 = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type ToolPoint = Point3 & {
+  f: number;
+};
+
+export type Segment = {
+  id: number;
+  mode: MotionMode;
+  start: ToolPoint;
+  end: ToolPoint;
+  feed: number;
+  lineNumber: number;
+  raw: string;
+  isCutting: boolean;
+};
+
+export type Bounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+};
+
+export type ParsedStats = {
+  totalLines: number;
+  totalMoves: number;
+  rapidMoves: number;
+  workMoves: number;
+  cuttingMoves: number;
+  renderMoves: number;
+  renderStep: number;
+};
+
+export type ParsedGCode = {
+  segments: Segment[];
+  renderSegments: Segment[];
+  bounds: Bounds;
+  stats: ParsedStats;
+  cumulativeLengths: number[];
+  totalLength: number;
+};
+
+export type StockDimensions = {
+  width: number;
+  height: number;
+  thickness: number;
+};
+
+export type CurrentState = {
+  index: number;
+  position: Point3;
+  mode: MotionMode | "-";
+  lineNumber: number;
+  segment: Segment | null;
+};
+
+export type CameraInfo = {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+};
 
 
 path: /src/utils/index.ts
 ----------------------------------------
 import * as THREE from "three";
-
-export type PlacementMode = "center" | "origin";
+import type { Bounds, PlacementMode, Point3, Segment, StockDimensions } from "../types/gcode";
 
 export const AXIS_MAP = {
-  invertX: true,   // теперь true, чтобы левый нижний угол был слева
+  invertX: true,
   invertY: false,
   invertZ: false,
-};
+} as const;
 
 export function mapAxis(value: number, invert = false): number {
   return invert ? -value : value;
 }
 
-export function toSceneCoords(p: { x: number; y: number; z: number }) {
+export function toSceneCoords(p: Point3): Point3 {
   return {
     x: mapAxis(p.x, AXIS_MAP.invertX),
     y: mapAxis(p.z, AXIS_MAP.invertZ),
@@ -1858,44 +2290,43 @@ export function toSceneCoords(p: { x: number; y: number; z: number }) {
   };
 }
 
-export function fmt(v: number): string {
-  return Number.isFinite(v) ? v.toFixed(2) : "0.00";
-}
-
-export function toScenePoint(p: { x: number; y: number; z: number }) {
+export function toScenePoint(p: Point3): THREE.Vector3 {
   const s = toSceneCoords(p);
   return new THREE.Vector3(s.x, s.y, s.z);
 }
 
-export function segmentLength(seg: any): number {
+export function fmt(v: number): string {
+  return Number.isFinite(v) ? v.toFixed(2) : "0.00";
+}
+
+export function segmentLength(seg: Segment): number {
   const dx = seg.end.x - seg.start.x;
   const dy = seg.end.y - seg.start.y;
   const dz = seg.end.z - seg.start.z;
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+export function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 /**
- * Возвращает координаты центра заготовки в системе G‑кода и смещения left/bottom
- * @param bounds границы траектории
- * @param stock размеры заготовки
- * @param mode режим позиционирования: 'center' – центр заготовки совпадает с центром bounds,
- *             'origin' – левый нижний угол bounds совпадает с левым нижним углом заготовки
+ * Возвращает координаты центра заготовки в системе G-code и смещения left/bottom
  */
 export function getStockPlacement(
-  bounds: { minX: number; maxX: number; minY: number; maxY: number },
-  stock: { width: number; height: number; thickness: number },
-  mode: PlacementMode = "origin"
+  bounds: Pick<Bounds, "minX" | "maxX" | "minY" | "maxY">,
+  stock: StockDimensions,
+  mode: PlacementMode = "origin",
 ) {
-  let centerX: number, centerY: number;
+  const centerX =
+    mode === "center"
+      ? (bounds.minX + bounds.maxX) / 2
+      : bounds.minX + stock.width / 2;
 
-  if (mode === "center") {
-    centerX = (bounds.minX + bounds.maxX) / 2;
-    centerY = (bounds.minY + bounds.maxY) / 2;
-  } else {
-    // origin: левый нижний угол bounds привязан к левому нижнему углу заготовки
-    centerX = bounds.minX + stock.width / 2;
-    centerY = bounds.minY + stock.height / 2;
-  }
+  const centerY =
+    mode === "center"
+      ? (bounds.minY + bounds.maxY) / 2
+      : bounds.minY + stock.height / 2;
 
   const left = centerX - stock.width / 2;
   const bottom = centerY - stock.height / 2;
@@ -1907,76 +2338,104 @@ export function getStockPlacement(
   };
 }
 
+export function downloadTextFile(content: string, fileName: string): void {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
 
 path: /src/workers/gcodeParser.worker.ts
 ----------------------------------------
-// src/workers/gcodeParser.worker.ts
+import type {
+  MotionMode,
+  ParsedGCode,
+  Point3,
+  Segment,
+  ToolPoint,
+} from "../types/gcode";
 
-type MotionMode = "G0" | "G1";
+const MAX_RENDER_SEGMENTS = 25_000;
 
-type Point3 = {
-  x: number;
-  y: number;
-  z: number;
-  f: number;
-};
-
-type Segment = {
-  id: number;
-  mode: MotionMode;
-  start: Point3;
-  end: Point3;
-  feed: number;
-  lineNumber: number;
-  raw: string;
-  isCutting: boolean;
-};
-
-const MAX_RENDER_SEGMENTS = 25000;
-
-function stripComments(line: string) {
+function stripComments(line: string): string {
   return line.split(";")[0].replace(/\([^)]*\)/g, "").trim();
 }
 
-function getWord(line: string, word: string) {
-  const match = line.match(new RegExp(word + "(-?\\d*\\.?\\d+)", "i"));
+function getWord(line: string, word: string): number | null {
+  const match = line.match(new RegExp(`${word}(-?\\d*\\.?\\d+)`, "i"));
   return match ? Number(match[1]) : null;
 }
 
-function getGCodes(line: string) {
-  return [...line.matchAll(/G(\d+(?:\.\d+)?)/gi)].map((m) => m[1]);
+function getGCodes(line: string): string[] {
+  return [...line.matchAll(/G(\d+(?:\.\d+)?)/gi)].map((match) => match[1]);
 }
 
-function parseGCode(text: string) {
+function lengthBetween(start: Point3, end: Point3): number {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const dz = end.z - start.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function parseGCode(text: string): ParsedGCode {
   const safeText = typeof text === "string" ? text : "";
   const lines = safeText.split(/\r?\n/);
 
   let absoluteMode = true;
   let unitScale = 1;
   let lastMotionMode: MotionMode | null = null;
-  let state: Point3 = { x: 0, y: 0, z: 0, f: 0 };
+  let state: ToolPoint = { x: 0, y: 0, z: 0, f: 0 };
 
   const segments: Segment[] = [];
-  const points = [{ ...state }];
+  const points: Point3[] = [{ x: 0, y: 0, z: 0 }];
+
+  let rapidMoves = 0;
+  let workMoves = 0;
+  let cuttingMoves = 0;
 
   for (let i = 0; i < lines.length; i += 1) {
-    const raw = lines[i] || "";
+    const raw = lines[i] ?? "";
     const line = stripComments(raw);
-    if (!line) continue;
+
+    if (!line) {
+      continue;
+    }
 
     const upperLine = line.toUpperCase();
     const gCodes = getGCodes(upperLine);
 
-    if (gCodes.includes("20")) unitScale = 25.4;
-    if (gCodes.includes("21")) unitScale = 1;
-    if (gCodes.includes("90")) absoluteMode = true;
-    if (gCodes.includes("91")) absoluteMode = false;
+    if (gCodes.includes("20")) {
+      unitScale = 25.4;
+    }
+    if (gCodes.includes("21")) {
+      unitScale = 1;
+    }
+    if (gCodes.includes("90")) {
+      absoluteMode = true;
+    }
+    if (gCodes.includes("91")) {
+      absoluteMode = false;
+    }
 
     let motionMode: MotionMode | null = null;
-    if (gCodes.includes("0") || gCodes.includes("00")) motionMode = "G0";
-    if (gCodes.includes("1") || gCodes.includes("01")) motionMode = "G1";
+    if (gCodes.includes("0") || gCodes.includes("00")) {
+      motionMode = "G0";
+    }
+    if (gCodes.includes("1") || gCodes.includes("01")) {
+      motionMode = "G1";
+    }
 
-    if (motionMode) lastMotionMode = motionMode;
+    if (motionMode) {
+      lastMotionMode = motionMode;
+    }
 
     const xWord = getWord(line, "X");
     const yWord = getWord(line, "Y");
@@ -1986,24 +2445,40 @@ function parseGCode(text: string) {
     const hasMove = xWord !== null || yWord !== null || zWord !== null;
 
     if (!hasMove) {
-      if (fWord !== null) state.f = fWord;
+      if (fWord !== null) {
+        state.f = fWord;
+      }
       continue;
     }
 
     const effectiveMode = motionMode || lastMotionMode;
-    if (!effectiveMode) continue;
+    if (!effectiveMode) {
+      continue;
+    }
 
-    const next: Point3 = { ...state };
+    const next: ToolPoint = { ...state };
 
-    if (xWord !== null) next.x = absoluteMode ? xWord * unitScale : state.x + xWord * unitScale;
-    if (yWord !== null) next.y = absoluteMode ? yWord * unitScale : state.y + yWord * unitScale;
-    if (zWord !== null) next.z = absoluteMode ? zWord * unitScale : state.z + zWord * unitScale;
-    if (fWord !== null) next.f = fWord;
+    if (xWord !== null) {
+      next.x = absoluteMode ? xWord * unitScale : state.x + xWord * unitScale;
+    }
+    if (yWord !== null) {
+      next.y = absoluteMode ? yWord * unitScale : state.y + yWord * unitScale;
+    }
+    if (zWord !== null) {
+      next.z = absoluteMode ? zWord * unitScale : state.z + zWord * unitScale;
+    }
+    if (fWord !== null) {
+      next.f = fWord;
+    }
 
     const moved = next.x !== state.x || next.y !== state.y || next.z !== state.z;
-    if (!moved) continue;
+    if (!moved) {
+      continue;
+    }
 
-    segments.push({
+    const isCutting = next.z <= 0 || state.z <= 0;
+
+    const segment: Segment = {
       id: segments.length,
       mode: effectiveMode,
       start: { ...state },
@@ -2011,65 +2486,78 @@ function parseGCode(text: string) {
       feed: next.f,
       lineNumber: i + 1,
       raw,
-      isCutting: next.z <= 0 || state.z <= 0,
-    });
+      isCutting,
+    };
 
-    points.push({ ...next });
+    segments.push(segment);
+    points.push({ x: next.x, y: next.y, z: next.z });
+
+    if (effectiveMode === "G0") {
+      rapidMoves += 1;
+    } else {
+      workMoves += 1;
+    }
+
+    if (isCutting) {
+      cuttingMoves += 1;
+    }
+
     state = next;
   }
 
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const zs = points.map((p) => p.z);
+  let minX = points[0]?.x ?? 0;
+  let maxX = points[0]?.x ?? 0;
+  let minY = points[0]?.y ?? 0;
+  let maxY = points[0]?.y ?? 0;
+  let minZ = points[0]?.z ?? 0;
+  let maxZ = points[0]?.z ?? 0;
 
-  let minX = xs[0] ?? 0;
-  let maxX = xs[0] ?? 0;
-  let minY = ys[0] ?? 0;
-  let maxY = ys[0] ?? 0;
-  let minZ = zs[0] ?? 0;
-  let maxZ = zs[0] ?? 0;
-
-  for (let i = 1; i < xs.length; i += 1) {
-    if (xs[i] < minX) minX = xs[i];
-    if (xs[i] > maxX) maxX = xs[i];
-    if (ys[i] < minY) minY = ys[i];
-    if (ys[i] > maxY) maxY = ys[i];
-    if (zs[i] < minZ) minZ = zs[i];
-    if (zs[i] > maxZ) maxZ = zs[i];
+  for (let i = 1; i < points.length; i += 1) {
+    const point = points[i];
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+    if (point.z < minZ) minZ = point.z;
+    if (point.z > maxZ) maxZ = point.z;
   }
+
+  let totalLength = 0;
+  const cumulativeLengths = segments.map((segment) => {
+    totalLength += lengthBetween(segment.start, segment.end);
+    return totalLength;
+  });
 
   const renderStep = Math.max(1, Math.ceil(segments.length / MAX_RENDER_SEGMENTS));
   const renderSegments =
     renderStep === 1
       ? segments
-      : segments.filter((_, idx) => idx % renderStep === 0 || idx === segments.length - 1);
+      : segments.filter(
+          (_segment, index) => index % renderStep === 0 || index === segments.length - 1,
+        );
 
   return {
     segments,
     renderSegments,
     bounds: { minX, maxX, minY, maxY, minZ, maxZ },
+    cumulativeLengths,
+    totalLength,
     stats: {
       totalLines: lines.length,
       totalMoves: segments.length,
-      rapidMoves: segments.filter((s) => s.mode === "G0").length,
-      workMoves: segments.filter((s) => s.mode === "G1").length,
-      cuttingMoves: segments.filter((s) => s.isCutting).length,
+      rapidMoves,
+      workMoves,
+      cuttingMoves,
       renderMoves: renderSegments.length,
       renderStep,
     },
   };
 }
 
-self.onmessage = (e: MessageEvent<{ gcodeText: string }>) => {
-  const { gcodeText } = e.data;
-  const result = parseGCode(gcodeText);
+self.onmessage = (event: MessageEvent<{ gcodeText: string }>) => {
+  const result = parseGCode(event.data.gcodeText);
   self.postMessage(result);
 };
-
-
-path: /src/workers/heightmap.worker.ts
-----------------------------------------
-
 
 
 path: /tsconfig.app.json
@@ -2157,8 +2645,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 30
+included: 35
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 69444
+totalBytes(approx): 71032

@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
-import { getStockPlacement, toScenePoint } from "../utils";
+import { toScenePoint } from "../utils";
 
 type AutoFitCameraProps = {
   bounds: Bounds;
@@ -30,32 +30,30 @@ export function AutoFitCamera({
       bounds.maxZ - bounds.minZ,
       1,
     );
+
+    const maxHorizontalSize = Math.max(sizeX, sizeY);
     const maxSize = Math.max(sizeX, sizeY, sizeZ);
 
-    const placement = getStockPlacement(bounds, stock, placementMode);
-    const centerScene = toScenePoint(placement.centerGcode);
-    const cornerScene = toScenePoint({ x: placement.left, y: placement.bottom, z: 0 });
+    const targetScene = toScenePoint({ x: 0, y: 0, z: 0 });
+    const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
 
-    const direction = new THREE.Vector3()
-      .subVectors(centerScene, cornerScene);
+    // Небольшой фиксированный наклон:
+    // +Y = сверху, +Z = лёгкий наклон "спереди"
+    const cameraPosition = new THREE.Vector3(
+      targetScene.x,
+      targetScene.y + distance,
+      targetScene.z + distance * -0.22,
+    );
 
-    if (direction.lengthSq() < 1e-6) {
-      direction.set(-1, 1, 1);
-    }
-
-    direction.normalize();
-
-    const distance = maxSize * 2.5;
-    const cameraPos = cornerScene.clone().add(direction.multiplyScalar(distance));
-
-    camera.position.copy(cameraPos);
+    camera.position.copy(cameraPosition);
+    camera.up.set(0, 0, 1);
     camera.near = 0.1;
-    camera.far = Math.max(2000, maxSize * 20);
-    camera.lookAt(cornerScene);
+    camera.far = Math.max(4000, distance * 10);
+    camera.lookAt(targetScene);
     camera.updateProjectionMatrix();
 
     if (controlsRef.current) {
-      controlsRef.current.target.copy(cornerScene);
+      controlsRef.current.target.copy(targetScene);
       controlsRef.current.update();
     }
   }, [bounds, camera, cameraResetKey, controlsRef, placementMode, stock]);
