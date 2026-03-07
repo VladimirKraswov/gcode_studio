@@ -1,0 +1,2164 @@
+=== CODE BUNDLE ===
+root: /Volumes/Extend/work/gcode_studio
+ignore: .codebundleignore
+generated: 2026-03-07T10:42:33.143Z
+
+
+
+path: /.gitignore
+----------------------------------------
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+path: /.vscode/c_cpp_properties.json
+----------------------------------------
+{
+  "configurations": [
+    {
+      "name": "STM32",
+      "includePath": [
+        "${workspaceFolder}/Core/Inc",
+        "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
+        "${workspaceFolder}/Drivers/CMSIS/Include",
+        "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+        "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy"
+      ],
+      "defines": [
+        "USE_HAL_DRIVER",
+        "STM32F407xx"
+      ],
+      "compilerPath": "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.macos64_1.0.100.202509120712/tools/bin/arm-none-eabi-gcc",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-arm",
+      "browse": {
+        "path": [
+          "${workspaceFolder}/Core/Inc",
+          "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
+          "${workspaceFolder}/Drivers/CMSIS/Include",
+          "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+          "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
+}
+
+
+path: /bundle-code.js
+----------------------------------------
+#!/usr/bin/env node
+/**
+ * bundle-code.js
+ * Собирает весь текстовый код проекта в один файл, помечая секции путями.
+ * - Рекурсивный обход
+ * - Пропуск бинарных файлов (по содержимому)
+ * - Игнор по .codebundleignore (gitignore-like)
+ */
+
+import  fs from "fs";
+import fsp from "fs/promises";
+import path from "path";
+
+const PROJECT_ROOT = process.cwd();
+const IGNORE_FILE_NAME = ".codebundleignore";
+const OUTPUT_FILE = path.join(PROJECT_ROOT, "codebundle.txt");
+
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_TOTAL_BYTES = 200 * 1024 * 1024;   // 200MB
+
+// Если заполнить — соберёт только эти расширения. Если пусто — любые текстовые.
+const ONLY_EXTENSIONS = new Set([
+  // ".js", ".jsx", ".ts", ".tsx", ".json", ".css", ".scss", ".md", ".html", ".yml", ".yaml"
+]);
+
+function normalizeToPosix(p) {
+  return p.split(path.sep).join("/");
+}
+
+function stripBom(s) {
+  return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
+}
+
+async function readIgnoreFile(ignorePath) {
+  try {
+    const raw = await fsp.readFile(ignorePath, "utf8");
+    return stripBom(raw)
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith("#"));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Компилируем игнор-правила.
+ * Поддержка:
+ * - "node_modules/" (игнор любой сегмент /node_modules/ в любом месте)
+ * - "dist/" и т.п.
+ * - "*.ext"
+ * - "path/to/file" (точный относительный путь)
+ * - "!pattern" (снять игнор)
+ */
+function buildIgnoreMatcher(patterns) {
+  // дефолтные, чтобы не протекало даже если забыли
+  const defaultPatterns = [
+    "node_modules/",
+    ".git/",
+    "dist/",
+    "build/",
+    ".next/",
+    "coverage/",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+  ];
+
+  const all = [...defaultPatterns, ...patterns];
+
+  const rules = all.map(p => ({
+    neg: p.startsWith("!"),
+    pat: (p.startsWith("!") ? p.slice(1) : p).trim(),
+  })).filter(r => r.pat);
+
+  function matchRule(relPosix, pat) {
+    // relPosix: "admin/node_modules/express/index.js"
+
+    // directory pattern: "node_modules/"
+    if (pat.endsWith("/")) {
+      const seg = pat.slice(0, -1);
+      if (!seg) return false;
+
+      // матч:
+      // - если путь начинается с seg/
+      // - или содержит /seg/ как сегмент
+      return (
+        relPosix === seg ||
+        relPosix.startsWith(seg + "/") ||
+        relPosix.includes("/" + seg + "/") ||
+        relPosix.endsWith("/" + seg)
+      );
+    }
+
+    // glob extension: "*.png"
+    if (pat.startsWith("*.") && !pat.includes("/")) {
+      const ext = pat.slice(1); // ".png"
+      return relPosix.toLowerCase().endsWith(ext.toLowerCase());
+    }
+
+    // exact file path
+    return relPosix === pat;
+  }
+
+  return function isIgnored(relPosix) {
+    let ignored = false;
+    for (const r of rules) {
+      if (matchRule(relPosix, r.pat)) {
+        ignored = !r.neg; // если negation — снимаем игнор
+      }
+    }
+    return ignored;
+  };
+}
+
+async function isProbablyBinary(filePath) {
+  const fd = await fsp.open(filePath, "r");
+  try {
+    const { size } = await fd.stat();
+    const toRead = Math.min(size, 8192);
+    const buf = Buffer.allocUnsafe(toRead);
+    const { bytesRead } = await fd.read(buf, 0, toRead, 0);
+    if (bytesRead === 0) return false;
+
+    let nulCount = 0;
+    let weirdCount = 0;
+    for (let i = 0; i < bytesRead; i++) {
+      const b = buf[i];
+      if (b === 0) nulCount++;
+      const ok =
+        b === 9 || b === 10 || b === 13 || (b >= 32 && b <= 126) || b >= 128;
+      if (!ok) weirdCount++;
+    }
+    if (nulCount > 0) return true;
+    return (weirdCount / bytesRead) > 0.25;
+  } finally {
+    await fd.close();
+  }
+}
+
+async function* walk(dirAbs, isIgnored) {
+  let entries;
+  try {
+    entries = await fsp.readdir(dirAbs, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const ent of entries) {
+    const abs = path.join(dirAbs, ent.name);
+    const rel = path.relative(PROJECT_ROOT, abs);
+    const relPosix = normalizeToPosix(rel);
+
+    // не включаем output и ignore файл
+    if (path.resolve(abs) === path.resolve(OUTPUT_FILE)) continue;
+    if (relPosix === IGNORE_FILE_NAME) continue;
+
+    if (isIgnored(relPosix)) continue;
+
+    if (ent.isDirectory()) {
+      yield* walk(abs, isIgnored);
+    } else if (ent.isFile()) {
+      yield { abs, relPosix };
+    }
+  }
+}
+
+async function bundle() {
+  const ignorePath = path.join(PROJECT_ROOT, IGNORE_FILE_NAME);
+  const patterns = await readIgnoreFile(ignorePath);
+  const isIgnored = buildIgnoreMatcher(patterns);
+
+  const out = fs.createWriteStream(OUTPUT_FILE, { encoding: "utf8" });
+
+  let totalBytes = 0;
+  let included = 0;
+  let skippedBinary = 0;
+  let skippedSize = 0;
+  let skippedExt = 0;
+
+  out.write(`=== CODE BUNDLE ===\n`);
+  out.write(`root: ${normalizeToPosix(PROJECT_ROOT)}\n`);
+  out.write(`ignore: ${IGNORE_FILE_NAME}\n`);
+  out.write(`generated: ${new Date().toISOString()}\n\n`);
+
+  for await (const file of walk(PROJECT_ROOT, isIgnored)) {
+    const ext = path.extname(file.relPosix).toLowerCase();
+    if (ONLY_EXTENSIONS.size && !ONLY_EXTENSIONS.has(ext)) {
+      skippedExt++;
+      continue;
+    }
+
+    let stat;
+    try {
+      stat = await fsp.stat(file.abs);
+    } catch {
+      continue;
+    }
+
+    if (stat.size > MAX_FILE_SIZE_BYTES) {
+      skippedSize++;
+      continue;
+    }
+    if (totalBytes + stat.size > MAX_TOTAL_BYTES) {
+      out.write(`\n\n=== STOP: total size limit reached (${MAX_TOTAL_BYTES} bytes) ===\n`);
+      break;
+    }
+
+    let binary;
+    try {
+      binary = await isProbablyBinary(file.abs);
+    } catch {
+      continue;
+    }
+    if (binary) {
+      skippedBinary++;
+      continue;
+    }
+
+    let content;
+    try {
+      content = await fsp.readFile(file.abs, "utf8");
+    } catch {
+      continue;
+    }
+
+    out.write(`\n\npath: /${file.relPosix}\n`);
+    out.write(`----------------------------------------\n`);
+    out.write(content);
+    if (!content.endsWith("\n")) out.write("\n");
+
+    totalBytes += stat.size;
+    included++;
+  }
+
+  out.write(`\n\n=== SUMMARY ===\n`);
+  out.write(`included: ${included}\n`);
+  out.write(`skipped(binary): ${skippedBinary}\n`);
+  out.write(`skipped(size): ${skippedSize}\n`);
+  out.write(`skipped(ext): ${skippedExt}\n`);
+  out.write(`totalBytes(approx): ${totalBytes}\n`);
+
+  await new Promise((res, rej) => {
+    out.end(res);
+    out.on("error", rej);
+  });
+
+  console.log(`Done. Output: ${OUTPUT_FILE}`);
+}
+
+bundle().catch(err => {
+  console.error("Error:", err);
+  process.exitCode = 1;
+});
+
+
+path: /eslint.config.js
+----------------------------------------
+import js from '@eslint/js'
+import globals from 'globals'
+import reactHooks from 'eslint-plugin-react-hooks'
+import reactRefresh from 'eslint-plugin-react-refresh'
+import tseslint from 'typescript-eslint'
+import { defineConfig, globalIgnores } from 'eslint/config'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      js.configs.recommended,
+      tseslint.configs.recommended,
+      reactHooks.configs.flat.recommended,
+      reactRefresh.configs.vite,
+    ],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+  },
+])
+
+
+path: /package.json
+----------------------------------------
+{
+  "name": "gcode_studio",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@codemirror/state": "^6.5.4",
+    "@codemirror/view": "^6.39.16",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
+    "@uiw/react-codemirror": "^4.25.7",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.183.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^25.3.5",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.48.0",
+    "vite": "^8.0.0-beta.13"
+  },
+  "overrides": {
+    "vite": "^8.0.0-beta.13"
+  }
+}
+
+
+path: /src/App.tsx
+----------------------------------------
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { fmt, segmentLength } from "./utils";
+import * as THREE from "three";
+import { PathScene } from "./components/PathScene";
+import { RightInfoPanel } from "./components/RightInfoPanel";
+import { GCodeEditorTab } from "./components/GCodeEditorTab";
+import type { PlacementMode } from "./utils";
+import { DEMO_GCODE } from "./constants/demo";
+
+export default function App() {
+  const [source, setSource] = useState(DEMO_GCODE);
+  const [fileName, setFileName] = useState("demo.gcode");
+  const [progress, setProgress] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [cameraResetKey, setCameraResetKey] = useState(0);
+  const [stock, setStock] = useState({ width: 300, height: 180, thickness: 3 });
+  const [showMaterialRemoval, setShowMaterialRemoval] = useState(true);
+  const [parsed, setParsed] = useState<any>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const workerRef = useRef<Worker | null>(null);
+  const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
+  const [detailLevel, setDetailLevel] = useState<number>(5);
+  const [cameraInfo, setCameraInfo] = useState<{ position: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
+
+  useEffect(() => {
+    workerRef.current = new Worker(new URL("./workers/gcodeParser.worker.ts", import.meta.url));
+    workerRef.current.onmessage = (e) => {
+      setParsed(e.data);
+      setIsParsing(false);
+    };
+    return () => workerRef.current?.terminate();
+  }, []);
+
+  useEffect(() => {
+    if (!source) return;
+    setIsParsing(true);
+    workerRef.current?.postMessage({ gcodeText: source });
+  }, [source]);
+
+  const metrics = useMemo(() => {
+    if (!parsed) return { cumulative: [], totalLength: 0 };
+    let totalLength = 0;
+    const cumulative = parsed.segments.map((seg: any) => {
+      const len = segmentLength(seg);
+      totalLength += len;
+      return { len, total: totalLength };
+    });
+    return { cumulative, totalLength };
+  }, [parsed]);
+
+  const currentState = useMemo(() => {
+    if (!parsed?.segments.length) {
+      return {
+        index: -1,
+        position: { x: 0, y: 0, z: 0 },
+        mode: "-",
+        lineNumber: 0,
+        segment: null,
+      };
+    }
+
+    const { cumulative, totalLength } = metrics;
+    if (progress <= 0) {
+      const first = parsed.segments[0];
+      return {
+        index: 0,
+        position: { ...first.start },
+        mode: first.mode,
+        lineNumber: first.lineNumber,
+        segment: first,
+      };
+    }
+
+    if (totalLength <= 0) {
+      const last = parsed.segments[parsed.segments.length - 1];
+      return {
+        index: parsed.segments.length - 1,
+        position: { ...last.end },
+        lineNumber: last.lineNumber,
+        mode: last.mode,
+        segment: last,
+      };
+    }
+
+    const target = (progress / 100) * totalLength;
+
+    for (let i = 0; i < parsed.segments.length; i += 1) {
+      const seg = parsed.segments[i];
+      const prevTotal = i === 0 ? 0 : cumulative[i - 1].total;
+      const currentTotal = cumulative[i].total;
+
+      if (target <= currentTotal || i === parsed.segments.length - 1) {
+        const len = Math.max(cumulative[i].len, 0.000001);
+        const t = Math.min(Math.max((target - prevTotal) / len, 0), 1);
+        return {
+          index: i,
+          position: {
+            x: seg.start.x + (seg.end.x - seg.start.x) * t,
+            y: seg.start.y + (seg.end.y - seg.start.y) * t,
+            z: seg.start.z + (seg.end.z - seg.start.z) * t,
+          },
+          mode: seg.mode,
+          lineNumber: seg.lineNumber,
+          segment: seg,
+        };
+      }
+    }
+
+    const last = parsed.segments[parsed.segments.length - 1];
+    return {
+      index: parsed.segments.length - 1,
+      position: { ...last.end },
+      mode: last.mode,
+      lineNumber: last.lineNumber,
+      segment: last,
+    };
+  }, [metrics, parsed, progress]);
+
+  useEffect(() => {
+    if (!playing) return undefined;
+    const id = window.setInterval(() => {
+      setProgress((prev) => {
+        const next = prev + 0.2 * speed;
+        if (next >= 100) {
+          setPlaying(false);
+          return 100;
+        }
+        return next;
+      });
+    }, 16);
+    return () => window.clearInterval(id);
+  }, [playing, speed]);
+
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    setSource(text || "");
+    setFileName(file.name || "loaded.gcode");
+    setProgress(0);
+    setPlaying(false);
+    setCameraResetKey((v) => v + 1);
+  }
+
+  if (!parsed || isParsing) {
+    return (
+      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8fafc" }}>
+        <div style={{ textAlign: "center" }}>
+          <h2>GCode Studio</h2>
+          <p>{isParsing ? "Парсинг G‑кода... Это может занять несколько секунд." : "Загрузите G‑код"}</p>
+          {!isParsing && (
+            <input type="file" accept=".gcode,.nc,.tap,.txt" onChange={handleFileChange} />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const b = parsed.bounds;
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#f8fafc", padding: 20, color: "#0f172a", fontFamily: "Arial, sans-serif" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr 320px", gap: 20, maxWidth: 1800, margin: "0 auto" }}>
+        {/* Левая панель – настройки */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            <h2 style={{ marginTop: 0, marginBottom: 16 }}>GCode Studio</h2>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 14, marginBottom: 6 }}>Загрузка G-code</div>
+              <input type="file" accept=".gcode,.nc,.tap,.txt" onChange={handleFileChange} />
+            </div>
+
+            <div style={{ background: "#f1f5f9", borderRadius: 12, padding: 12, fontSize: 14, marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Файл</div>
+              <div style={{ wordBreak: "break-all" }}>{fileName}</div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              <button onClick={() => setPlaying((v) => !v)}>{playing ? "Пауза" : "Старт"}</button>
+              <button onClick={() => { setPlaying(false); setProgress(0); }}>В начало</button>
+              <button onClick={() => { setSource(DEMO_GCODE); setFileName("demo.gcode"); setProgress(0); setPlaying(false); setCameraResetKey((v) => v + 1); }}>Демо</button>
+              <button onClick={() => setCameraResetKey((v) => v + 1)}>Сброс вида</button>
+            </div>
+
+            <div style={{ marginBottom: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Заготовка</div>
+
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Позиционирование заготовки</div>
+              <label style={{ display: "block", marginBottom: 4 }}>
+                <input
+                  type="radio"
+                  name="placementMode"
+                  value="origin"
+                  checked={placementMode === "origin"}
+                  onChange={() => setPlacementMode("origin")}
+                />{" "}
+                Левый нижний угол
+              </label>
+              <label style={{ display: "block", marginBottom: 4 }}>
+                <input
+                  type="radio"
+                  name="placementMode"
+                  value="center"
+                  checked={placementMode === "center"}
+                  onChange={() => setPlacementMode("center")}
+                />{" "}
+                Центрировать по траектории
+              </label>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <label style={{ fontSize: 12 }}>
+                  Ширина, мм
+                  <input
+                    type="number"
+                    min="1"
+                    value={stock.width}
+                    onChange={(e) => setStock((s) => ({ ...s, width: Math.max(1, Number(e.target.value) || 1) }))}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+                <label style={{ fontSize: 12 }}>
+                  Высота, мм
+                  <input
+                    type="number"
+                    min="1"
+                    value={stock.height}
+                    onChange={(e) => setStock((s) => ({ ...s, height: Math.max(1, Number(e.target.value) || 1) }))}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+                <label style={{ fontSize: 12 }}>
+                  Толщина, мм
+                  <input
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    value={stock.thickness}
+                    onChange={(e) => setStock((s) => ({ ...s, thickness: Math.max(0.1, Number(e.target.value) || 0.1) }))}
+                    style={{ width: "100%" }}
+                  />
+                </label>
+              </div>
+
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 14, fontWeight: 600 }}>
+                <input type="checkbox" checked={showMaterialRemoval} onChange={(e) => setShowMaterialRemoval(e.target.checked)} />
+                Показывать снятие материала
+              </label>
+
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Качество меша</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12 }}>1</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={detailLevel}
+                    onChange={(e) => setDetailLevel(Number(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ fontSize: 12 }}>10</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+                <span>Прогресс</span>
+                <span>{progress.toFixed(1)}%</span>
+              </div>
+              <input type="range" min="0" max="100" step="0.1" value={progress} onChange={(e) => setProgress(Number(e.target.value))} style={{ width: "100%" }} />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginBottom: 6 }}>
+                <span>Скорость</span>
+                <span>{speed.toFixed(1)}x</span>
+              </div>
+              <input type="range" min="0.2" max="5" step="0.1" value={speed} onChange={(e) => setSpeed(Number(e.target.value))} style={{ width: "100%" }} />
+            </div>
+          </div>
+        </div>
+
+        {/* Центральная панель – 3D сцена */}
+        <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+          <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
+          <div style={{ height: 760, borderRadius: 16, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+            <PathScene
+              parsed={parsed}
+              currentState={currentState}
+              progress={progress}
+              cameraResetKey={cameraResetKey}
+              stock={stock}
+              showMaterialRemoval={showMaterialRemoval}
+              totalLength={metrics.totalLength}
+              placementMode={placementMode}
+              detailLevel={detailLevel}
+              onCameraUpdate={setCameraInfo}
+            />
+          </div>
+          <div style={{ marginTop: 12, fontSize: 14, color: "#64748b", display: "flex", justifyContent: "space-between" }}>
+            <span>ЛКМ — вращение, ПКМ — панорама, колесо мыши — масштаб.</span>
+            <button onClick={() => setShowEditor(!showEditor)}>
+              {showEditor ? "Показать информацию" : "Редактор G‑кода"}
+            </button>
+          </div>
+        </div>
+
+        {/* Правая панель – либо информация, либо редактор */}
+        {showEditor ? (
+          <GCodeEditorTab source={source} setSource={setSource} fileName={fileName} onClose={() => setShowEditor(false)} />
+        ) : (
+          <RightInfoPanel
+            bounds={b}
+            stock={stock}
+            parsedStats={parsed.stats}
+            currentState={currentState}
+            cameraInfo={cameraInfo}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+path: /src/assets/react.svg
+----------------------------------------
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="35.93" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 228"><path fill="#00D8FF" d="M210.483 73.824a171.49 171.49 0 0 0-8.24-2.597c.465-1.9.893-3.777 1.273-5.621c6.238-30.281 2.16-54.676-11.769-62.708c-13.355-7.7-35.196.329-57.254 19.526a171.23 171.23 0 0 0-6.375 5.848a155.866 155.866 0 0 0-4.241-3.917C100.759 3.829 77.587-4.822 63.673 3.233C50.33 10.957 46.379 33.89 51.995 62.588a170.974 170.974 0 0 0 1.892 8.48c-3.28.932-6.445 1.924-9.474 2.98C17.309 83.498 0 98.307 0 113.668c0 15.865 18.582 31.778 46.812 41.427a145.52 145.52 0 0 0 6.921 2.165a167.467 167.467 0 0 0-2.01 9.138c-5.354 28.2-1.173 50.591 12.134 58.266c13.744 7.926 36.812-.22 59.273-19.855a145.567 145.567 0 0 0 5.342-4.923a168.064 168.064 0 0 0 6.92 6.314c21.758 18.722 43.246 26.282 56.54 18.586c13.731-7.949 18.194-32.003 12.4-61.268a145.016 145.016 0 0 0-1.535-6.842c1.62-.48 3.21-.974 4.76-1.488c29.348-9.723 48.443-25.443 48.443-41.52c0-15.417-17.868-30.326-45.517-39.844Zm-6.365 70.984c-1.4.463-2.836.91-4.3 1.345c-3.24-10.257-7.612-21.163-12.963-32.432c5.106-11 9.31-21.767 12.459-31.957c2.619.758 5.16 1.557 7.61 2.4c23.69 8.156 38.14 20.213 38.14 29.504c0 9.896-15.606 22.743-40.946 31.14Zm-10.514 20.834c2.562 12.94 2.927 24.64 1.23 33.787c-1.524 8.219-4.59 13.698-8.382 15.893c-8.067 4.67-25.32-1.4-43.927-17.412a156.726 156.726 0 0 1-6.437-5.87c7.214-7.889 14.423-17.06 21.459-27.246c12.376-1.098 24.068-2.894 34.671-5.345a134.17 134.17 0 0 1 1.386 6.193ZM87.276 214.515c-7.882 2.783-14.16 2.863-17.955.675c-8.075-4.657-11.432-22.636-6.853-46.752a156.923 156.923 0 0 1 1.869-8.499c10.486 2.32 22.093 3.988 34.498 4.994c7.084 9.967 14.501 19.128 21.976 27.15a134.668 134.668 0 0 1-4.877 4.492c-9.933 8.682-19.886 14.842-28.658 17.94ZM50.35 144.747c-12.483-4.267-22.792-9.812-29.858-15.863c-6.35-5.437-9.555-10.836-9.555-15.216c0-9.322 13.897-21.212 37.076-29.293c2.813-.98 5.757-1.905 8.812-2.773c3.204 10.42 7.406 21.315 12.477 32.332c-5.137 11.18-9.399 22.249-12.634 32.792a134.718 134.718 0 0 1-6.318-1.979Zm12.378-84.26c-4.811-24.587-1.616-43.134 6.425-47.789c8.564-4.958 27.502 2.111 47.463 19.835a144.318 144.318 0 0 1 3.841 3.545c-7.438 7.987-14.787 17.08-21.808 26.988c-12.04 1.116-23.565 2.908-34.161 5.309a160.342 160.342 0 0 1-1.76-7.887Zm110.427 27.268a347.8 347.8 0 0 0-7.785-12.803c8.168 1.033 15.994 2.404 23.343 4.08c-2.206 7.072-4.956 14.465-8.193 22.045a381.151 381.151 0 0 0-7.365-13.322Zm-45.032-43.861c5.044 5.465 10.096 11.566 15.065 18.186a322.04 322.04 0 0 0-30.257-.006c4.974-6.559 10.069-12.652 15.192-18.18ZM82.802 87.83a323.167 323.167 0 0 0-7.227 13.238c-3.184-7.553-5.909-14.98-8.134-22.152c7.304-1.634 15.093-2.97 23.209-3.984a321.524 321.524 0 0 0-7.848 12.897Zm8.081 65.352c-8.385-.936-16.291-2.203-23.593-3.793c2.26-7.3 5.045-14.885 8.298-22.6a321.187 321.187 0 0 0 7.257 13.246c2.594 4.48 5.28 8.868 8.038 13.147Zm37.542 31.03c-5.184-5.592-10.354-11.779-15.403-18.433c4.902.192 9.899.29 14.978.29c5.218 0 10.376-.117 15.453-.343c-4.985 6.774-10.018 12.97-15.028 18.486Zm52.198-57.817c3.422 7.8 6.306 15.345 8.596 22.52c-7.422 1.694-15.436 3.058-23.88 4.071a382.417 382.417 0 0 0 7.859-13.026a347.403 347.403 0 0 0 7.425-13.565Zm-16.898 8.101a358.557 358.557 0 0 1-12.281 19.815a329.4 329.4 0 0 1-23.444.823c-7.967 0-15.716-.248-23.178-.732a310.202 310.202 0 0 1-12.513-19.846h.001a307.41 307.41 0 0 1-10.923-20.627a310.278 310.278 0 0 1 10.89-20.637l-.001.001a307.318 307.318 0 0 1 12.413-19.761c7.613-.576 15.42-.876 23.31-.876H128c7.926 0 15.743.303 23.354.883a329.357 329.357 0 0 1 12.335 19.695a358.489 358.489 0 0 1 11.036 20.54a329.472 329.472 0 0 1-11 20.722Zm22.56-122.124c8.572 4.944 11.906 24.881 6.52 51.026c-.344 1.668-.73 3.367-1.15 5.09c-10.622-2.452-22.155-4.275-34.23-5.408c-7.034-10.017-14.323-19.124-21.64-27.008a160.789 160.789 0 0 1 5.888-5.4c18.9-16.447 36.564-22.941 44.612-18.3ZM128 90.808c12.625 0 22.86 10.235 22.86 22.86s-10.235 22.86-22.86 22.86s-22.86-10.235-22.86-22.86s10.235-22.86 22.86-22.86Z"></path></svg>
+
+
+path: /src/components/AutoFitCamera.tsx
+----------------------------------------
+import { useThree } from "@react-three/fiber";
+import { useEffect } from "react";
+import * as THREE from "three";
+import { toScenePoint, getStockPlacement } from "../utils";
+
+interface AutoFitCameraProps {
+  bounds: any;
+  stock: any;
+  placementMode: any;
+  cameraResetKey: any;
+}
+
+export function AutoFitCamera({ bounds, stock, placementMode, cameraResetKey }: AutoFitCameraProps) {
+  const { camera } = useThree();
+
+  useEffect(() => {
+    const sizeX = Math.max(stock.width, bounds.maxX - bounds.minX, 1);
+    const sizeY = Math.max(stock.height, bounds.maxY - bounds.minY, 1);
+    const sizeZ = Math.max(stock.thickness + Math.max(0, bounds.maxZ), bounds.maxZ - bounds.minZ, 1);
+    const maxSize = Math.max(sizeX, sizeY, sizeZ);
+
+    const placement = getStockPlacement(bounds, stock, placementMode);
+    const centerGcode = placement.centerGcode;
+    const cornerGcode = { x: placement.left, y: placement.bottom, z: 0 }; // левый нижний угол на поверхности
+    const centerScene = toScenePoint(centerGcode);
+    const cornerScene = toScenePoint(cornerGcode);
+
+    // Направление от угла к центру
+    const dir = new THREE.Vector3().subVectors(centerScene, cornerScene).normalize();
+    // Позиция камеры: угол + направление * расстояние
+    const distance = maxSize * 2.5;
+    const cameraPos = cornerScene.clone().add(dir.multiplyScalar(distance));
+
+    camera.position.copy(cameraPos);
+    camera.near = 0.1;
+    camera.far = Math.max(2000, maxSize * 20);
+    camera.lookAt(cornerScene);
+    camera.updateProjectionMatrix();
+  }, [camera, bounds, stock, placementMode, cameraResetKey]);
+
+  return null;
+}
+
+
+path: /src/components/CameraDebug.tsx
+----------------------------------------
+import { useEffect } from "react";
+import { useThree } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import * as THREE from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+
+type CameraDebugProps = {
+  onUpdate: (info: { position: THREE.Vector3; target: THREE.Vector3 }) => void;
+};
+
+export function CameraDebug({ onUpdate }: CameraDebugProps) {
+  const { camera, controls } = useThree();
+
+  useEffect(() => {
+    if (!controls) return;
+
+    const handleChange = () => {
+      onUpdate({
+        position: camera.position.clone(),
+        target: (controls as any).target.clone(), // OrbitControls имеет свойство target
+      });
+    };
+
+    // Вызвать сразу для начальных значений
+    handleChange();
+
+    (controls as OrbitControlsImpl).addEventListener('change', handleChange);
+    return () => (controls as OrbitControlsImpl).removeEventListener('change', handleChange);
+  }, [camera, controls, onUpdate]);
+
+  return null;
+}
+
+
+path: /src/components/FixedCamera.tsx
+----------------------------------------
+import { useEffect } from "react";
+import { useThree } from "@react-three/fiber";
+
+type FixedCameraProps = {
+  cameraResetKey: number;
+};
+
+export function FixedCamera({ cameraResetKey }: FixedCameraProps) {
+  const { camera, controls } = useThree();
+
+  useEffect(() => {
+    if (!controls) return;
+
+    // Устанавливаем фиксированную позицию и цель
+    camera.position.set(-155.74, 311.41, -200.47);
+    (controls as any).target.set(-152.94, 27.98, 60.09);
+    (controls as any).update();
+
+    console.log('Camera reset to fixed position');
+  }, [cameraResetKey, camera, controls]);
+
+  return null;
+}
+
+
+path: /src/components/GCodeEditorPanel.tsx
+----------------------------------------
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { EditorSelection } from "@codemirror/state";
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
+
+type GCodeEditorPanelProps = {
+  source: string;
+  setSource: (src: string) => void;
+  fileName: string;
+};
+
+const COMMON_COMMANDS = [
+  "G0",
+  "G1",
+  "G90",
+  "G91",
+  "G21",
+  "G20",
+  "M3",
+  "M5",
+  "M6 T",
+  "G04 P",
+  "S",
+  "F",
+];
+
+export function GCodeEditorPanel({
+  source,
+  setSource,
+  fileName,
+}: GCodeEditorPanelProps) {
+  const editorRef = useRef<ReactCodeMirrorRef | null>(null);
+  const localValueRef = useRef(source);
+  const [editorValue, setEditorValue] = useState(source);
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (!isDirty) {
+      localValueRef.current = source;
+      setEditorValue(source);
+    }
+  }, [source, isDirty]);
+
+  const extensions = useMemo(
+    () => [
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      EditorView.lineWrapping,
+      EditorView.editable.of(true),
+      EditorView.theme({
+        "&": {
+          height: "100%",
+          fontSize: "12px",
+        },
+        ".cm-scroller": {
+          overflow: "auto",
+          fontFamily: "monospace",
+        },
+        ".cm-content": {
+          fontFamily: "monospace",
+          whiteSpace: "pre",
+        },
+        ".cm-focused": {
+          outline: "none",
+        },
+        ".cm-editor": {
+          borderRadius: "8px",
+        },
+      }),
+      keymap.of([
+        {
+          key: "Mod-s",
+          preventDefault: true,
+          run: () => {
+            handleSave();
+            return true;
+          },
+        },
+      ]),
+    ],
+    []
+  );
+
+  const handleChange = useCallback((value: string) => {
+    localValueRef.current = value;
+    setEditorValue(value);
+    setIsDirty(true);
+  }, []);
+
+  const handleApply = useCallback(() => {
+    const value = localValueRef.current;
+    setSource(value);
+    setIsDirty(false);
+  }, [setSource]);
+
+  const handleSave = useCallback(() => {
+    const blob = new Blob([localValueRef.current], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName.replace(/\.gcode$/i, "") + "_edited.gcode";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    URL.revokeObjectURL(url);
+  }, [fileName]);
+
+  const handleAddCommand = useCallback((cmd: string) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+
+    const sel = view.state.selection.main;
+    const from = sel.from;
+    const to = sel.to;
+
+    const needsLeadingBreak =
+      from > 0 && view.state.doc.sliceString(from - 1, from) !== "\n";
+
+    const text = needsLeadingBreak ? `\n${cmd}` : cmd;
+
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: EditorSelection.cursor(from + text.length),
+      scrollIntoView: true,
+    });
+
+    const nextValue = view.state.doc.toString();
+    localValueRef.current = nextValue;
+    setEditorValue(nextValue);
+    setIsDirty(true);
+    view.focus();
+  }, []);
+
+  return (
+    <div
+      style={{
+        background: "white",
+        borderRadius: 16,
+        padding: 16,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}
+    >
+      <h3 style={{ marginTop: 0 }}>Редактор G-code</h3>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+          Часто используемые команды
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {COMMON_COMMANDS.map((cmd) => (
+            <button
+              key={cmd}
+              type="button"
+              onClick={() => handleAddCommand(cmd)}
+              style={{ padding: "4px 8px", fontSize: 12 }}
+            >
+              {cmd}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          overflow: "hidden",
+        }}
+      >
+        <CodeMirror
+          ref={editorRef}
+          value={editorValue}
+          height="100%"
+          extensions={extensions}
+          basicSetup={{
+            foldGutter: false,
+            dropCursor: false,
+            allowMultipleSelections: false,
+            indentOnInput: false,
+            syntaxHighlighting: false,
+            bracketMatching: false,
+            closeBrackets: false,
+            autocompletion: false,
+            highlightActiveLine: true,
+            highlightSelectionMatches: false,
+            searchKeymap: true,
+          }}
+          onChange={handleChange}
+        />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button type="button" onClick={handleApply} style={{ flex: 1 }}>
+          Применить
+        </button>
+        <button type="button" onClick={handleSave} style={{ flex: 1 }}>
+          Сохранить как...
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+path: /src/components/GCodeEditorTab.tsx
+----------------------------------------
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CodeMirror from "@uiw/react-codemirror";
+import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { EditorSelection } from "@codemirror/state";
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter } from "@codemirror/view";
+
+type GCodeEditorTabProps = {
+  source: string;
+  setSource: (src: string) => void;
+  fileName: string;
+  onClose: () => void;
+};
+
+const COMMON_COMMANDS = ["G0", "G1", "G90", "G91", "G21", "G20", "M3", "M5", "M6 T", "G04 P", "S", "F"];
+
+export function GCodeEditorTab({ source, setSource, fileName, onClose }: GCodeEditorTabProps) {
+  const editorRef = useRef<ReactCodeMirrorRef | null>(null);
+  const localValueRef = useRef(source);
+  const [editorValue, setEditorValue] = useState(source);
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (!isDirty) {
+      localValueRef.current = source;
+      setEditorValue(source);
+    }
+  }, [source, isDirty]);
+
+  const extensions = useMemo(
+    () => [
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      EditorView.lineWrapping,
+      EditorView.editable.of(true),
+      EditorView.theme({
+        "&": { height: "100%", fontSize: "12px" },
+        ".cm-scroller": { overflow: "auto", fontFamily: "monospace" },
+        ".cm-content": { fontFamily: "monospace", whiteSpace: "pre" },
+        ".cm-focused": { outline: "none" },
+        ".cm-editor": { borderRadius: "8px" },
+      }),
+      keymap.of([
+        {
+          key: "Mod-s",
+          preventDefault: true,
+          run: () => { handleSave(); return true; },
+        },
+      ]),
+    ],
+    []
+  );
+
+  const handleChange = useCallback((value: string) => {
+    localValueRef.current = value;
+    setEditorValue(value);
+    setIsDirty(true);
+  }, []);
+
+  const handleApply = useCallback(() => {
+    setSource(localValueRef.current);
+    setIsDirty(false);
+  }, [setSource]);
+
+  const handleSave = useCallback(() => {
+    const blob = new Blob([localValueRef.current], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName.replace(/\.gcode$/i, "") + "_edited.gcode";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [fileName]);
+
+  const handleAddCommand = useCallback((cmd: string) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+
+    const sel = view.state.selection.main;
+    const from = sel.from;
+    const to = sel.to;
+    const needsLeadingBreak = from > 0 && view.state.doc.sliceString(from - 1, from) !== "\n";
+    const text = needsLeadingBreak ? `\n${cmd}` : cmd;
+
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: EditorSelection.cursor(from + text.length),
+      scrollIntoView: true,
+    });
+
+    const nextValue = view.state.doc.toString();
+    localValueRef.current = nextValue;
+    setEditorValue(nextValue);
+    setIsDirty(true);
+    view.focus();
+  }, []);
+
+  return (
+    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <h3 style={{ margin: 0 }}>Редактор G-code</h3>
+        <button onClick={onClose} style={{ padding: "4px 8px" }}>Закрыть</button>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Часто используемые команды</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {COMMON_COMMANDS.map((cmd) => (
+            <button key={cmd} type="button" onClick={() => handleAddCommand(cmd)} style={{ padding: "4px 8px", fontSize: 12 }}>
+              {cmd}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+        <CodeMirror
+          ref={editorRef}
+          value={editorValue}
+          height="100%"
+          extensions={extensions}
+          basicSetup={{
+            foldGutter: false,
+            dropCursor: false,
+            allowMultipleSelections: false,
+            indentOnInput: false,
+            syntaxHighlighting: false,
+            bracketMatching: false,
+            closeBrackets: false,
+            autocompletion: false,
+            highlightActiveLine: true,
+            highlightSelectionMatches: false,
+            searchKeymap: true,
+          }}
+          onChange={handleChange}
+        />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button type="button" onClick={handleApply} style={{ flex: 1 }}>Применить</button>
+        <button type="button" onClick={handleSave} style={{ flex: 1 }}>Сохранить как...</button>
+      </div>
+    </div>
+  );
+}
+
+
+path: /src/components/MaterialRemovalMesh.tsx
+----------------------------------------
+import { useEffect, useMemo } from "react";
+import * as THREE from "three";
+import { toSceneCoords, getStockPlacement, AXIS_MAP } from "../utils";
+
+type Props = {
+  parsed: any;
+  stock: any;
+  progress: number;
+  totalLength: number;
+  placementMode: any;
+  detailLevel?: number; // от 1 до 10, где 1 - низкое качество, 10 - максимальное
+};
+
+export function MaterialRemovalMesh({
+  parsed,
+  stock,
+  progress,
+  totalLength,
+  placementMode,
+  detailLevel = 5,
+}: Props) {
+  const { bounds, segments } = parsed;
+  const width = stock.width;
+  const depth = stock.height;
+  const thickness = stock.thickness;
+  const invertX = AXIS_MAP.invertX;
+
+  // Преобразуем число 1..10 в параметры сетки и плотности
+  const level = Math.min(10, Math.max(1, detailLevel)); // ограничиваем диапазон
+  const t = (level - 1) / 9; // 0..1
+
+  // Линейная интерполяция между минимальными и максимальными значениями
+  const gridX = Math.floor(100 + t * 900); // от 100 до 1000
+  const gridY = Math.floor(100 + t * 900);
+  const stepDensity = 1 + t * 9; // от 1.0 до 10.0
+  const recomputeNormals = level >= 6; // включаем нормали с 6 уровня
+
+  const placement = useMemo(
+    () => getStockPlacement(bounds, stock, placementMode),
+    [bounds, stock, placementMode]
+  );
+
+  const { left, bottom, centerGcode } = placement;
+
+  const geometry = useMemo(() => {
+    const plane = new THREE.PlaneGeometry(width, depth, gridX - 1, gridY - 1);
+    plane.rotateX(-Math.PI / 2);
+    return plane;
+  }, [width, depth, gridX, gridY]);
+
+  useEffect(() => {
+    return () => geometry.dispose();
+  }, [geometry]);
+
+  const heights = useMemo(() => {
+    const arr = new Float32Array(gridX * gridY);
+    arr.fill(0);
+    return arr;
+  }, [gridX, gridY]); // зависимость от gridX/Y гарантирует создание нового массива при изменении разрешения
+
+  const material = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#d8b17b",
+        roughness: 0.95,
+        metalness: 0.02,
+        side: THREE.DoubleSide,
+        flatShading: !recomputeNormals,
+      }),
+    [recomputeNormals]
+  );
+
+  useEffect(() => {
+    const targetLength = (progress / 100) * totalLength;
+    heights.fill(0);
+
+    let accumulated = 0;
+
+    const clamp = (v: number, min: number, max: number) =>
+      Math.max(min, Math.min(max, v));
+
+    for (let s = 0; s < segments.length; s++) {
+      const seg = segments[s];
+
+      const dx = seg.end.x - seg.start.x;
+      const dy = seg.end.y - seg.start.y;
+      const dz = seg.end.z - seg.start.z;
+
+      const distance = Math.max(Math.sqrt(dx * dx + dy * dy + dz * dz), 0.001);
+      const segStart = accumulated;
+      const segEnd = accumulated + distance;
+      accumulated = segEnd;
+
+      if (seg.mode !== "G1" || !seg.isCutting) continue;
+
+      const steps = Math.max(2, Math.ceil(distance * stepDensity));
+
+      const limitT =
+        segEnd <= targetLength
+          ? 1
+          : segStart < targetLength
+          ? (targetLength - segStart) / distance
+          : -1;
+
+      if (limitT < 0) break;
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        if (t > limitT) break;
+
+        const x = seg.start.x + dx * t;
+        const y = seg.start.y + dy * t;
+        const z = seg.start.z + dz * t;
+
+        const localX = x - left;
+        const localY = y - bottom;
+
+        if (localX < 0 || localX > width || localY < 0 || localY > depth) {
+          continue;
+        }
+
+        const mappedX = invertX ? width - localX : localX;
+        const gx = clamp(Math.round((mappedX / width) * (gridX - 1)), 0, gridX - 1);
+        const gy = clamp(Math.round((localY / depth) * (gridY - 1)), 0, gridY - 1);
+        const index = gy * gridX + gx;
+
+        const nextZ = Math.max(z, -thickness);
+        if (nextZ < heights[index]) {
+          heights[index] = nextZ;
+        }
+      }
+
+      if (segEnd > targetLength) break;
+    }
+
+    const pos = geometry.attributes.position as THREE.BufferAttribute;
+    const array = pos.array as Float32Array;
+
+    for (let i = 0; i < heights.length; i++) {
+      array[i * 3 + 1] = heights[i]; // Y координата (после rotateX)
+    }
+
+    pos.needsUpdate = true;
+
+    if (recomputeNormals) {
+      geometry.computeVertexNormals();
+    }
+  }, [
+    progress,
+    totalLength,
+    segments,
+    heights,
+    geometry,
+    width,
+    depth,
+    thickness,
+    left,
+    bottom,
+    invertX,
+    gridX,
+    gridY,
+    stepDensity,
+    recomputeNormals,
+  ]);
+
+  const center = toSceneCoords(centerGcode);
+
+  return (
+    <group position={[center.x, 0, center.z]}>
+      <mesh geometry={geometry} material={material} castShadow receiveShadow />
+    </group>
+  );
+}
+
+
+path: /src/components/PathScene.tsx
+----------------------------------------
+import { useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Text, Line } from "@react-three/drei";
+import * as THREE from "three";
+import { toScenePoint, toSceneCoords, getStockPlacement } from "../utils";
+import { AutoFitCamera } from "./AutoFitCamera";
+import { WorkArea } from "./WorkArea";
+import { StockWireframe } from "./StockWireframe";
+import { MaterialRemovalMesh } from "./MaterialRemovalMesh";
+import { SimpleLine } from "./SimpleLine";
+import { ProgressBillboard } from "./ProgressBillboard";
+import ToolHead from "./ToolHead";
+import { CameraDebug } from "./CameraDebug";
+import { FixedCamera } from "./FixedCamera";
+
+export function PathScene({ parsed, currentState, progress, cameraResetKey, stock, showMaterialRemoval, totalLength, placementMode, detailLevel, onCameraUpdate }: {
+  parsed: any;
+  currentState: any;
+  progress: number;
+  cameraResetKey: number;
+  stock: any;
+  showMaterialRemoval: boolean;
+  totalLength: number;
+  placementMode: any;
+  detailLevel: number;
+  onCameraUpdate: (camera: any) => void;
+}) {
+  const orbitTarget = useMemo(() => {
+    return toScenePoint({
+      x: (parsed.bounds.minX + parsed.bounds.maxX) / 2,
+      y: (parsed.bounds.minY + parsed.bounds.maxY) / 2,
+      z: (parsed.bounds.minZ + parsed.bounds.maxZ) / 2,
+    });
+  }, [parsed.bounds]);
+
+  const placement = useMemo(() => getStockPlacement(parsed.bounds, stock, placementMode), [parsed.bounds, stock, placementMode]);
+  const stockCenter = toSceneCoords(placement.centerGcode);
+  const cornerScene = useMemo(() => {
+    return toScenePoint({ x: placement.left, y: placement.bottom, z: 0 });
+  }, [placement]);
+
+  // Оси с подписями
+  const axesHelper = useMemo(() => {
+    const length = Math.max(stock.width, stock.height, stock.thickness) * 1.2;
+    if (length <= 0) return null;
+    
+    const origin = toSceneCoords({ x: 0, y: 0, z: 0 });
+    const pointsX = [new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(toSceneCoords({ x: length, y: 0, z: 0 }).x, toSceneCoords({ x: length, y: 0, z: 0 }).y, toSceneCoords({ x: length, y: 0, z: 0 }).z)];
+    const pointsY = [new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(toSceneCoords({ x: 0, y: length, z: 0 }).x, toSceneCoords({ x: 0, y: length, z: 0 }).y, toSceneCoords({ x: 0, y: length, z: 0 }).z)];
+    const pointsZ = [new THREE.Vector3(origin.x, origin.y, origin.z), new THREE.Vector3(toSceneCoords({ x: 0, y: 0, z: length }).x, toSceneCoords({ x: 0, y: 0, z: length }).y, toSceneCoords({ x: 0, y: 0, z: length }).z)];
+
+    return (
+      <group>
+        <Line points={pointsX} color="red" lineWidth={2} />
+        <Text position={pointsX[1]} color="red" fontSize={5} anchorX="left" anchorY="middle">X</Text>
+        <Line points={pointsY} color="green" lineWidth={2} />
+        <Text position={pointsY[1]} color="green" fontSize={5} anchorX="left" anchorY="middle">Y</Text>
+        <Line points={pointsZ} color="blue" lineWidth={2} />
+        <Text position={pointsZ[1]} color="blue" fontSize={5} anchorX="left" anchorY="middle">Z</Text>
+      </group>
+    );
+  }, [stock]);
+
+  // Пунктирные линейки по рёбрам bounding box
+  const rulers = useMemo(() => {
+    const { minX, maxX, minY, maxY, minZ, maxZ } = parsed.bounds;
+    if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY) || !isFinite(minZ) || !isFinite(maxZ)) return null;
+
+    const corners = [
+      [minX, minY, minZ], [maxX, minY, minZ], [maxX, maxY, minZ], [minX, maxY, minZ],
+      [minX, minY, maxZ], [maxX, minY, maxZ], [maxX, maxY, maxZ], [minX, maxY, maxZ]
+    ].map(p => toScenePoint({ x: p[0], y: p[1], z: p[2] }));
+
+    if (corners.some(v => !v || !isFinite(v.x) || !isFinite(v.y) || !isFinite(v.z))) return null;
+
+    const edges = [
+      [corners[0], corners[1]], [corners[1], corners[2]], [corners[2], corners[3]], [corners[3], corners[0]],
+      [corners[4], corners[5]], [corners[5], corners[6]], [corners[6], corners[7]], [corners[7], corners[4]],
+      [corners[0], corners[4]], [corners[1], corners[5]], [corners[2], corners[6]], [corners[3], corners[7]]
+    ];
+
+    return edges.map(([start, end], idx) => {
+      if (start.distanceTo(end) < 0.001) return null;
+      return (
+        <Line
+          key={`ruler-${idx}`}
+          points={[start, end]}
+          color="#94a3b8"
+          lineWidth={1}
+          dashed
+          dashScale={1}
+          dashSize={2}
+          gapSize={1}
+        />
+      );
+    }).filter(Boolean);
+  }, [parsed.bounds]);
+
+  return (
+    <Canvas
+      camera={{ position: [-155.74, 311.41, -200.47], fov: 50 }}
+      shadows={{ type: THREE.PCFShadowMap }}
+    >
+      <color attach="background" args={["#f8fafc"]} />
+      <ambientLight intensity={0.85} />
+      <hemisphereLight intensity={0.45} groundColor="#cbd5e1" />
+      <directionalLight
+        position={[80, 110, 60]}
+        intensity={1.25}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-mapType={THREE.PCFShadowMap}
+      />
+      <AutoFitCamera bounds={parsed.bounds} stock={stock} placementMode={placementMode} cameraResetKey={cameraResetKey} />
+      <WorkArea bounds={parsed.bounds} stock={stock} placementMode={placementMode} />
+      
+      {axesHelper}
+      {rulers}
+
+      {showMaterialRemoval && (
+        <mesh position={[stockCenter.x, stockCenter.y, stockCenter.z]} receiveShadow>
+          <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
+          <meshStandardMaterial color="#c89d67" transparent opacity={0.25} roughness={0.6} />
+        </mesh>
+      )}
+
+      <StockWireframe bounds={parsed.bounds} stock={stock} placementMode={placementMode} />
+
+      {showMaterialRemoval ? (
+        <MaterialRemovalMesh
+          parsed={parsed}
+          stock={stock}
+          progress={progress}
+          totalLength={totalLength}
+          placementMode={placementMode}
+          detailLevel={detailLevel}
+        />
+      ) : (
+        <>
+          {parsed.segments.map((seg: { id: any; start: unknown; end: unknown; mode: string; }) => (
+            <SimpleLine
+              key={`bg-${seg.id}`}
+              start={seg.start}
+              end={seg.end}
+              color={seg.mode === "G0" ? "#bfdbfe" : "#cbd5e1"}
+              opacity={0.55}
+            />
+          ))}
+          {parsed.segments.slice(0, Math.max(currentState.index, 0)).map((seg: { id: any; start: unknown; end: unknown; mode: string; isCutting: any; }) => (
+            <SimpleLine
+              key={`done-${seg.id}`}
+              start={seg.start}
+              end={seg.end}
+              color={seg.mode === "G0" ? "#2563eb" : seg.isCutting ? "#111827" : "#475569"}
+              opacity={1}
+            />
+          ))}
+          {currentState.segment && (
+            <>
+              <SimpleLine
+                start={currentState.segment.start}
+                end={currentState.position}
+                color={currentState.segment.mode === "G0" ? "#1d4ed8" : "#dc2626"}
+                opacity={1}
+              />
+              <ProgressBillboard position={currentState.position} progress={progress} />
+            </>
+          )}
+        </>
+      )}
+
+      <ToolHead
+        position={currentState.position}
+        cutting={currentState.position.z <= 0}
+        toScenePoint={toScenePoint}
+      />
+      
+      <FixedCamera cameraResetKey={cameraResetKey} />
+
+      <OrbitControls
+        key={cameraResetKey}
+        makeDefault
+        target={[cornerScene.x, cornerScene.y, cornerScene.z]}
+        enableDamping
+        dampingFactor={0.08}
+        screenSpacePanning
+        minDistance={10}
+        maxDistance={1000}
+      />
+      <CameraDebug onUpdate={onCameraUpdate} />
+    </Canvas>
+  );
+}
+
+
+path: /src/components/ProgressBillboard.tsx
+----------------------------------------
+import { Html } from "@react-three/drei";
+import { toSceneCoords } from "../utils";
+
+export function ProgressBillboard({ position, progress }) {
+  const scene = toSceneCoords(position);
+
+  return (
+    <Html position={[scene.x, scene.y + 6, scene.z]} center distanceFactor={10}>
+      <div
+        style={{
+          background: "rgba(255,255,255,0.92)",
+          color: "#0f172a",
+          border: "1px solid #e2e8f0",
+          borderRadius: 10,
+          padding: "4px 8px",
+          fontSize: 12,
+          fontWeight: 600,
+          whiteSpace: "nowrap",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        }}
+      >
+        {progress.toFixed(1)}%
+      </div>
+    </Html>
+  );
+}
+
+
+path: /src/components/RightInfoPanel.tsx
+----------------------------------------
+import React from "react";
+import { StatCard } from "./StatCard";
+import * as THREE from "three";
+
+type RightInfoPanelProps = {
+  bounds: any;
+  stock: any;
+  parsedStats: any;
+  currentState: any;
+  cameraInfo: { position: THREE.Vector3; target: THREE.Vector3 } | null;
+};
+
+function fmt(v: number): string {
+  return Number.isFinite(v) ? v.toFixed(2) : "0.00";
+}
+
+export function RightInfoPanel({ bounds, stock, parsedStats, currentState, cameraInfo }: RightInfoPanelProps) {
+  return (
+    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: 'fit-content' }}>
+      <h3 style={{ marginTop: 0, marginBottom: 16 }}>Информация</h3>
+
+      <div style={{ marginBottom: 20 }}>
+        <h4 style={{ marginBottom: 12 }}>Размеры и статистика</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <StatCard label="X" value={`${fmt(bounds.minX)} .. ${fmt(bounds.maxX)} мм`} />
+          <StatCard label="Y" value={`${fmt(bounds.minY)} .. ${fmt(bounds.maxY)} мм`} />
+          <StatCard label="Z" value={`${fmt(bounds.minZ)} .. ${fmt(bounds.maxZ)} мм`} />
+          <StatCard label="Заготовка" value={`${fmt(stock.width)} × ${fmt(stock.height)} × ${fmt(stock.thickness)} мм`} />
+          <StatCard label="Движений" value={String(parsedStats.totalMoves)} />
+          <StatCard label="G0" value={String(parsedStats.rapidMoves)} />
+          <StatCard label="G1" value={String(parsedStats.workMoves)} />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <h4 style={{ marginBottom: 12 }}>Состояние инструмента</h4>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <StatCard label="X" value={`${fmt(currentState.position.x)} мм`} />
+          <StatCard label="Y" value={`${fmt(currentState.position.y)} мм`} />
+          <StatCard label="Z" value={`${fmt(currentState.position.z)} мм`} />
+          <StatCard label="Команда" value={currentState.mode} />
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <StatCard label="Текущая строка" value={currentState.segment ? currentState.segment.raw : "-"} mono />
+        </div>
+      </div>
+
+      <div>
+        <h4 style={{ marginBottom: 12 }}>Камера</h4>
+        {cameraInfo ? (
+          <>
+            <div>Поворот: {cameraInfo.position.x.toFixed(1)}, {cameraInfo.position.y.toFixed(1)}, {cameraInfo.position.z.toFixed(1)}</div>
+            <div>Позиция: {cameraInfo.target.x.toFixed(1)}, {cameraInfo.target.y.toFixed(1)}, {cameraInfo.target.z.toFixed(1)}</div>
+          </>
+        ) : (
+          <div>N/A</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+path: /src/components/SimpleLine.tsx
+----------------------------------------
+import { useEffect, useMemo } from "react";
+import { toScenePoint } from "../utils";
+import * as THREE from "three";
+
+export function SimpleLine({ start, end, color, opacity = 1 }) {
+  const geometry = useMemo(() => {
+    return new THREE.BufferGeometry().setFromPoints([toScenePoint(start), toScenePoint(end)]);
+  }, [start, end]);
+
+  useEffect(() => {
+    return () => geometry.dispose();
+  }, [geometry]);
+
+  return (
+    <line geometry={geometry}>
+      <lineBasicMaterial color={color} transparent opacity={opacity} />
+    </line>
+  );
+}
+
+
+path: /src/components/StatCard.tsx
+----------------------------------------
+export function StatCard({ label, value, mono = false }) {
+  return (
+    <div style={{ background: "#f1f5f9", borderRadius: 12, padding: 12 }}>
+      <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 600, fontFamily: mono ? "monospace" : "inherit", wordBreak: "break-all" }}>{value}</div>
+    </div>
+  );
+}
+
+
+path: /src/components/StockWireframe.tsx
+----------------------------------------
+import { toSceneCoords, getStockPlacement } from "../utils";
+
+export function StockWireframe({ bounds, stock, placementMode }: { bounds: any; stock: any; placementMode: any }) {
+  const placement = getStockPlacement(bounds, stock, placementMode);
+  const center = toSceneCoords(placement.centerGcode);
+
+  return (
+    <mesh position={[center.x, center.y, center.z]}>
+      <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
+      <meshBasicMaterial color="#94a3b8" wireframe transparent opacity={0.35} />
+    </mesh>
+  );
+}
+
+
+path: /src/components/ToolHead.tsx
+----------------------------------------
+// src/components/ToolHead.tsx
+import React from "react";
+import * as THREE from "three";
+
+export type Point3 = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+type ToolHeadProps = {
+  position: Point3;
+  cutting: boolean;
+  toScenePoint: (p: Point3) => THREE.Vector3;
+};
+
+export default function ToolHead({ position, cutting, toScenePoint }: ToolHeadProps) {
+  const scenePos = toScenePoint(position);
+
+  return (
+    <group position={scenePos}>
+      <mesh castShadow>
+        <sphereGeometry args={[1.2, 16, 16]} />
+        <meshStandardMaterial color={cutting ? "#ef4444" : "#f59e0b"} />
+      </mesh>
+
+      <mesh position={[0, -2.5, 0]} castShadow>
+        <cylinderGeometry args={[0.3, 0.3, 4, 16]} />
+        <meshStandardMaterial color="#475569" />
+      </mesh>
+    </group>
+  );
+}
+
+
+path: /src/components/WorkArea.tsx
+----------------------------------------
+import { toSceneCoords, getStockPlacement } from "../utils";
+
+export function WorkArea({ bounds, stock, placementMode }: { bounds: any; stock: any; placementMode: any }) {
+  const placement = getStockPlacement(bounds, stock, placementMode);
+  const center = toSceneCoords(placement.centerGcode);
+
+  return (
+    <group>
+      <mesh position={[center.x, -stock.thickness - 0.2, center.z]} receiveShadow>
+        <boxGeometry args={[stock.width + 20, 0.4, stock.height + 20]} />
+        <meshStandardMaterial color="#e2e8f0" metalness={0.05} roughness={0.85} />
+      </mesh>
+      <gridHelper
+        args={[Math.max(stock.width + 20, stock.height + 20), 20, 0x94a3b8, 0xcbd5e1]}
+        position={[center.x, -stock.thickness, center.z]}
+      />
+      <axesHelper args={[25]} />
+    </group>
+  );
+}
+
+
+path: /src/constants/demo.ts
+----------------------------------------
+export const DEMO_GCODE = `; CNC 3018 demo
+G21
+G90
+G0 X0 Y0 Z5
+G0 X5 Y5
+G1 Z-1 F150
+G1 X65 Y5 F400
+G1 X65 Y45
+G1 X5 Y45
+G1 X5 Y5
+G0 Z5
+G0 X15 Y15
+G1 Z-0.8
+G1 X55 Y15
+G1 X55 Y35
+G1 X15 Y35
+G1 X15 Y15
+G0 Z5
+`;
+
+
+path: /src/main.tsx
+----------------------------------------
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import App from './App.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>,
+)
+
+
+path: /src/utils/index.ts
+----------------------------------------
+import * as THREE from "three";
+
+export type PlacementMode = "center" | "origin";
+
+export const AXIS_MAP = {
+  invertX: true,   // теперь true, чтобы левый нижний угол был слева
+  invertY: false,
+  invertZ: false,
+};
+
+export function mapAxis(value: number, invert = false): number {
+  return invert ? -value : value;
+}
+
+export function toSceneCoords(p: { x: number; y: number; z: number }) {
+  return {
+    x: mapAxis(p.x, AXIS_MAP.invertX),
+    y: mapAxis(p.z, AXIS_MAP.invertZ),
+    z: mapAxis(p.y, AXIS_MAP.invertY),
+  };
+}
+
+export function fmt(v: number): string {
+  return Number.isFinite(v) ? v.toFixed(2) : "0.00";
+}
+
+export function toScenePoint(p: { x: number; y: number; z: number }) {
+  const s = toSceneCoords(p);
+  return new THREE.Vector3(s.x, s.y, s.z);
+}
+
+export function segmentLength(seg: any): number {
+  const dx = seg.end.x - seg.start.x;
+  const dy = seg.end.y - seg.start.y;
+  const dz = seg.end.z - seg.start.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+/**
+ * Возвращает координаты центра заготовки в системе G‑кода и смещения left/bottom
+ * @param bounds границы траектории
+ * @param stock размеры заготовки
+ * @param mode режим позиционирования: 'center' – центр заготовки совпадает с центром bounds,
+ *             'origin' – левый нижний угол bounds совпадает с левым нижним углом заготовки
+ */
+export function getStockPlacement(
+  bounds: { minX: number; maxX: number; minY: number; maxY: number },
+  stock: { width: number; height: number; thickness: number },
+  mode: PlacementMode = "origin"
+) {
+  let centerX: number, centerY: number;
+
+  if (mode === "center") {
+    centerX = (bounds.minX + bounds.maxX) / 2;
+    centerY = (bounds.minY + bounds.maxY) / 2;
+  } else {
+    // origin: левый нижний угол bounds привязан к левому нижнему углу заготовки
+    centerX = bounds.minX + stock.width / 2;
+    centerY = bounds.minY + stock.height / 2;
+  }
+
+  const left = centerX - stock.width / 2;
+  const bottom = centerY - stock.height / 2;
+
+  return {
+    centerGcode: { x: centerX, y: centerY, z: -stock.thickness / 2 },
+    left,
+    bottom,
+  };
+}
+
+
+path: /src/workers/gcodeParser.worker.ts
+----------------------------------------
+// src/workers/gcodeParser.worker.ts
+
+type MotionMode = "G0" | "G1";
+
+type Point3 = {
+  x: number;
+  y: number;
+  z: number;
+  f: number;
+};
+
+type Segment = {
+  id: number;
+  mode: MotionMode;
+  start: Point3;
+  end: Point3;
+  feed: number;
+  lineNumber: number;
+  raw: string;
+  isCutting: boolean;
+};
+
+const MAX_RENDER_SEGMENTS = 25000;
+
+function stripComments(line: string) {
+  return line.split(";")[0].replace(/\([^)]*\)/g, "").trim();
+}
+
+function getWord(line: string, word: string) {
+  const match = line.match(new RegExp(word + "(-?\\d*\\.?\\d+)", "i"));
+  return match ? Number(match[1]) : null;
+}
+
+function getGCodes(line: string) {
+  return [...line.matchAll(/G(\d+(?:\.\d+)?)/gi)].map((m) => m[1]);
+}
+
+function parseGCode(text: string) {
+  const safeText = typeof text === "string" ? text : "";
+  const lines = safeText.split(/\r?\n/);
+
+  let absoluteMode = true;
+  let unitScale = 1;
+  let lastMotionMode: MotionMode | null = null;
+  let state: Point3 = { x: 0, y: 0, z: 0, f: 0 };
+
+  const segments: Segment[] = [];
+  const points = [{ ...state }];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i] || "";
+    const line = stripComments(raw);
+    if (!line) continue;
+
+    const upperLine = line.toUpperCase();
+    const gCodes = getGCodes(upperLine);
+
+    if (gCodes.includes("20")) unitScale = 25.4;
+    if (gCodes.includes("21")) unitScale = 1;
+    if (gCodes.includes("90")) absoluteMode = true;
+    if (gCodes.includes("91")) absoluteMode = false;
+
+    let motionMode: MotionMode | null = null;
+    if (gCodes.includes("0") || gCodes.includes("00")) motionMode = "G0";
+    if (gCodes.includes("1") || gCodes.includes("01")) motionMode = "G1";
+
+    if (motionMode) lastMotionMode = motionMode;
+
+    const xWord = getWord(line, "X");
+    const yWord = getWord(line, "Y");
+    const zWord = getWord(line, "Z");
+    const fWord = getWord(line, "F");
+
+    const hasMove = xWord !== null || yWord !== null || zWord !== null;
+
+    if (!hasMove) {
+      if (fWord !== null) state.f = fWord;
+      continue;
+    }
+
+    const effectiveMode = motionMode || lastMotionMode;
+    if (!effectiveMode) continue;
+
+    const next: Point3 = { ...state };
+
+    if (xWord !== null) next.x = absoluteMode ? xWord * unitScale : state.x + xWord * unitScale;
+    if (yWord !== null) next.y = absoluteMode ? yWord * unitScale : state.y + yWord * unitScale;
+    if (zWord !== null) next.z = absoluteMode ? zWord * unitScale : state.z + zWord * unitScale;
+    if (fWord !== null) next.f = fWord;
+
+    const moved = next.x !== state.x || next.y !== state.y || next.z !== state.z;
+    if (!moved) continue;
+
+    segments.push({
+      id: segments.length,
+      mode: effectiveMode,
+      start: { ...state },
+      end: { ...next },
+      feed: next.f,
+      lineNumber: i + 1,
+      raw,
+      isCutting: next.z <= 0 || state.z <= 0,
+    });
+
+    points.push({ ...next });
+    state = next;
+  }
+
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const zs = points.map((p) => p.z);
+
+  let minX = xs[0] ?? 0;
+  let maxX = xs[0] ?? 0;
+  let minY = ys[0] ?? 0;
+  let maxY = ys[0] ?? 0;
+  let minZ = zs[0] ?? 0;
+  let maxZ = zs[0] ?? 0;
+
+  for (let i = 1; i < xs.length; i += 1) {
+    if (xs[i] < minX) minX = xs[i];
+    if (xs[i] > maxX) maxX = xs[i];
+    if (ys[i] < minY) minY = ys[i];
+    if (ys[i] > maxY) maxY = ys[i];
+    if (zs[i] < minZ) minZ = zs[i];
+    if (zs[i] > maxZ) maxZ = zs[i];
+  }
+
+  const renderStep = Math.max(1, Math.ceil(segments.length / MAX_RENDER_SEGMENTS));
+  const renderSegments =
+    renderStep === 1
+      ? segments
+      : segments.filter((_, idx) => idx % renderStep === 0 || idx === segments.length - 1);
+
+  return {
+    segments,
+    renderSegments,
+    bounds: { minX, maxX, minY, maxY, minZ, maxZ },
+    stats: {
+      totalLines: lines.length,
+      totalMoves: segments.length,
+      rapidMoves: segments.filter((s) => s.mode === "G0").length,
+      workMoves: segments.filter((s) => s.mode === "G1").length,
+      cuttingMoves: segments.filter((s) => s.isCutting).length,
+      renderMoves: renderSegments.length,
+      renderStep,
+    },
+  };
+}
+
+self.onmessage = (e: MessageEvent<{ gcodeText: string }>) => {
+  const { gcodeText } = e.data;
+  const result = parseGCode(gcodeText);
+  self.postMessage(result);
+};
+
+
+path: /src/workers/heightmap.worker.ts
+----------------------------------------
+
+
+
+path: /tsconfig.app.json
+----------------------------------------
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "types": ["vite/client"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["src"]
+}
+
+
+path: /tsconfig.json
+----------------------------------------
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+
+
+path: /tsconfig.node.json
+----------------------------------------
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+
+
+path: /vite.config.ts
+----------------------------------------
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+// https://vite.dev/config/
+export default defineConfig({
+  plugins: [react()],
+})
+
+
+=== SUMMARY ===
+included: 30
+skipped(binary): 0
+skipped(size): 0
+skipped(ext): 0
+totalBytes(approx): 69444
