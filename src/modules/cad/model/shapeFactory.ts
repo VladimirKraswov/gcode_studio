@@ -1,8 +1,10 @@
+// path: /src/modules/cad/model/shapeFactory.ts
 import type {
   SketchCircle,
   SketchPolyline,
   SketchPolylinePoint,
   SketchRectangle,
+  SketchSvg,
   SketchText,
 } from "./types";
 import { createId } from "./ids";
@@ -83,6 +85,34 @@ export function createTextShape(
     rotation: 0,
     align: "left",
     cutMode: "outline",
+    cutZ: null,
+    strokeWidth: 1,
+  };
+}
+
+export function createSvgShape(params: {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  preserveAspectRatio: boolean;
+  contours: SketchPolylinePoint[][];
+}): SketchSvg {
+  return {
+    id: createId("svg"),
+    type: "svg",
+    name: params.name,
+    x: params.x,
+    y: params.y,
+    width: params.width,
+    height: params.height,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    preserveAspectRatio: params.preserveAspectRatio,
+    contours: params.contours,
     cutZ: null,
     strokeWidth: 1,
   };

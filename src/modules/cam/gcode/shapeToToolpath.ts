@@ -1,9 +1,11 @@
+// path: /src/modules/cam/gcode/shapeToToolpath.ts
 import type {
   SketchCircle,
   SketchDocument,
   SketchPolyline,
   SketchRectangle,
   SketchShape,
+  SketchSvg,
   SketchText,
 } from "../../cad/model/types";
 import { getTextPolylines } from "../../cad/geometry/textGeometry";
@@ -203,18 +205,9 @@ export function polylineToToolpaths(
   const strokeWidth = resolveStrokeWidth(shape);
   const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
 
-  if (shape.closed) {
-    return bandOffsets.map((offset, index) => ({
-      name: `POLYLINE ${shape.name} #${index + 1}`,
-      closed: true,
-      cutZ,
-      points: offsetPolylinePoints(shape.points, offset),
-    }));
-  }
-
   return bandOffsets.map((offset, index) => ({
     name: `POLYLINE ${shape.name} #${index + 1}`,
-    closed: false,
+    closed: shape.closed,
     cutZ,
     points: offsetPolylinePoints(shape.points, offset),
   }));
@@ -250,6 +243,48 @@ export async function textToToolpaths(
   return toolpaths;
 }
 
+export function svgToToolpaths(
+  shape: SketchSvg,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const bandOffsets = buildBandOffsets(
+    resolveStrokeWidth(shape),
+    doc.toolDiameter,
+    doc.stepover,
+  );
+
+  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
+  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+
+  const baseContours = shape.contours
+    .map((contour) =>
+      contour.map((point) => ({
+        x: round(shape.x + point.x * scaleX),
+        y: round(shape.y + point.y * scaleY),
+      })),
+    )
+    .filter((contour) => contour.length >= 2);
+
+  const toolpaths: Toolpath[] = [];
+
+  baseContours.forEach((contour, contourIndex) => {
+    bandOffsets.forEach((offset, offsetIndex) => {
+      toolpaths.push({
+        name: `SVG ${shape.name} #${contourIndex + 1}.${offsetIndex + 1}`,
+        closed:
+          contour.length > 2 &&
+          Math.abs(contour[0].x - contour[contour.length - 1].x) < 0.001 &&
+          Math.abs(contour[0].y - contour[contour.length - 1].y) < 0.001,
+        cutZ,
+        points: offsetPolylinePoints(contour, offset),
+      });
+    });
+  });
+
+  return toolpaths;
+}
+
 export async function shapeToToolpaths(
   shape: SketchShape,
   doc: SketchDocument,
@@ -263,5 +298,7 @@ export async function shapeToToolpaths(
       return polylineToToolpaths(shape, doc);
     case "text":
       return textToToolpaths(shape, doc);
+    case "svg":
+      return svgToToolpaths(shape, doc);
   }
 }

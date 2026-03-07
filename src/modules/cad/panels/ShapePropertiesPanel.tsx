@@ -1,4 +1,5 @@
-import { FiBox, FiCircle, FiEdit3, FiMove, FiType } from "react-icons/fi";
+// path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
+import { FiBox, FiCircle, FiEdit3, FiImage, FiMove, FiType } from "react-icons/fi";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
 import type { SketchDocument, SketchShape } from "../model/types";
@@ -58,6 +59,8 @@ function getShapeIcon(type: SketchShape["type"]) {
       return <FiMove size={18} />;
     case "text":
       return <FiType size={18} />;
+    case "svg":
+      return <FiImage size={18} />;
     default:
       return <FiEdit3 size={18} />;
   }
@@ -183,6 +186,40 @@ export function ShapePropertiesPanel({
             />
             <span>Замкнуть полилинию</span>
           </label>
+        )}
+
+        {selectedShape.type === "svg" && (
+          <>
+            <CardBlock>
+              <div style={twoColumnGrid}>
+                <label style={fieldLabel}>
+                  X
+                  <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+                </label>
+                <label style={fieldLabel}>
+                  Y
+                  <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+                </label>
+                <label style={fieldLabel}>
+                  Width
+                  <input style={ui.input} type="number" min="0.001" step="0.001" value={selectedShape.width} onChange={(e) => updateSelected({ width: Math.max(0.001, Number(e.target.value) || 0.001) })} />
+                </label>
+                <label style={fieldLabel}>
+                  Height
+                  <input style={ui.input} type="number" min="0.001" step="0.001" value={selectedShape.height} onChange={(e) => updateSelected({ height: Math.max(0.001, Number(e.target.value) || 0.001) })} />
+                </label>
+              </div>
+            </CardBlock>
+
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={selectedShape.preserveAspectRatio}
+                onChange={(e) => updateSelected({ preserveAspectRatio: e.target.checked })}
+              />
+              <span>Пропорциональное масштабирование</span>
+            </label>
+          </>
         )}
 
         {selectedShape.type === "text" && (

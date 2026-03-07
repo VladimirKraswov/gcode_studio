@@ -1,3 +1,4 @@
+// path: /src/modules/cad/model/shapeBounds.ts
 import type { SketchDocument, SketchShape } from "./types";
 
 export type Bounds2D = {
@@ -53,6 +54,13 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         maxY: shape.y + shape.height,
       };
     }
+    case "svg":
+      return {
+        minX: shape.x,
+        minY: shape.y,
+        maxX: shape.x + shape.width,
+        maxY: shape.y + shape.height,
+      };
   }
 }
 

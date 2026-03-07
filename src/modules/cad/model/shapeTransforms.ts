@@ -1,3 +1,4 @@
+// path: /src/modules/cad/model/shapeTransforms.ts
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { SketchShape } from "./types";
 
@@ -17,6 +18,8 @@ export function moveShape(shape: SketchShape, dx: number, dy: number): SketchSha
         points: shape.points.map((p) => ({ x: round(p.x + dx), y: round(p.y + dy) })),
       };
     case "text":
+      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+    case "svg":
       return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
   }
 }
@@ -54,6 +57,8 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
         ...rotatePoint({ x: shape.x, y: shape.y }, origin, angle),
         rotation: (shape.rotation ?? 0) + angle,
       };
+    case "svg":
+      return shape;
   }
 }
 
@@ -98,6 +103,16 @@ export function scaleShape(
         y: p.y,
         height: round(shape.height * sy),
         letterSpacing: round(shape.letterSpacing * sx),
+      };
+    }
+    case "svg": {
+      const p = scalePoint({ x: shape.x, y: shape.y });
+      return {
+        ...shape,
+        x: p.x,
+        y: p.y,
+        width: round(shape.width * sx),
+        height: round(shape.height * sy),
       };
     }
   }

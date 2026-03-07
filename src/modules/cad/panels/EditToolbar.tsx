@@ -1,8 +1,11 @@
+// path: /src/modules/cad/panels/EditToolbar.tsx
+import { useRef } from "react";
 import {
   FiCheck,
   FiCircle,
   FiCornerUpLeft,
   FiCornerUpRight,
+  FiImage,
   FiMaximize,
   FiMousePointer,
   FiPenTool,
@@ -26,6 +29,7 @@ type EditToolbarProps = {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onImportSvg: (file: File) => void;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
@@ -48,7 +52,10 @@ export function EditToolbar({
   onRedo,
   canUndo,
   canRedo,
+  onImportSvg,
 }: EditToolbarProps) {
+  const svgInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
     <div
       style={{
@@ -94,6 +101,29 @@ export function EditToolbar({
             <FiCheck size={16} />
           </button>
         )}
+
+        <button
+          type="button"
+          title="Импортировать SVG"
+          onClick={() => svgInputRef.current?.click()}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
+          <FiImage size={16} />
+        </button>
+
+        <input
+          ref={svgInputRef}
+          type="file"
+          accept=".svg,image/svg+xml"
+          style={{ display: "none" }}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              onImportSvg(file);
+            }
+            event.currentTarget.value = "";
+          }}
+        />
 
         <button
           type="button"

@@ -1,4 +1,5 @@
-export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text";
+// path: /src/modules/cad/model/types.ts
+export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text" | "svg";
 
 export type SketchBase = {
   id: string;
@@ -46,11 +47,24 @@ export type SketchText = SketchBase & {
   cutMode?: "outline" | "pocket";
 };
 
+export type SketchSvg = SketchBase & {
+  type: "svg";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  preserveAspectRatio: boolean;
+  contours: SketchPolylinePoint[][];
+};
+
 export type SketchShape =
   | SketchRectangle
   | SketchCircle
   | SketchPolyline
-  | SketchText;
+  | SketchText
+  | SketchSvg;
 
 export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
 export type UnitsMode = "mm" | "inch";

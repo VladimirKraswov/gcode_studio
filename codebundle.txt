@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T18:29:01.483Z
+generated: 2026-03-07T20:17:27.631Z
 
 
 
@@ -959,6 +959,7 @@ export default function App() {
                       totalLength={parsed.totalLength}
                       placementMode={placementMode}
                       detailLevel={detailLevel}
+                      toolDiameter={editDocument.toolDiameter}
                       onCameraUpdate={setCameraInfo}
                     />
                   </div>
@@ -1245,6 +1246,8 @@ export function EditRightPanel({
 
 path: /src/components/EditTab.tsx
 ----------------------------------------
+// path: /src/components/EditTab.tsx
+import { SvgImportModal } from "./SvgImportModal";
 import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
 import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
 import { EditStatusBar } from "../modules/cad/panels/EditStatusBar";
@@ -1305,86 +1308,103 @@ export function EditTab({
   });
 
   return (
-    <div
-      style={{
-        ...ui.panel,
-        padding: 16,
-        height: "100%",
-        minHeight: 0,
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        width: "100%",
-      }}
-    >
-      <EditToolbar
-        tool={editor.tool}
-        onToolChange={editor.setTool}
-        onCommitPolyline={editor.commitPolyline}
-        onDeleteSelected={editor.deleteSelected}
-        onResetView={editor.resetView}
-        onGenerate={editor.handleGenerateClick}
-        isGenerating={editor.isGenerating}
-        onUndo={onUndo}
-        onRedo={onRedo}
-        canUndo={canUndo}
-        canRedo={canRedo}
-      />
-
-      {editor.tool === "text" && (
-        <TextToolPanel
-          value={editor.textTool}
-          fontOptions={editor.fontOptions}
-          onChange={(patch) =>
-            editor.setTextTool((prev) => ({
-              ...prev,
-              ...patch,
-            }))
-          }
-        />
-      )}
-
+    <>
       <div
         style={{
-          ...ui.panelInset,
-          flex: 1,
+          ...ui.panel,
+          padding: 16,
+          height: "100%",
           minHeight: 0,
           minWidth: 0,
-          overflow: "hidden",
-          background: "#f8fafc",
           display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          width: "100%",
         }}
       >
+        <EditToolbar
+          tool={editor.tool}
+          onToolChange={editor.setTool}
+          onCommitPolyline={editor.commitPolyline}
+          onDeleteSelected={editor.deleteSelected}
+          onResetView={editor.resetView}
+          onGenerate={editor.handleGenerateClick}
+          isGenerating={editor.isGenerating}
+          onUndo={onUndo}
+          onRedo={onRedo}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onImportSvg={editor.startSvgImport}
+        />
+
+        {editor.tool === "text" && (
+          <TextToolPanel
+            value={editor.textTool}
+            fontOptions={editor.fontOptions}
+            onChange={(patch) =>
+              editor.setTextTool((prev) => ({
+                ...prev,
+                ...patch,
+              }))
+            }
+          />
+        )}
+
         <div
           style={{
+            ...ui.panelInset,
             flex: 1,
             minHeight: 0,
             minWidth: 0,
             overflow: "hidden",
+            background: "#f8fafc",
+            display: "flex",
           }}
         >
-          <CadCanvas
-            svgRef={editor.svgRef}
-            document={document}
-            selection={selection}
-            view={editor.view}
-            draft={editor.draft}
-            polylineDraft={editor.polylineDraft}
-            textPreviewMap={editor.textPreviewMap}
-            tool={editor.tool}
-            onPointerDown={editor.handleCanvasPointerDown}
-            onPointerMove={editor.handleCanvasPointerMove}
-            onPointerUp={editor.handleCanvasPointerUp}
-            onPointerLeave={editor.handleCanvasPointerUp}
-            onWheel={editor.handleCanvasWheel}
-            onShapePointerDown={editor.bindSelectStart}
-          />
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              minWidth: 0,
+              overflow: "hidden",
+            }}
+          >
+            <CadCanvas
+              svgRef={editor.svgRef}
+              document={document}
+              selection={selection}
+              view={editor.view}
+              draft={editor.draft}
+              polylineDraft={editor.polylineDraft}
+              textPreviewMap={editor.textPreviewMap}
+              tool={editor.tool}
+              onPointerDown={editor.handleCanvasPointerDown}
+              onPointerMove={editor.handleCanvasPointerMove}
+              onPointerUp={editor.handleCanvasPointerUp}
+              onPointerLeave={editor.handleCanvasPointerUp}
+              onWheel={editor.handleCanvasWheel}
+              onShapePointerDown={editor.bindSelectStart}
+            />
+          </div>
         </div>
+
+        <EditStatusBar objectCount={document.shapes.length} />
       </div>
 
-      <EditStatusBar objectCount={document.shapes.length} />
-    </div>
+      <SvgImportModal
+        open={editor.svgImport.open}
+        fileName={editor.svgImport.fileName}
+        stage={editor.svgImport.stage}
+        progress={editor.svgImport.progress}
+        message={editor.svgImport.message}
+        error={editor.svgImport.error}
+        draft={editor.svgImport.draft}
+        onClose={editor.closeSvgImport}
+        onAbort={editor.abortSvgImport}
+        onChangeDraft={editor.updateSvgImportDraft}
+        onConfirm={editor.confirmSvgImport}
+      />
+    </>
   );
 }
 
@@ -2698,6 +2718,7 @@ type MaterialRemovalMeshProps = {
   totalLength: number;
   placementMode: PlacementMode;
   detailLevel?: number;
+  toolDiameter?: number;
 };
 
 export function MaterialRemovalMesh({
@@ -2707,12 +2728,11 @@ export function MaterialRemovalMesh({
   totalLength,
   placementMode,
   detailLevel = 5,
+  toolDiameter = 1,
 }: MaterialRemovalMeshProps) {
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
 
-  // В preview сцена зеркалится по X, поэтому карту выборки
-  // нужно зеркалить так же, иначе съём материала уедет в другой угол.
   const previewMirrorX = true;
 
   const level = clamp(detailLevel, 1, 10);
@@ -2761,6 +2781,55 @@ export function MaterialRemovalMesh({
     heights.fill(0);
 
     let accumulated = 0;
+    const toolRadius = Math.max(0.001, toolDiameter / 2);
+    const cellSizeX = width / Math.max(1, gridX - 1);
+    const cellSizeY = depth / Math.max(1, gridY - 1);
+
+    function carveAt(localX: number, localY: number, z: number) {
+      if (localX < -toolRadius || localX > width + toolRadius) return;
+      if (localY < -toolRadius || localY > depth + toolRadius) return;
+
+      const mappedCenterX = previewMirrorX ? width - localX : localX;
+
+      const radiusCellsX = Math.ceil(toolRadius / Math.max(cellSizeX, 0.0001));
+      const radiusCellsY = Math.ceil(toolRadius / Math.max(cellSizeY, 0.0001));
+
+      const centerGX = clamp(
+        Math.round((mappedCenterX / width) * (gridX - 1)),
+        0,
+        gridX - 1,
+      );
+      const centerGY = clamp(
+        Math.round((localY / depth) * (gridY - 1)),
+        0,
+        gridY - 1,
+      );
+
+      const nextZ = Math.max(z, -thickness);
+
+      for (let oy = -radiusCellsY; oy <= radiusCellsY; oy += 1) {
+        const gy = centerGY + oy;
+        if (gy < 0 || gy >= gridY) continue;
+
+        for (let ox = -radiusCellsX; ox <= radiusCellsX; ox += 1) {
+          const gx = centerGX + ox;
+          if (gx < 0 || gx >= gridX) continue;
+
+          const sampleX = (gx / (gridX - 1)) * width;
+          const sampleY = (gy / (gridY - 1)) * depth;
+
+          const dx = sampleX - mappedCenterX;
+          const dy = sampleY - localY;
+
+          if (dx * dx + dy * dy <= toolRadius * toolRadius) {
+            const index = gy * gridX + gx;
+            if (nextZ < heights[index]) {
+              heights[index] = nextZ;
+            }
+          }
+        }
+      }
+    }
 
     for (let s = 0; s < segments.length; s += 1) {
       const seg = segments[s];
@@ -2803,19 +2872,7 @@ export function MaterialRemovalMesh({
         const localX = x - placement.left;
         const localY = y - placement.bottom;
 
-        if (localX < 0 || localX > width || localY < 0 || localY > depth) {
-          continue;
-        }
-
-        const mappedX = previewMirrorX ? width - localX : localX;
-        const gx = clamp(Math.round((mappedX / width) * (gridX - 1)), 0, gridX - 1);
-        const gy = clamp(Math.round((localY / depth) * (gridY - 1)), 0, gridY - 1);
-        const index = gy * gridX + gx;
-
-        const nextZ = Math.max(z, -thickness);
-        if (nextZ < heights[index]) {
-          heights[index] = nextZ;
-        }
+        carveAt(localX, localY, z);
       }
 
       if (segEnd > targetLength) {
@@ -2849,6 +2906,7 @@ export function MaterialRemovalMesh({
     segments,
     stepDensity,
     thickness,
+    toolDiameter,
     totalLength,
     width,
   ]);
@@ -2897,6 +2955,7 @@ type PathSceneProps = {
   totalLength: number;
   placementMode: PlacementMode;
   detailLevel: number;
+  toolDiameter?: number;
   onCameraUpdate: (camera: CameraInfo) => void;
 };
 
@@ -2914,6 +2973,7 @@ export function PathScene({
   totalLength,
   placementMode,
   detailLevel,
+  toolDiameter = 3,
   onCameraUpdate,
 }: PathSceneProps) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
@@ -3079,6 +3139,7 @@ export function PathScene({
           totalLength={totalLength}
           placementMode={placementMode}
           detailLevel={detailLevel}
+          toolDiameter={toolDiameter}
         />
       ) : (
         <>
@@ -3119,6 +3180,7 @@ export function PathScene({
       <ToolHead
         position={currentState.position}
         cutting={currentState.position.z <= 0}
+        toolDiameter={toolDiameter}
         toScenePoint={toScenePoint}
       />
 
@@ -3475,6 +3537,460 @@ export function StockWireframe({
 }
 
 
+path: /src/components/SvgImportModal.tsx
+----------------------------------------
+import { useEffect, useMemo } from "react";
+import {
+  FiAlertCircle,
+  FiLoader,
+  FiSlash,
+  FiUploadCloud,
+  FiX,
+} from "react-icons/fi";
+import { theme, ui } from "../styles/ui";
+
+export type SvgImportStage =
+  | "reading"
+  | "parsing"
+  | "ready"
+  | "error"
+  | "aborted";
+
+export type SvgImportDraft = {
+  name: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  keepAspectRatio: boolean;
+};
+
+type SvgImportModalProps = {
+  open: boolean;
+  fileName: string;
+  stage: SvgImportStage;
+  progress: number;
+  message: string;
+  error: string | null;
+  draft: SvgImportDraft | null;
+  onClose: () => void;
+  onAbort: () => void;
+  onChangeDraft: (patch: Partial<SvgImportDraft>) => void;
+  onConfirm: () => void;
+};
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+export function SvgImportModal({
+  open,
+  fileName,
+  stage,
+  progress,
+  message,
+  error,
+  draft,
+  onClose,
+  onAbort,
+  onChangeDraft,
+  onConfirm,
+}: SvgImportModalProps) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
+  const ratio = useMemo(() => {
+    if (!draft || draft.sourceWidth <= 0 || draft.sourceHeight <= 0) return 1;
+    return draft.sourceWidth / draft.sourceHeight;
+  }, [draft]);
+
+  if (!open) return null;
+
+  const isBusy = stage === "reading" || stage === "parsing";
+  const canEdit = stage === "ready" && draft;
+  const canConfirm = stage === "ready" && Boolean(draft);
+
+  return (
+    <div
+      style={overlayStyle}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div style={modalStyle}>
+        <div style={headerStyle}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={ui.iconBadge}>
+              {isBusy ? (
+                <FiLoader
+                  size={18}
+                  style={{ animation: "spin 1s linear infinite" }}
+                />
+              ) : (
+                <FiUploadCloud size={18} />
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>
+                Импорт SVG
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: theme.textMuted,
+                  marginTop: 2,
+                }}
+              >
+                {fileName}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            style={closeButtonStyle}
+            title="Закрыть"
+          >
+            <FiX size={18} />
+          </button>
+        </div>
+
+        {(isBusy || stage === "error" || stage === "aborted") && (
+          <div style={{ ...ui.panelInset, padding: 16, marginBottom: 14 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              {stage === "error" ? (
+                <FiAlertCircle size={18} color={theme.danger} />
+              ) : stage === "aborted" ? (
+                <FiSlash size={18} color={theme.warning} />
+              ) : (
+                <FiLoader
+                  size={18}
+                  color={theme.primary}
+                  style={{ animation: "spin 1s linear infinite" }}
+                />
+              )}
+
+              <div style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
+                {stage === "error"
+                  ? "Ошибка импорта"
+                  : stage === "aborted"
+                    ? "Импорт прерван"
+                    : "Загрузка и обработка SVG"}
+              </div>
+            </div>
+
+            <div
+              style={{
+                height: 12,
+                borderRadius: 999,
+                background: "#e2e8f0",
+                overflow: "hidden",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  width: `${clampProgress(progress)}%`,
+                  height: "100%",
+                  borderRadius: 999,
+                  background:
+                    stage === "error"
+                      ? "linear-gradient(90deg, #fb7185 0%, #e11d48 100%)"
+                      : stage === "aborted"
+                        ? "linear-gradient(90deg, #fbbf24 0%, #d97706 100%)"
+                        : "linear-gradient(90deg, #60a5fa 0%, #2563eb 100%)",
+                  transition: "width 160ms ease",
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: 13, color: theme.textSoft, lineHeight: 1.5 }}>
+              {error ?? message}
+            </div>
+
+            {isBusy && (
+              <div style={{ marginTop: 14 }}>
+                <button type="button" onClick={onAbort} style={ui.buttonDanger}>
+                  <FiSlash size={16} />
+                  Abort
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {canEdit && draft && (
+          <>
+            <div
+              style={{
+                ...ui.panelInset,
+                padding: 14,
+                marginBottom: 14,
+                display: "grid",
+                gap: 12,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 800, color: theme.text }}>
+                Исходный размер SVG
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                <Stat label="Ширина" value={String(draft.sourceWidth)} />
+                <Stat label="Высота" value={String(draft.sourceHeight)} />
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              <label style={ui.inputLabel}>
+                Имя объекта
+                <input
+                  style={ui.input}
+                  type="text"
+                  value={draft.name}
+                  onChange={(e) => onChangeDraft({ name: e.target.value })}
+                />
+              </label>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                <label style={ui.inputLabel}>
+                  Ширина
+                  <input
+                    style={ui.input}
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={draft.width}
+                    onChange={(e) => {
+                      const nextWidth = Math.max(
+                        0.001,
+                        Number(e.target.value) || 0.001,
+                      );
+                      if (draft.keepAspectRatio) {
+                        onChangeDraft({
+                          width: nextWidth,
+                          height: Number((nextWidth / ratio).toFixed(3)),
+                        });
+                      } else {
+                        onChangeDraft({ width: nextWidth });
+                      }
+                    }}
+                  />
+                </label>
+
+                <label style={ui.inputLabel}>
+                  Высота
+                  <input
+                    style={ui.input}
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={draft.height}
+                    onChange={(e) => {
+                      const nextHeight = Math.max(
+                        0.001,
+                        Number(e.target.value) || 0.001,
+                      );
+                      if (draft.keepAspectRatio) {
+                        onChangeDraft({
+                          height: nextHeight,
+                          width: Number((nextHeight * ratio).toFixed(3)),
+                        });
+                      } else {
+                        onChangeDraft({ height: nextHeight });
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: 12,
+                  borderRadius: 14,
+                  border: `1px solid ${theme.border}`,
+                  background: "#fff",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: theme.text,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={draft.keepAspectRatio}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    if (!checked) {
+                      onChangeDraft({ keepAspectRatio: false });
+                      return;
+                    }
+
+                    onChangeDraft({
+                      keepAspectRatio: true,
+                      height: Number((draft.width / ratio).toFixed(3)),
+                    });
+                  }}
+                />
+                Пропорциональное масштабирование
+              </label>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 10,
+                }}
+              >
+                <label style={ui.inputLabel}>
+                  X
+                  <input
+                    style={ui.input}
+                    type="number"
+                    step="0.001"
+                    value={draft.x}
+                    onChange={(e) =>
+                      onChangeDraft({ x: Number(e.target.value) || 0 })
+                    }
+                  />
+                </label>
+
+                <label style={ui.inputLabel}>
+                  Y
+                  <input
+                    style={ui.input}
+                    type="number"
+                    step="0.001"
+                    value={draft.y}
+                    onChange={(e) =>
+                      onChangeDraft({ y: Number(e.target.value) || 0 })
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div style={footerStyle}>
+          <button type="button" onClick={onClose} style={ui.buttonGhost}>
+            Закрыть
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={!canConfirm}
+            style={{
+              ...ui.buttonPrimary,
+              opacity: canConfirm ? 1 : 0.55,
+              cursor: canConfirm ? "pointer" : "not-allowed",
+            }}
+          >
+            Импортировать
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={ui.statCard}>
+      <div style={ui.statLabel}>{label}</div>
+      <div style={{ ...ui.statValue, fontSize: 16 }}>{value}</div>
+    </div>
+  );
+}
+
+const overlayStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1000,
+  background: "rgba(15, 23, 42, 0.42)",
+  backdropFilter: "blur(6px)",
+  display: "grid",
+  placeItems: "center",
+  padding: 24,
+};
+
+const modalStyle: React.CSSProperties = {
+  width: "min(680px, 100%)",
+  maxHeight: "min(88vh, 920px)",
+  overflowY: "auto",
+  background: "#fff",
+  borderRadius: 24,
+  border: `1px solid ${theme.border}`,
+  boxShadow: theme.shadow,
+  padding: 18,
+};
+
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  marginBottom: 16,
+};
+
+const footerStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+  marginTop: 18,
+};
+
+const closeButtonStyle: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: 12,
+  border: `1px solid ${theme.border}`,
+  background: "#fff",
+  color: theme.text,
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+};
+
+
 path: /src/components/ToolHead.tsx
 ----------------------------------------
 import * as THREE from "three";
@@ -3483,25 +3999,28 @@ import type { Point3 } from "../types/gcode";
 type ToolHeadProps = {
   position: Point3;
   cutting: boolean;
+  toolDiameter?: number;
   toScenePoint: (p: Point3) => THREE.Vector3;
 };
 
 export default function ToolHead({
   position,
   cutting,
+  toolDiameter = 3,
   toScenePoint,
 }: ToolHeadProps) {
   const scenePos = toScenePoint(position);
+  const radius = Math.max(0.4, toolDiameter / 2);
 
   return (
     <group position={scenePos}>
-      <mesh castShadow>
-        <sphereGeometry args={[1.2, 16, 16]} />
+      <mesh castShadow position={[0, 1.2, 0]}>
+        <sphereGeometry args={[Math.max(1.2, radius * 0.55), 16, 16]} />
         <meshStandardMaterial color={cutting ? "#ef4444" : "#f59e0b"} />
       </mesh>
 
       <mesh position={[0, -2.5, 0]} castShadow>
-        <cylinderGeometry args={[0.3, 0.3, 4, 16]} />
+        <cylinderGeometry args={[radius, radius, 4, 24]} />
         <meshStandardMaterial color="#475569" />
       </mesh>
     </group>
@@ -4146,17 +4665,24 @@ type CircleShapeViewProps = {
   onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
 };
 
-export function CircleShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: CircleShapeViewProps) {
+export function CircleShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: CircleShapeViewProps) {
   const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, documentHeight, view);
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
 
   return (
     <circle
       cx={p.x}
       cy={p.y}
       r={shape.radius * view.scale}
-      fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
+      fill="none"
       stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={isSelected ? 2 : 1.5}
+      strokeWidth={strokeWidth}
       onPointerDown={onPointerDown}
     />
   );
@@ -4268,7 +4794,13 @@ type PolylineShapeViewProps = {
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
 };
 
-export function PolylineShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: PolylineShapeViewProps) {
+export function PolylineShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: PolylineShapeViewProps) {
   const points = shape.points
     .map((point) => {
       const p = cadToScreenPoint(point, documentHeight, view);
@@ -4276,19 +4808,20 @@ export function PolylineShapeView({ shape, documentHeight, view, isSelected, onP
     })
     .join(" ");
 
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+
   return (
     <polyline
       points={points}
       fill="none"
       stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={isSelected ? 2 : 1.5}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       onPointerDown={onPointerDown}
     />
   );
 }
-
 
 
 path: /src/modules/cad/canvas/RectangleShapeView.tsx
@@ -4313,6 +4846,7 @@ export function RectangleShapeView({
   onPointerDown,
 }: RectangleShapeViewProps) {
   const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, documentHeight, view);
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
 
   return (
     <rect
@@ -4320,9 +4854,10 @@ export function RectangleShapeView({
       y={p.y}
       width={shape.width * view.scale}
       height={shape.height * view.scale}
-      fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
+      fill="none"
       stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={isSelected ? 2 : 1.5}
+      strokeWidth={strokeWidth}
+      opacity={0.95}
       onPointerDown={onPointerDown}
     />
   );
@@ -4338,6 +4873,7 @@ export function SelectionOverlay() {
 
 path: /src/modules/cad/canvas/ShapeRenderer.tsx
 ----------------------------------------
+// path: /src/modules/cad/canvas/ShapeRenderer.tsx
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { ViewTransform } from "../model/view";
 import type { SketchShape } from "../model/types";
@@ -4345,6 +4881,7 @@ import { RectangleShapeView } from "./RectangleShapeView";
 import { CircleShapeView } from "./CircleShapeView";
 import { PolylineShapeView } from "./PolylineShapeView";
 import { TextShapeView } from "./TextShapeView";
+import { SvgShapeView } from "./SvgShapeView";
 
 type ShapeRendererProps = {
   shape: SketchShape;
@@ -4405,7 +4942,77 @@ export function ShapeRenderer({
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       );
+    case "svg":
+      return (
+        <SvgShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
   }
+}
+
+
+path: /src/modules/cad/canvas/SvgShapeView.tsx
+----------------------------------------
+// path: /src/modules/cad/canvas/SvgShapeView.tsx
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { SketchSvg } from "../model/types";
+
+type SvgShapeViewProps = {
+  shape: SketchSvg;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
+};
+
+export function SvgShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: SvgShapeViewProps) {
+  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
+  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+
+  return (
+    <g onPointerDown={onPointerDown}>
+      {shape.contours.map((polyline, index) => {
+        const points = polyline
+          .map((point) => {
+            const p = cadToScreenPoint(
+              {
+                x: shape.x + point.x * scaleX,
+                y: shape.y + point.y * scaleY,
+              },
+              documentHeight,
+              view,
+            );
+            return `${p.x},${p.y}`;
+          })
+          .join(" ");
+
+        return (
+          <polyline
+            key={`${shape.id}-${index}`}
+            points={points}
+            fill="none"
+            stroke={isSelected ? "#2563eb" : "#475569"}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        );
+      })}
+    </g>
+  );
 }
 
 
@@ -4433,6 +5040,8 @@ export function TextShapeView({
   polylines,
   onPointerDown,
 }: TextShapeViewProps) {
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+
   return (
     <g onPointerDown={onPointerDown}>
       {polylines.map((polyline, index) => (
@@ -4446,7 +5055,7 @@ export function TextShapeView({
             .join(" ")}
           fill="none"
           stroke={isSelected ? "#2563eb" : "#475569"}
-          strokeWidth={isSelected ? 2 : 1.5}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -4776,6 +5385,395 @@ export function applyDefaultSnap(point: SketchPolylinePoint, options: SnapOption
 }
 
 
+path: /src/modules/cad/geometry/svgImport.ts
+----------------------------------------
+// path: /src/modules/cad/geometry/svgImport.ts
+import type { SketchPolylinePoint } from "../model/types";
+
+export type ParsedSvgGeometry = {
+  width: number;
+  height: number;
+  contours: SketchPolylinePoint[][];
+};
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function parseNumber(value: string | null | undefined, fallback = 0): number {
+  if (!value) return fallback;
+  const match = String(value).match(/-?\d*\.?\d+/);
+  return match ? Number(match[0]) : fallback;
+}
+
+function getSvgSize(svg: SVGSVGElement): { width: number; height: number } {
+  const viewBox = svg.getAttribute("viewBox");
+  if (viewBox) {
+    const parts = viewBox
+      .trim()
+      .split(/[\s,]+/)
+      .map((part) => Number(part));
+    if (parts.length === 4 && Number.isFinite(parts[2]) && Number.isFinite(parts[3])) {
+      return {
+        width: Math.max(1, parts[2]),
+        height: Math.max(1, parts[3]),
+      };
+    }
+  }
+
+  return {
+    width: Math.max(1, parseNumber(svg.getAttribute("width"), 100)),
+    height: Math.max(1, parseNumber(svg.getAttribute("height"), 100)),
+  };
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/[\n\r\t]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function tokenizePathData(d: string): string[] {
+  const matches = normalizeWhitespace(d).match(/[a-zA-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g);
+  return matches ?? [];
+}
+
+function isCommandToken(token: string): boolean {
+  return /^[a-zA-Z]$/.test(token);
+}
+
+function commandParamCount(command: string): number {
+  switch (command.toUpperCase()) {
+    case "M":
+    case "L":
+    case "T":
+      return 2;
+    case "H":
+    case "V":
+      return 1;
+    case "S":
+    case "Q":
+      return 4;
+    case "C":
+      return 6;
+    case "A":
+      return 7;
+    case "Z":
+      return 0;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Разбивает path d на отдельные подпути.
+ * Каждый подпуть начинается с M/m и может заканчиваться Z/z.
+ * Это убирает ложные диагонали между независимыми контурами.
+ */
+function splitPathDataToSubpaths(d: string): string[] {
+  const tokens = tokenizePathData(d);
+  const subpaths: string[] = [];
+
+  let i = 0;
+  let current = "";
+
+  while (i < tokens.length) {
+    const token = tokens[i];
+
+    if (!isCommandToken(token)) {
+      i += 1;
+      continue;
+    }
+
+    const command = token;
+    const upper = command.toUpperCase();
+    const paramCount = commandParamCount(command);
+
+    if (upper === "M") {
+      if (current.trim()) {
+        subpaths.push(current.trim());
+      }
+
+      current = command;
+      i += 1;
+
+      let firstMoveDone = false;
+
+      while (i < tokens.length && !isCommandToken(tokens[i])) {
+        if (i + 1 >= tokens.length) break;
+
+        const x = tokens[i];
+        const y = tokens[i + 1];
+
+        if (!firstMoveDone) {
+          current += ` ${x} ${y}`;
+          firstMoveDone = true;
+        } else {
+          const implicitLine = command === "m" ? "l" : "L";
+          current += ` ${implicitLine} ${x} ${y}`;
+        }
+
+        i += 2;
+      }
+
+      continue;
+    }
+
+    if (!current) {
+      i += 1;
+      while (i < tokens.length && !isCommandToken(tokens[i])) {
+        i += 1;
+      }
+      continue;
+    }
+
+    current += ` ${command}`;
+    i += 1;
+
+    if (upper === "Z") {
+      subpaths.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    while (i < tokens.length && !isCommandToken(tokens[i])) {
+      const chunk = tokens.slice(i, i + paramCount);
+      if (chunk.length < paramCount) break;
+      current += ` ${chunk.join(" ")}`;
+      i += paramCount;
+    }
+  }
+
+  if (current.trim()) {
+    subpaths.push(current.trim());
+  }
+
+  return subpaths;
+}
+
+function sampleSvgGeometryElement(
+  element: SVGGeometryElement,
+  svgHeight: number,
+  density = 2,
+): SketchPolylinePoint[] {
+  const totalLength = Math.max(element.getTotalLength(), 0);
+  const steps = Math.max(12, Math.ceil(totalLength * density));
+  const points: SketchPolylinePoint[] = [];
+
+  for (let i = 0; i <= steps; i += 1) {
+    const point = element.getPointAtLength((i / steps) * totalLength);
+    points.push({
+      x: round(point.x),
+      y: round(svgHeight - point.y),
+    });
+  }
+
+  return points;
+}
+
+function samplePathSubpaths(
+  pathElement: SVGPathElement,
+  svgHeight: number,
+  density = 2,
+): SketchPolylinePoint[][] {
+  const d = pathElement.getAttribute("d") ?? "";
+  const subpaths = splitPathDataToSubpaths(d);
+
+  if (subpaths.length <= 1) {
+    const polyline = sampleSvgGeometryElement(pathElement, svgHeight, density);
+    return polyline.length >= 2 ? [polyline] : [];
+  }
+
+  const results: SketchPolylinePoint[][] = [];
+
+  for (const subpathD of subpaths) {
+    const subpath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    subpath.setAttribute("d", subpathD);
+
+    const polyline = sampleSvgGeometryElement(subpath, svgHeight, density);
+    if (polyline.length >= 2) {
+      results.push(polyline);
+    }
+  }
+
+  return results;
+}
+
+function rectToPolyline(element: SVGRectElement, svgHeight: number): SketchPolylinePoint[] {
+  const x = Number(element.x.baseVal.value);
+  const y = Number(element.y.baseVal.value);
+  const width = Number(element.width.baseVal.value);
+  const height = Number(element.height.baseVal.value);
+
+  return [
+    { x: round(x), y: round(svgHeight - (y + height)) },
+    { x: round(x + width), y: round(svgHeight - (y + height)) },
+    { x: round(x + width), y: round(svgHeight - y) },
+    { x: round(x), y: round(svgHeight - y) },
+    { x: round(x), y: round(svgHeight - (y + height)) },
+  ];
+}
+
+function lineToPolyline(element: SVGLineElement, svgHeight: number): SketchPolylinePoint[] {
+  return [
+    {
+      x: round(Number(element.x1.baseVal.value)),
+      y: round(svgHeight - Number(element.y1.baseVal.value)),
+    },
+    {
+      x: round(Number(element.x2.baseVal.value)),
+      y: round(svgHeight - Number(element.y2.baseVal.value)),
+    },
+  ];
+}
+
+function polyPointsToPolyline(
+  points: SVGPointList,
+  svgHeight: number,
+  closed: boolean,
+): SketchPolylinePoint[] {
+  const result: SketchPolylinePoint[] = [];
+  for (let i = 0; i < points.numberOfItems; i += 1) {
+    const point = points.getItem(i);
+    result.push({
+      x: round(point.x),
+      y: round(svgHeight - point.y),
+    });
+  }
+
+  if (closed && result.length > 1) {
+    const first = result[0];
+    const last = result[result.length - 1];
+    if (Math.abs(first.x - last.x) > 0.001 || Math.abs(first.y - last.y) > 0.001) {
+      result.push({ ...first });
+    }
+  }
+
+  return result;
+}
+
+function circleToPolyline(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  svgHeight: number,
+  segments = 96,
+): SketchPolylinePoint[] {
+  const points: SketchPolylinePoint[] = [];
+  for (let i = 0; i <= segments; i += 1) {
+    const t = (i / segments) * Math.PI * 2;
+    points.push({
+      x: round(cx + Math.cos(t) * rx),
+      y: round(svgHeight - (cy + Math.sin(t) * ry)),
+    });
+  }
+  return points;
+}
+
+export function parseSvgToContours(svgText: string): ParsedSvgGeometry {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(svgText, "image/svg+xml");
+  const svg = doc.documentElement as unknown as SVGSVGElement;
+
+  if (!svg || svg.tagName.toLowerCase() !== "svg") {
+    throw new Error("Некорректный SVG");
+  }
+
+  if (doc.querySelector("parsererror")) {
+    throw new Error("Не удалось разобрать SVG");
+  }
+
+  const { width, height } = getSvgSize(svg);
+
+  const host = document.createElement("div");
+  host.style.position = "fixed";
+  host.style.left = "-99999px";
+  host.style.top = "-99999px";
+  host.style.width = "0";
+  host.style.height = "0";
+  host.style.overflow = "hidden";
+  document.body.appendChild(host);
+
+  try {
+    const runtimeSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    runtimeSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    runtimeSvg.setAttribute("width", String(width));
+    runtimeSvg.setAttribute("height", String(height));
+    runtimeSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    runtimeSvg.innerHTML = svg.innerHTML;
+    host.appendChild(runtimeSvg);
+
+    const contours: SketchPolylinePoint[][] = [];
+
+    runtimeSvg.querySelectorAll("*").forEach((node) => {
+      const tag = node.tagName.toLowerCase();
+
+      if (tag === "path" && node instanceof SVGPathElement) {
+        const polylines = samplePathSubpaths(node, height);
+        polylines.forEach((polyline) => {
+          if (polyline.length >= 2) contours.push(polyline);
+        });
+        return;
+      }
+
+      if (tag === "polyline" && node instanceof SVGPolylineElement) {
+        const polyline = polyPointsToPolyline(node.points, height, false);
+        if (polyline.length >= 2) contours.push(polyline);
+        return;
+      }
+
+      if (tag === "polygon" && node instanceof SVGPolygonElement) {
+        const polyline = polyPointsToPolyline(node.points, height, true);
+        if (polyline.length >= 2) contours.push(polyline);
+        return;
+      }
+
+      if (tag === "rect" && node instanceof SVGRectElement) {
+        const polyline = rectToPolyline(node, height);
+        if (polyline.length >= 2) contours.push(polyline);
+        return;
+      }
+
+      if (tag === "line" && node instanceof SVGLineElement) {
+        const polyline = lineToPolyline(node, height);
+        if (polyline.length >= 2) contours.push(polyline);
+        return;
+      }
+
+      if (tag === "circle" && node instanceof SVGCircleElement) {
+        const polyline = circleToPolyline(
+          Number(node.cx.baseVal.value),
+          Number(node.cy.baseVal.value),
+          Number(node.r.baseVal.value),
+          Number(node.r.baseVal.value),
+          height,
+        );
+        if (polyline.length >= 2) contours.push(polyline);
+        return;
+      }
+
+      if (tag === "ellipse" && node instanceof SVGEllipseElement) {
+        const polyline = circleToPolyline(
+          Number(node.cx.baseVal.value),
+          Number(node.cy.baseVal.value),
+          Number(node.rx.baseVal.value),
+          Number(node.ry.baseVal.value),
+          height,
+        );
+        if (polyline.length >= 2) contours.push(polyline);
+      }
+    });
+
+    if (contours.length === 0) {
+      throw new Error("В SVG не найдено поддерживаемых контуров");
+    }
+
+    return { width, height, contours };
+  } finally {
+    host.remove();
+  }
+}
+
+
 path: /src/modules/cad/geometry/textGeometry.ts
 ----------------------------------------
 import { getTextPolylines as buildTextPolylines } from "../../../utils/fontGeometry";
@@ -4844,6 +5842,7 @@ import {
   createCircleShape,
   createPolylineShape,
   createRectangleShape,
+  createSvgShape,
   createTextShape,
 } from "../model/shapeFactory";
 import { moveShape } from "../model/shapeTransforms";
@@ -4865,6 +5864,7 @@ import { clamp } from "../../../utils";
 import { useTextPreviewMap } from "./useTextPreviewMap";
 import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
+import { useSvgImportFlow } from "./useSvgImportFlow";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -4912,6 +5912,33 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  const {
+    svgImport,
+    startSvgImport,
+    closeSvgImport,
+    abortSvgImport,
+    updateSvgImportDraft,
+    confirmSvgImport,
+  } = useSvgImportFlow({
+    onConfirm: (payload) => {
+      const shape = createSvgShape({
+        name: payload.name,
+        contours: payload.contours,
+        sourceWidth: payload.sourceWidth,
+        sourceHeight: payload.sourceHeight,
+        width: payload.width,
+        height: payload.height,
+        x: payload.x,
+        y: payload.y,
+        preserveAspectRatio: true,
+      });
+
+      checkpointHistory();
+      setDocument((prev) => addShape(prev, shape));
+      onSelectionChange(selectOnly(shape.id));
+    },
+  });
 
   function normalizePoint(point: SketchPolylinePoint): SketchPolylinePoint {
     if (!document.snapEnabled) {
@@ -5216,6 +6243,276 @@ export function useCadEditor({
     handleCanvasWheel,
     bindSelectStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
+
+    svgImport,
+    startSvgImport,
+    closeSvgImport,
+    abortSvgImport,
+    updateSvgImportDraft,
+    confirmSvgImport,
+  };
+}
+
+
+path: /src/modules/cad/hooks/useSvgImportFlow.ts
+----------------------------------------
+// path: /src/modules/cad/hooks/useSvgImportFlow.ts
+import { useCallback, useRef, useState } from "react";
+import { parseSvgToContours } from "../geometry/svgImport";
+
+export type SvgImportStage = "reading" | "parsing" | "ready" | "error" | "aborted";
+
+export type SvgImportDraft = {
+  name: string;
+  sourceWidth: number;
+  sourceHeight: number;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  keepAspectRatio: boolean;
+};
+
+export type SvgImportReadyPayload = {
+  name: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  contours: Array<Array<{ x: number; y: number }>>;
+};
+
+type SvgImportState = {
+  open: boolean;
+  fileName: string;
+  stage: SvgImportStage;
+  progress: number;
+  message: string;
+  error: string | null;
+  draft: SvgImportDraft | null;
+  contours: Array<Array<{ x: number; y: number }>>;
+};
+
+type UseSvgImportFlowParams = {
+  onConfirm: (payload: SvgImportReadyPayload) => void;
+};
+
+function createIdleState(): SvgImportState {
+  return {
+    open: false,
+    fileName: "",
+    stage: "reading",
+    progress: 0,
+    message: "",
+    error: null,
+    draft: null,
+    contours: [],
+  };
+}
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function readFileAsText(file: File, signalRef: { aborted: boolean; reader?: FileReader }, onProgress: (value: number) => void) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const fraction = event.total > 0 ? event.loaded / event.total : 0;
+      onProgress(Math.max(0, Math.min(55, fraction * 55)));
+    };
+
+    reader.onerror = () => reject(new Error("Не удалось прочитать SVG файл"));
+    reader.onabort = () => reject(new DOMException("Aborted", "AbortError"));
+
+    reader.onload = () => {
+      if (signalRef.aborted) {
+        reject(new DOMException("Aborted", "AbortError"));
+        return;
+      }
+
+      resolve(String(reader.result ?? ""));
+    };
+
+    if (signalRef.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+
+    reader.readAsText(file);
+    signalRef.reader = reader;
+  });
+}
+
+export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
+  const [state, setState] = useState<SvgImportState>(createIdleState);
+
+  const taskRef = useRef<{
+    aborted: boolean;
+    reader?: FileReader;
+  } | null>(null);
+
+  const close = useCallback(() => {
+    if (taskRef.current) {
+      taskRef.current.aborted = true;
+      taskRef.current.reader?.abort();
+      taskRef.current = null;
+    }
+    setState(createIdleState());
+  }, []);
+
+  const abort = useCallback(() => {
+    if (taskRef.current) {
+      taskRef.current.aborted = true;
+      taskRef.current.reader?.abort();
+      taskRef.current = null;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      stage: "aborted",
+      progress: prev.progress,
+      message: "Импорт был остановлен пользователем.",
+      error: null,
+    }));
+  }, []);
+
+  const updateDraft = useCallback((patch: Partial<SvgImportDraft>) => {
+    setState((prev) => {
+      if (!prev.draft) return prev;
+      return {
+        ...prev,
+        draft: {
+          ...prev.draft,
+          ...patch,
+        },
+      };
+    });
+  }, []);
+
+  const start = useCallback(async (file: File) => {
+    const token = { aborted: false } as { aborted: boolean; reader?: FileReader };
+    taskRef.current = token;
+
+    const nameWithoutExt = file.name.replace(/\.svg$/i, "") || "SVG";
+    setState({
+      open: true,
+      fileName: file.name,
+      stage: "reading",
+      progress: 0,
+      message: "Чтение файла...",
+      error: null,
+      draft: null,
+      contours: [],
+    });
+
+    try {
+      const text = await readFileAsText(file, token, (value) => {
+        setState((prev) => ({
+          ...prev,
+          progress: value,
+          message: "Чтение SVG файла...",
+        }));
+      });
+
+      if (token.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+
+      setState((prev) => ({
+        ...prev,
+        stage: "parsing",
+        progress: 64,
+        message: "Разбор контуров SVG...",
+      }));
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
+      const parsed = parseSvgToContours(text);
+
+      if (token.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
+
+      setState({
+        open: true,
+        fileName: file.name,
+        stage: "ready",
+        progress: 100,
+        message: "SVG подготовлен. Теперь можно задать размеры и координаты.",
+        error: null,
+        contours: parsed.contours,
+        draft: {
+          name: nameWithoutExt,
+          sourceWidth: round(parsed.width),
+          sourceHeight: round(parsed.height),
+          width: round(parsed.width),
+          height: round(parsed.height),
+          x: 0,
+          y: 0,
+          keepAspectRatio: true,
+        },
+      });
+
+      taskRef.current = null;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setState((prev) => ({
+          ...prev,
+          open: true,
+          stage: "aborted",
+          message: "Импорт был остановлен пользователем.",
+          error: null,
+        }));
+        return;
+      }
+
+      setState((prev) => ({
+        ...prev,
+        open: true,
+        stage: "error",
+        progress: prev.progress,
+        message: "",
+        error: error instanceof Error ? error.message : "Не удалось импортировать SVG",
+      }));
+      taskRef.current = null;
+    }
+  }, []);
+
+  const confirm = useCallback(() => {
+    setState((prev) => {
+      if (!prev.draft || prev.stage !== "ready") {
+        return prev;
+      }
+
+      onConfirm({
+        name: prev.draft.name.trim() || "SVG",
+        width: prev.draft.width,
+        height: prev.draft.height,
+        x: prev.draft.x,
+        y: prev.draft.y,
+        sourceWidth: prev.draft.sourceWidth,
+        sourceHeight: prev.draft.sourceHeight,
+        contours: prev.contours,
+      });
+
+      return createIdleState();
+    });
+  }, [onConfirm]);
+
+  return {
+    svgImport: state,
+    startSvgImport: start,
+    closeSvgImport: close,
+    abortSvgImport: abort,
+    updateSvgImportDraft: updateDraft,
+    confirmSvgImport: confirm,
   };
 }
 
@@ -5271,12 +6568,32 @@ export function createEmptySketchDocument(): SketchDocument {
   return {
     width: 300,
     height: 180,
+
+    units: "mm",
+    workOffset: "G54",
+
+    startZ: 5,
     safeZ: 5,
     cutZ: -1,
+    passDepth: 1,
+
     feedCut: 500,
+    feedPlunge: 180,
     feedRapid: 1200,
+
     spindleOn: false,
+    spindleSpeed: 12000,
+    spindleDirection: "cw",
     laserPower: 800,
+    dwellMs: 0,
+    coolant: false,
+    returnHome: true,
+
+    toolType: "router",
+    toolNumber: 1,
+    toolDiameter: 3.175,
+    stepover: 0.45,
+
     snapEnabled: true,
     snapStep: 5,
     shapes: [],
@@ -5391,6 +6708,7 @@ export function setPrimary(selection: SelectionState, id: string | null): Select
 
 path: /src/modules/cad/model/shapeBounds.ts
 ----------------------------------------
+// path: /src/modules/cad/model/shapeBounds.ts
 import type { SketchDocument, SketchShape } from "./types";
 
 export type Bounds2D = {
@@ -5446,6 +6764,13 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         maxY: shape.y + shape.height,
       };
     }
+    case "svg":
+      return {
+        minX: shape.x,
+        minY: shape.y,
+        maxX: shape.x + shape.width,
+        maxY: shape.y + shape.height,
+      };
   }
 }
 
@@ -5474,11 +6799,13 @@ export function selectionBounds(shapes: SketchShape[]): Bounds2D {
 
 path: /src/modules/cad/model/shapeFactory.ts
 ----------------------------------------
+// path: /src/modules/cad/model/shapeFactory.ts
 import type {
   SketchCircle,
   SketchPolyline,
   SketchPolylinePoint,
   SketchRectangle,
+  SketchSvg,
   SketchText,
 } from "./types";
 import { createId } from "./ids";
@@ -5499,6 +6826,7 @@ export function createRectangleShape(
     width,
     height,
     cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -5516,6 +6844,7 @@ export function createCircleShape(
     cy,
     radius,
     cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -5531,6 +6860,7 @@ export function createPolylineShape(
     points,
     closed,
     cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -5557,6 +6887,35 @@ export function createTextShape(
     align: "left",
     cutMode: "outline",
     cutZ: null,
+    strokeWidth: 1,
+  };
+}
+
+export function createSvgShape(params: {
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  preserveAspectRatio: boolean;
+  contours: SketchPolylinePoint[][];
+}): SketchSvg {
+  return {
+    id: createId("svg"),
+    type: "svg",
+    name: params.name,
+    x: params.x,
+    y: params.y,
+    width: params.width,
+    height: params.height,
+    sourceWidth: params.sourceWidth,
+    sourceHeight: params.sourceHeight,
+    preserveAspectRatio: params.preserveAspectRatio,
+    contours: params.contours,
+    cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -5577,6 +6936,7 @@ export type {
 
 path: /src/modules/cad/model/shapeTransforms.ts
 ----------------------------------------
+// path: /src/modules/cad/model/shapeTransforms.ts
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { SketchShape } from "./types";
 
@@ -5596,6 +6956,8 @@ export function moveShape(shape: SketchShape, dx: number, dy: number): SketchSha
         points: shape.points.map((p) => ({ x: round(p.x + dx), y: round(p.y + dy) })),
       };
     case "text":
+      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+    case "svg":
       return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
   }
 }
@@ -5633,6 +6995,8 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
         ...rotatePoint({ x: shape.x, y: shape.y }, origin, angle),
         rotation: (shape.rotation ?? 0) + angle,
       };
+    case "svg":
+      return shape;
   }
 }
 
@@ -5679,18 +7043,30 @@ export function scaleShape(
         letterSpacing: round(shape.letterSpacing * sx),
       };
     }
+    case "svg": {
+      const p = scalePoint({ x: shape.x, y: shape.y });
+      return {
+        ...shape,
+        x: p.x,
+        y: p.y,
+        width: round(shape.width * sx),
+        height: round(shape.height * sy),
+      };
+    }
   }
 }
 
 
 path: /src/modules/cad/model/types.ts
 ----------------------------------------
-export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text";
+// path: /src/modules/cad/model/types.ts
+export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text" | "svg";
 
 export type SketchBase = {
   id: string;
   name: string;
   cutZ?: number | null;
+  strokeWidth?: number;
 };
 
 export type SketchRectangle = SketchBase & {
@@ -5732,21 +7108,58 @@ export type SketchText = SketchBase & {
   cutMode?: "outline" | "pocket";
 };
 
+export type SketchSvg = SketchBase & {
+  type: "svg";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  preserveAspectRatio: boolean;
+  contours: SketchPolylinePoint[][];
+};
+
 export type SketchShape =
   | SketchRectangle
   | SketchCircle
   | SketchPolyline
-  | SketchText;
+  | SketchText
+  | SketchSvg;
+
+export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
+export type UnitsMode = "mm" | "inch";
+export type SpindleDirection = "cw" | "ccw";
 
 export type SketchDocument = {
   width: number;
   height: number;
+
+  units: UnitsMode;
+  workOffset: "G54" | "G55" | "G56" | "G57" | "G58" | "G59";
+
+  startZ: number;
   safeZ: number;
   cutZ: number;
+  passDepth: number;
+
   feedCut: number;
+  feedPlunge: number;
   feedRapid: number;
+
   spindleOn: boolean;
+  spindleSpeed: number;
+  spindleDirection: SpindleDirection;
   laserPower: number;
+  dwellMs: number;
+  coolant: boolean;
+  returnHome: boolean;
+
+  toolType: MachineToolType;
+  toolNumber: number;
+  toolDiameter: number;
+  stepover: number;
+
   snapEnabled: boolean;
   snapStep: number;
   shapes: SketchShape[];
@@ -5797,6 +7210,13 @@ const twoColumnGrid: React.CSSProperties = {
   minWidth: 0,
 };
 
+const threeColumnGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 10,
+  minWidth: 0,
+};
+
 const fieldLabel: React.CSSProperties = {
   ...ui.inputLabel,
 };
@@ -5814,19 +7234,82 @@ const checkboxRow: React.CSSProperties = {
   border: "1px solid #dbe4ee",
 };
 
-function CardBlock({ children }: { children: React.ReactNode }) {
+function CardBlock({
+  title,
+  children,
+}: {
+  title?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={{ background: "#fff", border: "1px solid #dbe4ee", borderRadius: 14, padding: 12, minWidth: 0 }}>
+    <div
+      style={{
+        background: "#fff",
+        border: "1px solid #dbe4ee",
+        borderRadius: 14,
+        padding: 12,
+        minWidth: 0,
+      }}
+    >
+      {title && (
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: "#0f172a",
+            marginBottom: 10,
+          }}
+        >
+          {title}
+        </div>
+      )}
       {children}
     </div>
   );
 }
 
-export function DocumentSettingsPanel({ document, setDocument }: DocumentSettingsPanelProps) {
+export function DocumentSettingsPanel({
+  document,
+  setDocument,
+}: DocumentSettingsPanelProps) {
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <CardBlock>
+      <CardBlock title="Сетка и лист">
         <div style={{ display: "grid", gap: 10 }}>
+          <div style={twoColumnGrid}>
+            <label style={fieldLabel}>
+              Ширина листа
+              <input
+                style={ui.input}
+                type="number"
+                min="1"
+                value={document.width}
+                onChange={(e) =>
+                  setDocument((prev) => ({
+                    ...prev,
+                    width: Math.max(1, Number(e.target.value) || 1),
+                  }))
+                }
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Высота листа
+              <input
+                style={ui.input}
+                type="number"
+                min="1"
+                value={document.height}
+                onChange={(e) =>
+                  setDocument((prev) => ({
+                    ...prev,
+                    height: Math.max(1, Number(e.target.value) || 1),
+                  }))
+                }
+              />
+            </label>
+          </div>
+
           <label style={fieldLabel}>
             Шаг сетки
             <input
@@ -5859,37 +7342,358 @@ export function DocumentSettingsPanel({ document, setDocument }: DocumentSetting
         </div>
       </CardBlock>
 
-      <CardBlock>
+      <CardBlock title="Основные настройки генерации">
         <div style={twoColumnGrid}>
-          <label style={fieldLabel}>Ширина листа<input style={ui.input} type="number" value={document.width} onChange={(e) => setDocument((prev) => ({ ...prev, width: Math.max(1, Number(e.target.value) || 1) }))} /></label>
-          <label style={fieldLabel}>Высота листа<input style={ui.input} type="number" value={document.height} onChange={(e) => setDocument((prev) => ({ ...prev, height: Math.max(1, Number(e.target.value) || 1) }))} /></label>
+          <label style={fieldLabel}>
+            Единицы
+            <select
+              value={document.units}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  units: e.target.value as SketchDocument["units"],
+                }))
+              }
+              style={ui.select}
+            >
+              <option value="mm">мм (G21)</option>
+              <option value="inch">дюймы (G20)</option>
+            </select>
+          </label>
+
+          <label style={fieldLabel}>
+            Work offset
+            <select
+              value={document.workOffset}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  workOffset: e.target.value as SketchDocument["workOffset"],
+                }))
+              }
+              style={ui.select}
+            >
+              <option value="G54">G54</option>
+              <option value="G55">G55</option>
+              <option value="G56">G56</option>
+              <option value="G57">G57</option>
+              <option value="G58">G58</option>
+              <option value="G59">G59</option>
+            </select>
+          </label>
         </div>
       </CardBlock>
 
-      <CardBlock>
+      <CardBlock title="Оси Z и проходы">
         <div style={twoColumnGrid}>
-          <label style={fieldLabel}>Safe Z<input style={ui.input} type="number" value={document.safeZ} onChange={(e) => setDocument((prev) => ({ ...prev, safeZ: Number(e.target.value) || 0 }))} /></label>
-          <label style={fieldLabel}>Cut Z по умолчанию<input style={ui.input} type="number" value={document.cutZ} onChange={(e) => setDocument((prev) => ({ ...prev, cutZ: Number(e.target.value) || 0 }))} /></label>
+          <label style={fieldLabel}>
+            Start Z
+            <input
+              style={ui.input}
+              type="number"
+              value={document.startZ}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  startZ: Number(e.target.value) || 0,
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Safe Z
+            <input
+              style={ui.input}
+              type="number"
+              value={document.safeZ}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  safeZ: Number(e.target.value) || 0,
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Cut Z по умолчанию
+            <input
+              style={ui.input}
+              type="number"
+              value={document.cutZ}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  cutZ: Number(e.target.value) || 0,
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Pass depth
+            <input
+              style={ui.input}
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={document.passDepth}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  passDepth: Math.max(0.001, Number(e.target.value) || 0.001),
+                }))
+              }
+            />
+          </label>
         </div>
       </CardBlock>
 
-      <CardBlock>
-        <div style={twoColumnGrid}>
-          <label style={fieldLabel}>Feed cut<input style={ui.input} type="number" value={document.feedCut} onChange={(e) => setDocument((prev) => ({ ...prev, feedCut: Math.max(1, Number(e.target.value) || 1) }))} /></label>
-          <label style={fieldLabel}>Feed rapid<input style={ui.input} type="number" value={document.feedRapid} onChange={(e) => setDocument((prev) => ({ ...prev, feedRapid: Math.max(1, Number(e.target.value) || 1) }))} /></label>
+      <CardBlock title="Подачи">
+        <div style={threeColumnGrid}>
+          <label style={fieldLabel}>
+            Feed cut
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              value={document.feedCut}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  feedCut: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Feed plunge
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              value={document.feedPlunge}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  feedPlunge: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Feed rapid
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              value={document.feedRapid}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  feedRapid: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+            />
+          </label>
         </div>
       </CardBlock>
 
-      <label style={checkboxRow}>
-        <input type="checkbox" checked={document.spindleOn} onChange={(e) => setDocument((prev) => ({ ...prev, spindleOn: e.target.checked }))} />
-        <span>Лазер / spindle M3/M5</span>
-      </label>
+      <CardBlock title="Инструмент">
+        <div style={threeColumnGrid}>
+          <label style={fieldLabel}>
+            Тип инструмента
+            <select
+              value={document.toolType}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  toolType: e.target.value as SketchDocument["toolType"],
+                  spindleOn: e.target.value === "laser" ? true : prev.spindleOn,
+                }))
+              }
+              style={ui.select}
+            >
+              <option value="router">Router</option>
+              <option value="spindle">Spindle</option>
+              <option value="laser">Laser</option>
+              <option value="drag-knife">Drag knife</option>
+            </select>
+          </label>
 
-      <label style={fieldLabel}>S power<input style={ui.input} type="number" value={document.laserPower} onChange={(e) => setDocument((prev) => ({ ...prev, laserPower: Math.max(0, Number(e.target.value) || 0) }))} /></label>
+          <label style={fieldLabel}>
+            Tool number
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              value={document.toolNumber}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  toolNumber: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Диаметр инструмента
+            <input
+              style={ui.input}
+              type="number"
+              min="0"
+              step="0.001"
+              value={document.toolDiameter}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  toolDiameter: Math.max(0.001, Number(e.target.value) || 0.001),
+                }))
+              }
+            />
+          </label>
+        </div>
+
+        <div style={{ marginTop: 10 }}>
+          <label style={fieldLabel}>
+            Stepover (0..1)
+            <input
+              style={ui.input}
+              type="number"
+              min="0.05"
+              max="1"
+              step="0.01"
+              value={document.stepover}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  stepover: Math.min(1, Math.max(0.05, Number(e.target.value) || 0.45)),
+                }))
+              }
+            />
+          </label>
+        </div>
+      </CardBlock>
+
+      <CardBlock title="Шпиндель / лазер / охлаждение">
+        <div style={twoColumnGrid}>
+          <label style={fieldLabel}>
+            Spindle speed (S)
+            <input
+              style={ui.input}
+              type="number"
+              min="0"
+              value={document.spindleSpeed}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  spindleSpeed: Math.max(0, Number(e.target.value) || 0),
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Направление
+            <select
+              value={document.spindleDirection}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  spindleDirection: e.target.value as SketchDocument["spindleDirection"],
+                }))
+              }
+              style={ui.select}
+            >
+              <option value="cw">CW (M3)</option>
+              <option value="ccw">CCW (M4)</option>
+            </select>
+          </label>
+
+          <label style={fieldLabel}>
+            S power
+            <input
+              style={ui.input}
+              type="number"
+              min="0"
+              value={document.laserPower}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  laserPower: Math.max(0, Number(e.target.value) || 0),
+                }))
+              }
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Dwell, мс
+            <input
+              style={ui.input}
+              type="number"
+              min="0"
+              value={document.dwellMs}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  dwellMs: Math.max(0, Number(e.target.value) || 0),
+                }))
+              }
+            />
+          </label>
+        </div>
+
+        <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={document.spindleOn}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  spindleOn: e.target.checked,
+                }))
+              }
+            />
+            <span>Включать M3/M4/M5</span>
+          </label>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={document.coolant}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  coolant: e.target.checked,
+                }))
+              }
+            />
+            <span>Охлаждение M8/M9</span>
+          </label>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={document.returnHome}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  returnHome: e.target.checked,
+                }))
+              }
+            />
+            <span>Возвращать в X0 Y0 в конце</span>
+          </label>
+        </div>
+      </CardBlock>
     </div>
   );
 }
-
 
 
 path: /src/modules/cad/panels/EditStatusBar.tsx
@@ -5919,11 +7723,14 @@ export function EditStatusBar({ objectCount }: { objectCount: number }) {
 
 path: /src/modules/cad/panels/EditToolbar.tsx
 ----------------------------------------
+// path: /src/modules/cad/panels/EditToolbar.tsx
+import { useRef } from "react";
 import {
   FiCheck,
   FiCircle,
   FiCornerUpLeft,
   FiCornerUpRight,
+  FiImage,
   FiMaximize,
   FiMousePointer,
   FiPenTool,
@@ -5947,6 +7754,7 @@ type EditToolbarProps = {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  onImportSvg: (file: File) => void;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
@@ -5969,7 +7777,10 @@ export function EditToolbar({
   onRedo,
   canUndo,
   canRedo,
+  onImportSvg,
 }: EditToolbarProps) {
+  const svgInputRef = useRef<HTMLInputElement | null>(null);
+
   return (
     <div
       style={{
@@ -6015,6 +7826,29 @@ export function EditToolbar({
             <FiCheck size={16} />
           </button>
         )}
+
+        <button
+          type="button"
+          title="Импортировать SVG"
+          onClick={() => svgInputRef.current?.click()}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
+          <FiImage size={16} />
+        </button>
+
+        <input
+          ref={svgInputRef}
+          type="file"
+          accept=".svg,image/svg+xml"
+          style={{ display: "none" }}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              onImportSvg(file);
+            }
+            event.currentTarget.value = "";
+          }}
+        />
 
         <button
           type="button"
@@ -6086,7 +7920,8 @@ export function EditToolbar({
 
 path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
 ----------------------------------------
-import { FiBox, FiCircle, FiEdit3, FiMove, FiType } from "react-icons/fi";
+// path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
+import { FiBox, FiCircle, FiEdit3, FiImage, FiMove, FiType } from "react-icons/fi";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
 import type { SketchDocument, SketchShape } from "../model/types";
@@ -6100,26 +7935,68 @@ type ShapePropertiesPanelProps = {
 };
 
 function CardBlock({ children }: { children: React.ReactNode }) {
-  return <div style={{ background: "#fff", border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, minWidth: 0 }}>{children}</div>;
+  return (
+    <div
+      style={{
+        background: "#fff",
+        border: `1px solid ${theme.border}`,
+        borderRadius: 14,
+        padding: 12,
+        minWidth: 0,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
-const twoColumnGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, minWidth: 0 };
+const twoColumnGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 10,
+  minWidth: 0,
+};
+
 const fieldLabel: React.CSSProperties = { ...ui.inputLabel };
-const checkboxRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, color: theme.text, padding: 12, borderRadius: 12, background: "#fff", border: `1px solid ${theme.border}` };
+const checkboxRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  fontSize: 13,
+  fontWeight: 700,
+  color: theme.text,
+  padding: 12,
+  borderRadius: 12,
+  background: "#fff",
+  border: `1px solid ${theme.border}`,
+};
 
 function getShapeIcon(type: SketchShape["type"]) {
   switch (type) {
-    case "rectangle": return <FiBox size={18} />;
-    case "circle": return <FiCircle size={18} />;
-    case "polyline": return <FiMove size={18} />;
-    case "text": return <FiType size={18} />;
-    default: return <FiEdit3 size={18} />;
+    case "rectangle":
+      return <FiBox size={18} />;
+    case "circle":
+      return <FiCircle size={18} />;
+    case "polyline":
+      return <FiMove size={18} />;
+    case "text":
+      return <FiType size={18} />;
+    case "svg":
+      return <FiImage size={18} />;
+    default:
+      return <FiEdit3 size={18} />;
   }
 }
 
-export function ShapePropertiesPanel({ document, setDocument, selectedShape }: ShapePropertiesPanelProps) {
+export function ShapePropertiesPanel({
+  document,
+  setDocument,
+  selectedShape,
+}: ShapePropertiesPanelProps) {
   function updateSelected(patch: Record<string, number | string | boolean | null>) {
-    setDocument((prev) => updateShape(prev, selectedShape.id, patch as Partial<SketchShape>));
+    setDocument((prev) =>
+      updateShape(prev, selectedShape.id, patch as Partial<SketchShape>),
+    );
   }
 
   return (
@@ -6128,50 +8005,208 @@ export function ShapePropertiesPanel({ document, setDocument, selectedShape }: S
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
         <div style={ui.iconBadge}>{getShapeIcon(selectedShape.type)}</div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>Выбранный объект</div>
-          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>Тип: {selectedShape.type}</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+            Выбранный объект
+          </div>
+          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+            Тип: {selectedShape.type}
+          </div>
         </div>
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
-        <CardBlock><label style={fieldLabel}>Имя<input style={ui.input} type="text" value={selectedShape.name} onChange={(e) => updateSelected({ name: e.target.value })} /></label></CardBlock>
-        <CardBlock><label style={fieldLabel}>Индивидуальная глубина Z<input style={ui.input} type="number" value={selectedShape.cutZ ?? document.cutZ} onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })} /></label></CardBlock>
+        <CardBlock>
+          <label style={fieldLabel}>
+            Имя
+            <input
+              style={ui.input}
+              type="text"
+              value={selectedShape.name}
+              onChange={(e) => updateSelected({ name: e.target.value })}
+            />
+          </label>
+        </CardBlock>
+
+        <CardBlock>
+          <div style={twoColumnGrid}>
+            <label style={fieldLabel}>
+              Индивидуальная глубина Z
+              <input
+                style={ui.input}
+                type="number"
+                value={selectedShape.cutZ ?? document.cutZ}
+                onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Толщина линии
+              <input
+                style={ui.input}
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={selectedShape.strokeWidth ?? 1}
+                onChange={(e) =>
+                  updateSelected({
+                    strokeWidth: Math.max(0.1, Number(e.target.value) || 0.1),
+                  })
+                }
+              />
+            </label>
+          </div>
+        </CardBlock>
 
         {selectedShape.type === "rectangle" && (
-          <CardBlock><div style={twoColumnGrid}>
-            <label style={fieldLabel}>X<input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} /></label>
-            <label style={fieldLabel}>Y<input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} /></label>
-            <label style={fieldLabel}>Width<input style={ui.input} type="number" value={selectedShape.width} onChange={(e) => updateSelected({ width: clamp(Number(e.target.value) || 1, 1, 100000) })} /></label>
-            <label style={fieldLabel}>Height<input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 1, 1, 100000) })} /></label>
-          </div></CardBlock>
+          <CardBlock>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                X
+                <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+              </label>
+              <label style={fieldLabel}>
+                Y
+                <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+              </label>
+              <label style={fieldLabel}>
+                Width
+                <input style={ui.input} type="number" value={selectedShape.width} onChange={(e) => updateSelected({ width: clamp(Number(e.target.value) || 1, 1, 100000) })} />
+              </label>
+              <label style={fieldLabel}>
+                Height
+                <input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 1, 1, 100000) })} />
+              </label>
+            </div>
+          </CardBlock>
         )}
 
         {selectedShape.type === "circle" && (
-          <CardBlock><div style={twoColumnGrid}>
-            <label style={fieldLabel}>CX<input style={ui.input} type="number" value={selectedShape.cx} onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })} /></label>
-            <label style={fieldLabel}>CY<input style={ui.input} type="number" value={selectedShape.cy} onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })} /></label>
-            <label style={fieldLabel}>Radius<input style={ui.input} type="number" value={selectedShape.radius} onChange={(e) => updateSelected({ radius: clamp(Number(e.target.value) || 1, 1, 100000) })} /></label>
-          </div></CardBlock>
+          <CardBlock>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                CX
+                <input style={ui.input} type="number" value={selectedShape.cx} onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })} />
+              </label>
+              <label style={fieldLabel}>
+                CY
+                <input style={ui.input} type="number" value={selectedShape.cy} onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })} />
+              </label>
+              <label style={fieldLabel}>
+                Radius
+                <input style={ui.input} type="number" value={selectedShape.radius} onChange={(e) => updateSelected({ radius: clamp(Number(e.target.value) || 1, 1, 100000) })} />
+              </label>
+            </div>
+          </CardBlock>
         )}
 
         {selectedShape.type === "polyline" && (
-          <label style={checkboxRow}><input type="checkbox" checked={selectedShape.closed} onChange={(e) => updateSelected({ closed: e.target.checked })} /><span>Замкнуть полилинию</span></label>
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={selectedShape.closed}
+              onChange={(e) => updateSelected({ closed: e.target.checked })}
+            />
+            <span>Замкнуть полилинию</span>
+          </label>
+        )}
+
+        {selectedShape.type === "svg" && (
+          <>
+            <CardBlock>
+              <div style={twoColumnGrid}>
+                <label style={fieldLabel}>
+                  X
+                  <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+                </label>
+                <label style={fieldLabel}>
+                  Y
+                  <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+                </label>
+                <label style={fieldLabel}>
+                  Width
+                  <input style={ui.input} type="number" min="0.001" step="0.001" value={selectedShape.width} onChange={(e) => updateSelected({ width: Math.max(0.001, Number(e.target.value) || 0.001) })} />
+                </label>
+                <label style={fieldLabel}>
+                  Height
+                  <input style={ui.input} type="number" min="0.001" step="0.001" value={selectedShape.height} onChange={(e) => updateSelected({ height: Math.max(0.001, Number(e.target.value) || 0.001) })} />
+                </label>
+              </div>
+            </CardBlock>
+
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={selectedShape.preserveAspectRatio}
+                onChange={(e) => updateSelected({ preserveAspectRatio: e.target.checked })}
+              />
+              <span>Пропорциональное масштабирование</span>
+            </label>
+          </>
         )}
 
         {selectedShape.type === "text" && (
           <>
-            <CardBlock><label style={fieldLabel}>Текст<input style={ui.input} type="text" value={selectedShape.text} onChange={(e) => updateSelected({ text: e.target.value })} /></label></CardBlock>
-            <CardBlock><div style={twoColumnGrid}>
-              <label style={fieldLabel}>X<input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} /></label>
-              <label style={fieldLabel}>Y<input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} /></label>
-              <label style={fieldLabel}>Height<input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 2, 2, 100000) })} /></label>
-              <label style={fieldLabel}>Letter spacing<input style={ui.input} type="number" step="0.5" value={selectedShape.letterSpacing} onChange={(e) => updateSelected({ letterSpacing: Math.max(0, Number(e.target.value) || 0) })} /></label>
-            </div></CardBlock>
-            <CardBlock><div style={twoColumnGrid}>
-              <label style={fieldLabel}>Font<select value={selectedShape.fontFile} onChange={(e) => updateSelected({ fontFile: e.target.value })} style={ui.select}>{DEFAULT_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font.split("/").pop()}</option>)}</select></label>
-              <label style={fieldLabel}>Rotation<input style={ui.input} type="number" value={selectedShape.rotation ?? 0} onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })} /></label>
-              <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>Align<select value={selectedShape.align ?? "left"} onChange={(e) => updateSelected({ align: e.target.value })} style={ui.select}><option value="left">left</option><option value="center">center</option><option value="right">right</option></select></label>
-            </div></CardBlock>
+            <CardBlock>
+              <label style={fieldLabel}>
+                Текст
+                <input
+                  style={ui.input}
+                  type="text"
+                  value={selectedShape.text}
+                  onChange={(e) => updateSelected({ text: e.target.value })}
+                />
+              </label>
+            </CardBlock>
+
+            <CardBlock>
+              <div style={twoColumnGrid}>
+                <label style={fieldLabel}>
+                  X
+                  <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+                </label>
+                <label style={fieldLabel}>
+                  Y
+                  <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+                </label>
+                <label style={fieldLabel}>
+                  Height
+                  <input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 2, 2, 100000) })} />
+                </label>
+                <label style={fieldLabel}>
+                  Letter spacing
+                  <input style={ui.input} type="number" step="0.5" value={selectedShape.letterSpacing} onChange={(e) => updateSelected({ letterSpacing: Math.max(0, Number(e.target.value) || 0) })} />
+                </label>
+              </div>
+            </CardBlock>
+
+            <CardBlock>
+              <div style={twoColumnGrid}>
+                <label style={fieldLabel}>
+                  Font
+                  <select value={selectedShape.fontFile} onChange={(e) => updateSelected({ fontFile: e.target.value })} style={ui.select}>
+                    {DEFAULT_FONT_OPTIONS.map((font) => (
+                      <option key={font} value={font}>
+                        {font.split("/").pop()}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={fieldLabel}>
+                  Rotation
+                  <input style={ui.input} type="number" value={selectedShape.rotation ?? 0} onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })} />
+                </label>
+
+                <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>
+                  Align
+                  <select value={selectedShape.align ?? "left"} onChange={(e) => updateSelected({ align: e.target.value })} style={ui.select}>
+                    <option value="left">left</option>
+                    <option value="center">center</option>
+                    <option value="right">right</option>
+                  </select>
+                </label>
+              </div>
+            </CardBlock>
           </>
         )}
       </div>
@@ -6256,22 +8291,86 @@ path: /src/modules/cam/gcode/emitters.ts
 import type { SketchDocument } from "../../cad/model/types";
 import { fmt } from "./format";
 
-export function emitCutStart(doc: SketchDocument, cutZ = doc.cutZ): string[] {
-  if (doc.spindleOn) {
-    return [`M3 S${Math.max(0, Math.round(doc.laserPower))}`];
-  }
-  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedCut)}`];
+function isLaserMode(doc: SketchDocument): boolean {
+  return doc.toolType === "laser";
 }
 
-export function emitCutEnd(doc: SketchDocument): string[] {
-  if (doc.spindleOn) {
-    return ["M5"];
+function spindleMCode(doc: SketchDocument): "M3" | "M4" {
+  return doc.spindleDirection === "ccw" ? "M4" : "M3";
+}
+
+export function emitProgramPreamble(doc: SketchDocument): string[] {
+  const lines: string[] = [
+    "; Generated by GCode Studio / CAD module",
+    doc.units === "inch" ? "G20" : "G21",
+    "G90",
+    doc.workOffset,
+    `T${Math.max(1, Math.round(doc.toolNumber))} M6`,
+    `G0 Z${fmt(doc.startZ)}`,
+  ];
+
+  if (doc.coolant && !isLaserMode(doc)) {
+    lines.push("M8");
   }
-  return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
+
+  return lines;
+}
+
+export function emitProgramPostamble(doc: SketchDocument): string[] {
+  const lines: string[] = [];
+
+  if (doc.spindleOn) {
+    lines.push("M5");
+  }
+
+  if (doc.coolant && !isLaserMode(doc)) {
+    lines.push("M9");
+  }
+
+  lines.push(`G0 Z${fmt(doc.safeZ)}`);
+
+  if (doc.returnHome) {
+    lines.push("G0 X0 Y0");
+  }
+
+  return lines;
 }
 
 export function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
   return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
+}
+
+export function emitCutStart(doc: SketchDocument, cutZ: number): string[] {
+  const lines: string[] = [];
+
+  if (isLaserMode(doc)) {
+    if (doc.spindleOn) {
+      lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.laserPower))}`);
+    }
+    if (doc.dwellMs > 0) {
+      lines.push(`G4 P${fmt(doc.dwellMs)}`);
+    }
+    return lines;
+  }
+
+  if (doc.spindleOn) {
+    lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.spindleSpeed))}`);
+  }
+
+  if (doc.dwellMs > 0) {
+    lines.push(`G4 P${fmt(doc.dwellMs)}`);
+  }
+
+  lines.push(`G1 Z${fmt(cutZ)} F${fmt(doc.feedPlunge)}`);
+  return lines;
+}
+
+export function emitCutEnd(doc: SketchDocument): string[] {
+  if (isLaserMode(doc)) {
+    return doc.spindleOn ? ["M5"] : [];
+  }
+
+  return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
 }
 
 
@@ -6289,47 +8388,107 @@ export function fmt(value: number): string {
 path: /src/modules/cam/gcode/generator.ts
 ----------------------------------------
 import type { SketchDocument } from "../../cad/model/types";
-import { emitCutEnd, emitCutStart, emitMoveTo } from "./emitters";
+import {
+  emitCutEnd,
+  emitCutStart,
+  emitMoveTo,
+  emitProgramPostamble,
+  emitProgramPreamble,
+} from "./emitters";
 import { fmt } from "./format";
 import { shapeToToolpaths } from "./shapeToToolpath";
 
+function isLaserMode(doc: SketchDocument): boolean {
+  return doc.toolType === "laser";
+}
+
+function buildPassLevels(targetCutZ: number, passDepth: number): number[] {
+  if (targetCutZ >= 0) {
+    return [targetCutZ];
+  }
+
+  const depth = Math.max(0.001, Math.abs(passDepth));
+  const levels: number[] = [];
+
+  let current = -depth;
+  while (current > targetCutZ) {
+    levels.push(Number(current.toFixed(3)));
+    current -= depth;
+  }
+
+  if (levels.length === 0 || levels[levels.length - 1] !== targetCutZ) {
+    levels.push(targetCutZ);
+  }
+
+  return levels;
+}
+
 export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
-  const lines: string[] = [
-    "; Generated by GCode Studio / CAD module",
-    "G21",
-    "G90",
-    `G0 Z${fmt(doc.safeZ)}`,
-  ];
+  const lines: string[] = [...emitProgramPreamble(doc)];
 
   for (const shape of doc.shapes) {
     const toolpaths = await shapeToToolpaths(shape, doc);
+
     for (const toolpath of toolpaths) {
       if (toolpath.points.length < 2) continue;
-      lines.push(`; ${toolpath.name}`);
-      lines.push(...emitMoveTo(toolpath.points[0].x, toolpath.points[0].y, doc.feedRapid));
-      lines.push(...emitCutStart(doc, toolpath.cutZ));
-      for (let i = 1; i < toolpath.points.length; i += 1) {
-        lines.push(`G1 X${fmt(toolpath.points[i].x)} Y${fmt(toolpath.points[i].y)} F${fmt(doc.feedCut)}`);
+
+      const passLevels = isLaserMode(doc)
+        ? [toolpath.cutZ]
+        : buildPassLevels(toolpath.cutZ, doc.passDepth);
+
+      for (let passIndex = 0; passIndex < passLevels.length; passIndex += 1) {
+        const passCutZ = passLevels[passIndex];
+
+        lines.push(
+          `; ${toolpath.name} / pass ${passIndex + 1} / Z${fmt(passCutZ)}`,
+        );
+
+        if (!isLaserMode(doc)) {
+          lines.push(`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`);
+        }
+
+        lines.push(
+          ...emitMoveTo(toolpath.points[0].x, toolpath.points[0].y, doc.feedRapid),
+        );
+
+        lines.push(...emitCutStart(doc, passCutZ));
+
+        for (let i = 1; i < toolpath.points.length; i += 1) {
+          lines.push(
+            `G1 X${fmt(toolpath.points[i].x)} Y${fmt(toolpath.points[i].y)} F${fmt(doc.feedCut)}`,
+          );
+        }
+
+        if (toolpath.closed) {
+          lines.push(
+            `G1 X${fmt(toolpath.points[0].x)} Y${fmt(toolpath.points[0].y)} F${fmt(doc.feedCut)}`,
+          );
+        }
+
+        lines.push(...emitCutEnd(doc));
       }
-      if (toolpath.closed) {
-        lines.push(`G1 X${fmt(toolpath.points[0].x)} Y${fmt(toolpath.points[0].y)} F${fmt(doc.feedCut)}`);
-      }
-      lines.push(...emitCutEnd(doc));
     }
   }
 
-  lines.push(`G0 Z${fmt(doc.safeZ)}`);
-  lines.push("G0 X0 Y0");
+  lines.push(...emitProgramPostamble(doc));
   return lines.join("\n") + "\n";
 }
 
 
-
 path: /src/modules/cam/gcode/shapeToToolpath.ts
 ----------------------------------------
-import type { SketchCircle, SketchDocument, SketchPolyline, SketchRectangle, SketchShape, SketchText } from "../../cad/model/types";
+// path: /src/modules/cam/gcode/shapeToToolpath.ts
+import type {
+  SketchCircle,
+  SketchDocument,
+  SketchPolyline,
+  SketchRectangle,
+  SketchShape,
+  SketchSvg,
+  SketchText,
+} from "../../cad/model/types";
 import { getTextPolylines } from "../../cad/geometry/textGeometry";
-import type { Toolpath } from "../types";
+import type { Toolpath, ToolpathPoint } from "../types";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
@@ -6339,66 +8498,287 @@ function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
   return shape.cutZ ?? doc.cutZ;
 }
 
-function circleToPolylinePoints(shape: SketchCircle, segments = 72) {
-  const points: Array<{ x: number; y: number }> = [];
+function resolveStrokeWidth(shape: SketchShape): number {
+  return Math.max(0.1, shape.strokeWidth ?? 1);
+}
+
+function buildBandOffsets(
+  targetWidth: number,
+  toolDiameter: number,
+  stepover: number,
+): number[] {
+  const width = Math.max(0.1, targetWidth);
+  const radiusBand = width / 2;
+
+  if (toolDiameter >= width) {
+    return [0];
+  }
+
+  const step = Math.max(
+    0.05,
+    toolDiameter * Math.max(0.05, Math.min(1, stepover)),
+  );
+  const maxCenterOffset = Math.max(0, radiusBand - toolDiameter / 2);
+
+  if (maxCenterOffset <= 0.0001) {
+    return [0];
+  }
+
+  const offsets: number[] = [0];
+
+  for (let d = step; d < maxCenterOffset - 1e-6; d += step) {
+    offsets.push(round(d), round(-d));
+  }
+
+  offsets.push(round(maxCenterOffset), round(-maxCenterOffset));
+
+  return Array.from(new Set(offsets)).sort((a, b) => a - b);
+}
+
+function circleToPolylinePoints(
+  radius: number,
+  cx: number,
+  cy: number,
+  segments = 96,
+): ToolpathPoint[] {
+  const points: ToolpathPoint[] = [];
   for (let i = 0; i <= segments; i += 1) {
     const t = (i / segments) * Math.PI * 2;
-    points.push({ x: round(shape.cx + Math.cos(t) * shape.radius), y: round(shape.cy + Math.sin(t) * shape.radius) });
+    points.push({
+      x: round(cx + Math.cos(t) * radius),
+      y: round(cy + Math.sin(t) * radius),
+    });
   }
   return points;
 }
 
-export function rectangleToToolpath(shape: SketchRectangle, doc: SketchDocument): Toolpath {
-  return {
-    name: `RECTANGLE ${shape.name}`,
-    closed: true,
-    cutZ: resolveCutZ(shape, doc),
-    points: [
-      { x: shape.x, y: shape.y },
-      { x: shape.x + shape.width, y: shape.y },
-      { x: shape.x + shape.width, y: shape.y + shape.height },
-      { x: shape.x, y: shape.y + shape.height },
-    ],
-  };
+function rectangleOffsetLoop(
+  shape: SketchRectangle,
+  centerOffset: number,
+): ToolpathPoint[] | null {
+  const half = centerOffset;
+  const x = shape.x - half;
+  const y = shape.y - half;
+  const w = shape.width + half * 2;
+  const h = shape.height + half * 2;
+
+  if (w <= 0 || h <= 0) return null;
+
+  return [
+    { x: round(x), y: round(y) },
+    { x: round(x + w), y: round(y) },
+    { x: round(x + w), y: round(y + h) },
+    { x: round(x), y: round(y + h) },
+  ];
 }
 
-export function circleToToolpath(shape: SketchCircle, doc: SketchDocument): Toolpath {
-  return {
-    name: `CIRCLE ${shape.name}`,
-    closed: true,
-    cutZ: resolveCutZ(shape, doc),
-    points: circleToPolylinePoints(shape, 72),
-  };
+function polylineNormal(a: ToolpathPoint, b: ToolpathPoint) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: -dy / len, y: dx / len };
 }
 
-export function polylineToToolpath(shape: SketchPolyline, doc: SketchDocument): Toolpath {
-  return {
-    name: `POLYLINE ${shape.name}`,
+function offsetPolylinePoints(
+  points: ToolpathPoint[],
+  offset: number,
+): ToolpathPoint[] {
+  if (points.length < 2 || Math.abs(offset) < 1e-9) {
+    return points.map((p) => ({ ...p }));
+  }
+
+  const result: ToolpathPoint[] = [];
+
+  for (let i = 0; i < points.length; i += 1) {
+    if (i === 0) {
+      const n = polylineNormal(points[0], points[1]);
+      result.push({
+        x: round(points[0].x + n.x * offset),
+        y: round(points[0].y + n.y * offset),
+      });
+      continue;
+    }
+
+    if (i === points.length - 1) {
+      const n = polylineNormal(points[i - 1], points[i]);
+      result.push({
+        x: round(points[i].x + n.x * offset),
+        y: round(points[i].y + n.y * offset),
+      });
+      continue;
+    }
+
+    const n1 = polylineNormal(points[i - 1], points[i]);
+    const n2 = polylineNormal(points[i], points[i + 1]);
+    const nx = n1.x + n2.x;
+    const ny = n1.y + n2.y;
+    const nlen = Math.hypot(nx, ny) || 1;
+
+    result.push({
+      x: round(points[i].x + (nx / nlen) * offset),
+      y: round(points[i].y + (ny / nlen) * offset),
+    });
+  }
+
+  return result;
+}
+
+function isToolpath(value: Toolpath | null): value is Toolpath {
+  return value !== null;
+}
+
+export function rectangleToToolpaths(
+  shape: SketchRectangle,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const bandOffsets = buildBandOffsets(
+    resolveStrokeWidth(shape),
+    doc.toolDiameter,
+    doc.stepover,
+  );
+
+  const result: Array<Toolpath | null> = bandOffsets.map((bandOffset, index) => {
+    const path = rectangleOffsetLoop(shape, bandOffset);
+    if (!path || path.length < 2) return null;
+
+    return {
+      name: `RECTANGLE ${shape.name} #${index + 1}`,
+      closed: true,
+      cutZ,
+      points: path,
+    };
+  });
+
+  return result.filter(isToolpath);
+}
+
+export function circleToToolpaths(
+  shape: SketchCircle,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const strokeWidth = resolveStrokeWidth(shape);
+  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
+
+  const result: Array<Toolpath | null> = bandOffsets.map((bandOffset, index) => {
+    const radius = shape.radius + bandOffset;
+    if (radius <= 0.001) return null;
+
+    return {
+      name: `CIRCLE ${shape.name} #${index + 1}`,
+      closed: true,
+      cutZ,
+      points: circleToPolylinePoints(radius, shape.cx, shape.cy, 96),
+    };
+  });
+
+  return result.filter(isToolpath);
+}
+
+export function polylineToToolpaths(
+  shape: SketchPolyline,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const strokeWidth = resolveStrokeWidth(shape);
+  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
+
+  return bandOffsets.map((offset, index) => ({
+    name: `POLYLINE ${shape.name} #${index + 1}`,
     closed: shape.closed,
-    cutZ: resolveCutZ(shape, doc),
-    points: shape.points,
-  };
+    cutZ,
+    points: offsetPolylinePoints(shape.points, offset),
+  }));
 }
 
-export async function textToToolpaths(shape: SketchText, doc: SketchDocument): Promise<Toolpath[]> {
+export async function textToToolpaths(
+  shape: SketchText,
+  doc: SketchDocument,
+): Promise<Toolpath[]> {
   const polylines = await getTextPolylines(shape);
   const cutZ = resolveCutZ(shape, doc);
-  return polylines
+  const bandOffsets = buildBandOffsets(
+    resolveStrokeWidth(shape),
+    doc.toolDiameter,
+    doc.stepover,
+  );
+
+  const toolpaths: Toolpath[] = [];
+
+  polylines
     .filter((polyline) => polyline.length >= 2)
-    .map((polyline, index) => ({
-      name: `TEXT ${shape.name} #${index + 1}`,
-      closed: false,
-      cutZ,
-      points: polyline,
-    }));
+    .forEach((polyline, polylineIndex) => {
+      for (let i = 0; i < bandOffsets.length; i += 1) {
+        toolpaths.push({
+          name: `TEXT ${shape.name} #${polylineIndex + 1}.${i + 1}`,
+          closed: false,
+          cutZ,
+          points: offsetPolylinePoints(polyline, bandOffsets[i]),
+        });
+      }
+    });
+
+  return toolpaths;
 }
 
-export async function shapeToToolpaths(shape: SketchShape, doc: SketchDocument): Promise<Toolpath[]> {
+export function svgToToolpaths(
+  shape: SketchSvg,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const bandOffsets = buildBandOffsets(
+    resolveStrokeWidth(shape),
+    doc.toolDiameter,
+    doc.stepover,
+  );
+
+  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
+  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+
+  const baseContours = shape.contours
+    .map((contour) =>
+      contour.map((point) => ({
+        x: round(shape.x + point.x * scaleX),
+        y: round(shape.y + point.y * scaleY),
+      })),
+    )
+    .filter((contour) => contour.length >= 2);
+
+  const toolpaths: Toolpath[] = [];
+
+  baseContours.forEach((contour, contourIndex) => {
+    bandOffsets.forEach((offset, offsetIndex) => {
+      toolpaths.push({
+        name: `SVG ${shape.name} #${contourIndex + 1}.${offsetIndex + 1}`,
+        closed:
+          contour.length > 2 &&
+          Math.abs(contour[0].x - contour[contour.length - 1].x) < 0.001 &&
+          Math.abs(contour[0].y - contour[contour.length - 1].y) < 0.001,
+        cutZ,
+        points: offsetPolylinePoints(contour, offset),
+      });
+    });
+  });
+
+  return toolpaths;
+}
+
+export async function shapeToToolpaths(
+  shape: SketchShape,
+  doc: SketchDocument,
+): Promise<Toolpath[]> {
   switch (shape.type) {
-    case "rectangle": return [rectangleToToolpath(shape, doc)];
-    case "circle": return [circleToToolpath(shape, doc)];
-    case "polyline": return [polylineToToolpath(shape, doc)];
-    case "text": return textToToolpaths(shape, doc);
+    case "rectangle":
+      return rectangleToToolpaths(shape, doc);
+    case "circle":
+      return circleToToolpaths(shape, doc);
+    case "polyline":
+      return polylineToToolpaths(shape, doc);
+    case "text":
+      return textToToolpaths(shape, doc);
+    case "svg":
+      return svgToToolpaths(shape, doc);
   }
 }
 
@@ -7574,8 +9954,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 94
+included: 98
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 200202
+totalBytes(approx): 260071

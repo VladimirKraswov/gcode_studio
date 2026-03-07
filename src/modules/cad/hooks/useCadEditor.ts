@@ -24,6 +24,7 @@ import {
   createCircleShape,
   createPolylineShape,
   createRectangleShape,
+  createSvgShape,
   createTextShape,
 } from "../model/shapeFactory";
 import { moveShape } from "../model/shapeTransforms";
@@ -45,6 +46,7 @@ import { clamp } from "../../../utils";
 import { useTextPreviewMap } from "./useTextPreviewMap";
 import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
+import { useSvgImportFlow } from "./useSvgImportFlow";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -92,6 +94,33 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  const {
+    svgImport,
+    startSvgImport,
+    closeSvgImport,
+    abortSvgImport,
+    updateSvgImportDraft,
+    confirmSvgImport,
+  } = useSvgImportFlow({
+    onConfirm: (payload) => {
+      const shape = createSvgShape({
+        name: payload.name,
+        contours: payload.contours,
+        sourceWidth: payload.sourceWidth,
+        sourceHeight: payload.sourceHeight,
+        width: payload.width,
+        height: payload.height,
+        x: payload.x,
+        y: payload.y,
+        preserveAspectRatio: true,
+      });
+
+      checkpointHistory();
+      setDocument((prev) => addShape(prev, shape));
+      onSelectionChange(selectOnly(shape.id));
+    },
+  });
 
   function normalizePoint(point: SketchPolylinePoint): SketchPolylinePoint {
     if (!document.snapEnabled) {
@@ -396,5 +425,12 @@ export function useCadEditor({
     handleCanvasWheel,
     bindSelectStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
+
+    svgImport,
+    startSvgImport,
+    closeSvgImport,
+    abortSvgImport,
+    updateSvgImportDraft,
+    confirmSvgImport,
   };
 }
