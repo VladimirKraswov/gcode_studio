@@ -1,18 +1,23 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
+import { FiBox, FiEye, FiLoader, FiTool, FiCode } from "react-icons/fi";
 import type { CameraInfo, PlacementMode, StockDimensions } from "./types/gcode";
 import type { MainTab } from "./types/ui";
 import { DEMO_GCODE } from "./constants/demo";
 import { EditTab } from "./components/EditTab";
 import { GCodeEditorPanel } from "./components/GCodeEditorPanel";
+import { GCodeRightPanel } from "./components/GCodeRightPanel";
+import { LeftPanel } from "./components/LeftPanel";
 import { MainTabs } from "./components/MainTabs";
 import { PathScene } from "./components/PathScene";
 import { RightInfoPanel } from "./components/RightInfoPanel";
+import { EditRightPanel } from "./components/EditRightPanel";
 import { useCurrentState } from "./hooks/useCurrentState";
 import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
 import type { SketchDocument } from "./types/sketch";
 import { createEmptySketchDocument } from "./utils/sketch";
+import { theme, ui } from "./styles/ui";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -20,12 +25,32 @@ const DEFAULT_STOCK: StockDimensions = {
   thickness: 3,
 };
 
+const TAB_META: Record<
+  MainTab,
+  { title: string; icon: React.ReactNode; subtitle: string }
+> = {
+  view: {
+    title: "3D-превью",
+    subtitle: "Просмотр траектории, заготовки и хода инструмента",
+    icon: <FiEye size={18} />,
+  },
+  gcode: {
+    title: "G-code",
+    subtitle: "Редактирование, вставка команд и быстрый экспорт",
+    icon: <FiCode size={18} />,
+  },
+  edit: {
+    title: "Конструктор",
+    subtitle: "Создание геометрии и генерация G-code",
+    icon: <FiTool size={18} />,
+  },
+};
 
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
-const [editDocument, setEditDocument] = useState<SketchDocument>(
-  createEmptySketchDocument(),
-);
+  const [editDocument, setEditDocument] = useState<SketchDocument>(
+    createEmptySketchDocument(),
+  );
   const [fileName, setFileName] = useState("demo.gcode");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
@@ -34,6 +59,7 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
   const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -47,22 +73,20 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
   } = usePlayback();
 
   const currentState = useCurrentState(parsed, progress);
+  const tabMeta = TAB_META[activeTab];
 
   function applyGeneratedGCodeFromEdit(gcode: string) {
-  setSource(gcode);
-  setFileName("edit-generated.gcode");
-  resetPlayback();
-  setCameraResetKey((value) => value + 1);
-}
+    setSource(gcode);
+    setFileName("edit-generated.gcode");
+    resetPlayback();
+    setCameraResetKey((value) => value + 1);
+    setActiveTab("gcode");
+  }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
+    if (!file) return;
     const text = await file.text();
-
     setSource(text || "");
     setFileName(file.name || "loaded.gcode");
     resetPlayback();
@@ -78,394 +102,327 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
 
   if (!parsed || isParsing) {
     return (
-      <div
-        style={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f8fafc",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
-          <h2>GCode Studio</h2>
-          <p>
-            {isParsing
-              ? "Парсинг G-code... Это может занять несколько секунд."
-              : "Загрузите G-code"}
-          </p>
+      <div style={ui.appShell}>
+        <div
+          style={{
+            height: "100vh",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              ...ui.panel,
+              width: "min(520px, 100%)",
+              padding: 28,
+              textAlign: "center",
+              background: theme.panelSolid,
+            }}
+          >
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                margin: "0 auto 18px",
+                borderRadius: 24,
+                display: "grid",
+                placeItems: "center",
+                background: theme.primarySoft,
+                color: theme.primary,
+              }}
+            >
+              <FiLoader size={34} style={{ animation: "spin 1s linear infinite" }} />
+            </div>
 
-          {!isParsing && (
-            <input
-              type="file"
-              accept=".gcode,.nc,.tap,.txt"
-              onChange={handleFileChange}
-            />
-          )}
+            <h1 style={{ margin: 0, fontSize: 28 }}>GCode Studio</h1>
+            <p style={{ color: theme.textMuted, margin: "10px 0 18px" }}>
+              {isParsing
+                ? "Парсинг G-code... Это может занять несколько секунд."
+                : "Загрузите файл, чтобы начать работу."}
+            </p>
+
+            {!isParsing && (
+              <input
+                type="file"
+                accept=".gcode,.nc,.tap,.txt"
+                onChange={handleFileChange}
+                style={ui.input}
+              />
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f8fafc",
-        padding: 20,
-        color: "#0f172a",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "360px 1fr 320px",
-          gap: 20,
-          maxWidth: 1800,
-          margin: "0 auto",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={ui.appShell}>
+      <div style={ui.page}>
+        <div
+          style={{
+            ...ui.pageGrid,
+            height: "100%",
+            minHeight: 0,
+          }}
+        >
           <div
             style={{
-              background: "white",
-              borderRadius: 16,
-              padding: 16,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              ...ui.column,
+              minHeight: 0,
+              overflow: "hidden",
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>GCode Studio</h2>
-
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 14, marginBottom: 6 }}>Загрузка G-code</div>
-              <input
-                type="file"
-                accept=".gcode,.nc,.tap,.txt"
-                onChange={handleFileChange}
-              />
-            </div>
-
             <div
+              className="scrollbar-thin"
               style={{
-                background: "#f1f5f9",
-                borderRadius: 12,
-                padding: 12,
-                fontSize: 14,
-                marginBottom: 12,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: 4,
               }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>Файл</div>
-              <div style={{ wordBreak: "break-all" }}>{fileName}</div>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              <button type="button" onClick={() => setPlaying((value) => !value)}>
-                {playing ? "Пауза" : "Старт"}
-              </button>
-
-              <button type="button" onClick={resetPlayback}>
-                В начало
-              </button>
-
-              <button type="button" onClick={loadDemo}>
-                Демо
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCameraResetKey((value) => value + 1)}
-              >
-                Сброс вида
-              </button>
-            </div>
-
-            <div style={{ marginBottom: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Заготовка</div>
-
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                Позиционирование заготовки
-              </div>
-
-              <label style={{ display: "block", marginBottom: 4 }}>
-                <input
-                  type="radio"
-                  name="placementMode"
-                  value="origin"
-                  checked={placementMode === "origin"}
-                  onChange={() => setPlacementMode("origin")}
-                />{" "}
-                Левый нижний угол
-              </label>
-
-              <label style={{ display: "block", marginBottom: 4 }}>
-                <input
-                  type="radio"
-                  name="placementMode"
-                  value="center"
-                  checked={placementMode === "center"}
-                  onChange={() => setPlacementMode("center")}
-                />{" "}
-                Центрировать по траектории
-              </label>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                <label style={{ fontSize: 12 }}>
-                  Ширина, мм
-                  <input
-                    type="number"
-                    min="1"
-                    value={stock.width}
-                    onChange={(event) =>
-                      setStock((prev) => ({
-                        ...prev,
-                        width: Math.max(1, Number(event.target.value) || 1),
-                      }))
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </label>
-
-                <label style={{ fontSize: 12 }}>
-                  Высота, мм
-                  <input
-                    type="number"
-                    min="1"
-                    value={stock.height}
-                    onChange={(event) =>
-                      setStock((prev) => ({
-                        ...prev,
-                        height: Math.max(1, Number(event.target.value) || 1),
-                      }))
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </label>
-
-                <label style={{ fontSize: 12 }}>
-                  Толщина, мм
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={stock.thickness}
-                    onChange={(event) =>
-                      setStock((prev) => ({
-                        ...prev,
-                        thickness: Math.max(0.1, Number(event.target.value) || 0.1),
-                      }))
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </label>
-              </div>
-
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 10,
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={showMaterialRemoval}
-                  onChange={(event) => setShowMaterialRemoval(event.target.checked)}
-                />
-                Показывать снятие материала
-              </label>
-
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  Качество меша
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12 }}>1</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={detailLevel}
-                    onChange={(event) => setDetailLevel(Number(event.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ fontSize: 12 }}>10</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 14,
-                  marginBottom: 6,
-                }}
-              >
-                <span>Прогресс</span>
-                <span>{progress.toFixed(1)}%</span>
-              </div>
-
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="0.1"
-                value={progress}
-                onChange={(event) => setProgress(Number(event.target.value))}
-                style={{ width: "100%" }}
-              />
-            </div>
-
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 14,
-                  marginBottom: 6,
-                }}
-              >
-                <span>Скорость</span>
-                <span>{speed.toFixed(1)}x</span>
-              </div>
-
-              <input
-                type="range"
-                min="0.2"
-                max="5"
-                step="0.1"
-                value={speed}
-                onChange={(event) => setSpeed(Number(event.target.value))}
-                style={{ width: "100%" }}
+              <LeftPanel
+                fileName={fileName}
+                onFileChange={handleFileChange}
+                onLoadDemo={loadDemo}
+                onResetCamera={() => setCameraResetKey((v) => v + 1)}
+                playing={playing}
+                onPlayPause={() => setPlaying((v) => !v)}
+                onResetPlayback={resetPlayback}
+                progress={progress}
+                onProgressChange={setProgress}
+                speed={speed}
+                onSpeedChange={setSpeed}
+                placementMode={placementMode}
+                onPlacementModeChange={setPlacementMode}
+                stock={stock}
+                onStockChange={setStock}
+                showMaterialRemoval={showMaterialRemoval}
+                onShowMaterialRemovalChange={setShowMaterialRemoval}
+                detailLevel={detailLevel}
+                onDetailLevelChange={setDetailLevel}
               />
             </div>
           </div>
-        </div>
 
-        <div style={{ minWidth: 0 }}>
-          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
-
-          {activeTab === "view" && (
+          <div
+            style={{
+              ...ui.column,
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
             <div
               style={{
-                background: "white",
-                borderRadius: 16,
-                padding: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                ...ui.panel,
+                padding: 18,
+                background: theme.panelSolid,
+                flexShrink: 0,
               }}
             >
-              <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
-
               <div
                 style={{
-                  height: 760,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  border: "1px solid #e2e8f0",
-                }}
-              >
-                <PathScene
-                  parsed={parsed}
-                  currentState={currentState}
-                  progress={progress}
-                  cameraResetKey={cameraResetKey}
-                  stock={stock}
-                  showMaterialRemoval={showMaterialRemoval}
-                  totalLength={parsed.totalLength}
-                  placementMode={placementMode}
-                  detailLevel={detailLevel}
-                  onCameraUpdate={setCameraInfo}
-                />
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  fontSize: 14,
-                  color: "#64748b",
                   display: "flex",
                   justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 16,
+                  flexWrap: "wrap",
                 }}
               >
-                <span>ЛКМ/ПКМ — панорама, колесо мыши — масштаб.</span>
-                <span>Machine zero: X0 Y0 Z0</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={ui.iconBadge}>{tabMeta.icon}</div>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 800 }}>{tabMeta.title}</div>
+                    <div style={ui.sectionSubtle}>{tabMeta.subtitle}</div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    color: "#1d4ed8",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    maxWidth: "100%",
+                  }}
+                >
+                  <FiBox size={14} />
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {fileName}
+                  </span>
+                </div>
               </div>
+
+              <MainTabs activeTab={activeTab} onChange={setActiveTab} />
             </div>
-          )}
 
-          {activeTab === "gcode" && (
-            <div style={{ height: 860 }}>
-              <GCodeEditorPanel
-                source={source}
-                setSource={setSource}
-                fileName={fileName}
-              />
-            </div>
-          )}
-
-          {activeTab === "edit" && (
-  <EditTab
-    document={editDocument}
-    setDocument={setEditDocument}
-    onGenerateGCode={applyGeneratedGCodeFromEdit}
-  />
-)}
-        </div>
-
-        <div>
-          {activeTab === "view" ? (
-            <RightInfoPanel
-              bounds={parsed.bounds}
-              stock={stock}
-              parsedStats={parsed.stats}
-              currentState={currentState}
-              cameraInfo={cameraInfo}
-              totalLength={parsed.totalLength}
-            />
-          ) : activeTab === "gcode" ? (
             <div
+              className="fade-in"
               style={{
-                background: "white",
-                borderRadius: 16,
+                ...ui.panel,
+                flex: 1,
+                minHeight: 0,
                 padding: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                height: "fit-content",
+                background: theme.panelSolid,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
               }}
             >
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Подсказка</h3>
-              <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
-                Здесь можно редактировать исходный G-code, применять изменения и
-                сохранять файл как новую версию.
-              </p>
-              <p style={{ marginBottom: 0, color: "#64748b", lineHeight: 1.5 }}>
-                После нажатия «Применить» траектория будет перепарсена и обновится
-                во вкладке View.
-              </p>
+              {activeTab === "view" && (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <div
+                    style={{
+                      marginBottom: 12,
+                      padding: "10px 12px",
+                      borderRadius: 14,
+                      background: theme.panelMuted,
+                      border: `1px solid ${theme.border}`,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      fontSize: 12,
+                      color: theme.textMuted,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span>ЛКМ/ПКМ — панорама, колесо — масштаб</span>
+                    <span>Machine zero: X0 Y0 Z0</span>
+                  </div>
+
+                  <div
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      overflow: "hidden",
+                      borderRadius: 18,
+                      border: `1px solid ${theme.border}`,
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <PathScene
+                      parsed={parsed}
+                      currentState={currentState}
+                      progress={progress}
+                      cameraResetKey={cameraResetKey}
+                      stock={stock}
+                      showMaterialRemoval={showMaterialRemoval}
+                      totalLength={parsed.totalLength}
+                      placementMode={placementMode}
+                      detailLevel={detailLevel}
+                      onCameraUpdate={setCameraInfo}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "gcode" && (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    minWidth: 0,
+                    display: "flex",
+                    overflow: "hidden",
+                  }}
+                >
+                  <GCodeEditorPanel
+                    source={source}
+                    setSource={setSource}
+                    fileName={fileName}
+                  />
+                </div>
+              )}
+
+              {activeTab === "edit" && (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    minWidth: 0,
+                    display: "flex",
+                    overflow: "hidden",
+                  }}
+                >
+                  <EditTab
+                    document={editDocument}
+                    setDocument={setEditDocument}
+                    onGenerateGCode={applyGeneratedGCodeFromEdit}
+                    selectedId={selectedShapeId}
+                    onSelect={setSelectedShapeId}
+                  />
+                </div>
+              )}
             </div>
-          ) : (
+          </div>
+
+          <div
+            style={{
+              ...ui.column,
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
             <div
+              className="scrollbar-thin fade-in"
               style={{
-                background: "white",
-                borderRadius: 16,
-                padding: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                height: "fit-content",
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: 4,
               }}
             >
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Edit</h3>
-              <p style={{ margin: 0, color: "#64748b" }}>
-                Пока пусто. Здесь можно будет разместить инструменты геометрического
-                редактирования, трансформации траектории или постпроцессинг.
-              </p>
+              {activeTab === "view" && (
+                <RightInfoPanel
+                  bounds={parsed.bounds}
+                  stock={stock}
+                  parsedStats={parsed.stats}
+                  currentState={currentState}
+                  cameraInfo={cameraInfo}
+                  totalLength={parsed.totalLength}
+                />
+              )}
+
+              {activeTab === "gcode" && (
+                <GCodeRightPanel
+                  stats={parsed.stats}
+                  totalLength={parsed.totalLength}
+                />
+              )}
+
+              {activeTab === "edit" && (
+                <EditRightPanel
+                  document={editDocument}
+                  setDocument={setEditDocument}
+                  selectedId={selectedShapeId}
+                />
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

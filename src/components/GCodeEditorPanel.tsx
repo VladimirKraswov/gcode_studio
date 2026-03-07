@@ -16,7 +16,8 @@ export function GCodeEditorPanel({
       source={source}
       setSource={setSource}
       fileName={fileName}
-      header={<h3 style={{ marginTop: 0, marginBottom: 12 }}>Редактор G-code</h3>}
+      variant="panel"
+      title="Редактор G-code"
     />
   );
 }

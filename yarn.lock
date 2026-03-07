@@ -185,7 +185,7 @@
     "@codemirror/view" "^6.27.0"
     "@lezer/common" "^1.1.0"
 
-"@codemirror/language@^6.0.0":
+"@codemirror/language@^6.0.0", "@codemirror/language@^6.12.2":
   version "6.12.2"
   resolved "https://registry.yarnpkg.com/@codemirror/language/-/language-6.12.2.tgz#7db5a46757411cf251e8f450474c05710c27d42c"
   integrity sha512-jEPmz2nGGDxhRTg3lTpzmIyGKxz3Gp3SJES4b0nAuE5SWQoKdT5GoQ69cwMmFd+wvFUhYirtDTr0/DRHpQAyWg==
@@ -196,6 +196,13 @@
     "@lezer/highlight" "^1.0.0"
     "@lezer/lr" "^1.0.0"
     style-mod "^4.0.0"
+
+"@codemirror/legacy-modes@^6.5.2":
+  version "6.5.2"
+  resolved "https://registry.yarnpkg.com/@codemirror/legacy-modes/-/legacy-modes-6.5.2.tgz#7e2976c79007cd3fa9ed8a1d690892184a7f5ecf"
+  integrity sha512-/jJbwSTazlQEDOQw2FJ8LEEKVS72pU0lx6oM54kGpL8t/NJ2Jda3CZ4pcltiKTdqYSRk3ug1B3pil1gsjA6+8Q==
+  dependencies:
+    "@codemirror/language" "^6.0.0"
 
 "@codemirror/lint@^6.0.0":
   version "6.9.5"
@@ -399,7 +406,7 @@
   resolved "https://registry.yarnpkg.com/@lezer/common/-/common-1.5.1.tgz#6e8c114ff5d36a41148e146a253734d3bb8807d3"
   integrity sha512-6YRVG9vBkaY7p1IVxL4s44n5nUnaNnGM2/AckNgYOnxTG2kWh1vR8BMxPseWPjRNpb5VtXnMpeYAEAADoRV1Iw==
 
-"@lezer/highlight@^1.0.0":
+"@lezer/highlight@^1.0.0", "@lezer/highlight@^1.2.3":
   version "1.2.3"
   resolved "https://registry.yarnpkg.com/@lezer/highlight/-/highlight-1.2.3.tgz#a20f324b71148a2ea9ba6ff42e58bbfaec702857"
   integrity sha512-qXdH7UqTvGfdVBINrgKhDsVTJTxactNNxLk7+UMwZhU13lMHaOBlJe9Vqp907ya56Y3+ed2tlqzys7jDkTmW0g==
@@ -1643,6 +1650,11 @@ react-dom@^19.2.0:
   integrity sha512-AXJdLo8kgMbimY95O2aKQqsz2iWi9jMgKJhRBAxECE4IFxfcazB2LmzloIoibJI3C12IlY20+KFaLv+71bUJeQ==
   dependencies:
     scheduler "^0.27.0"
+
+react-icons@^5.6.0:
+  version "5.6.0"
+  resolved "https://registry.yarnpkg.com/react-icons/-/react-icons-5.6.0.tgz#27bcc4acbc836e762548d76041cf9b9fef4e3837"
+  integrity sha512-RH93p5ki6LfOiIt0UtDyNg/cee+HLVR6cHHtW3wALfo+eOHTp8RnU2kRkI6E+H19zMIs03DyxUG/GfZMOGvmiA==
 
 react-refresh@^0.18.0:
   version "0.18.0"

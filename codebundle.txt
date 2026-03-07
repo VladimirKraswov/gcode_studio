@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T13:55:42.054Z
+generated: 2026-03-07T14:38:04.947Z
 
 
 
@@ -398,11 +398,13 @@ path: /package.json
     "opentype.js": "^1.3.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-icons": "^5.6.0",
     "three": "^0.183.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
     "@types/node": "^25.3.5",
+    "@types/opentype.js": "^1.3.9",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -429,14 +431,18 @@ import type { MainTab } from "./types/ui";
 import { DEMO_GCODE } from "./constants/demo";
 import { EditTab } from "./components/EditTab";
 import { GCodeEditorPanel } from "./components/GCodeEditorPanel";
+import { GCodeRightPanel } from "./components/GCodeRightPanel";
+import { LeftPanel } from "./components/LeftPanel";
 import { MainTabs } from "./components/MainTabs";
 import { PathScene } from "./components/PathScene";
 import { RightInfoPanel } from "./components/RightInfoPanel";
+import { EditRightPanel } from "./components/EditRightPanel";
 import { useCurrentState } from "./hooks/useCurrentState";
 import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
 import type { SketchDocument } from "./types/sketch";
 import { createEmptySketchDocument } from "./utils/sketch";
+import { FiEye, FiLoader } from "react-icons/fi";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -444,12 +450,11 @@ const DEFAULT_STOCK: StockDimensions = {
   thickness: 3,
 };
 
-
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
-const [editDocument, setEditDocument] = useState<SketchDocument>(
-  createEmptySketchDocument(),
-);
+  const [editDocument, setEditDocument] = useState<SketchDocument>(
+    createEmptySketchDocument(),
+  );
   const [fileName, setFileName] = useState("demo.gcode");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
@@ -458,6 +463,7 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
   const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -473,20 +479,16 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
   const currentState = useCurrentState(parsed, progress);
 
   function applyGeneratedGCodeFromEdit(gcode: string) {
-  setSource(gcode);
-  setFileName("edit-generated.gcode");
-  resetPlayback();
-  setCameraResetKey((value) => value + 1);
-}
+    setSource(gcode);
+    setFileName("edit-generated.gcode");
+    resetPlayback();
+    setCameraResetKey((value) => value + 1);
+  }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
+    if (!file) return;
     const text = await file.text();
-
     setSource(text || "");
     setFileName(file.name || "loaded.gcode");
     resetPlayback();
@@ -502,28 +504,21 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
 
   if (!parsed || isParsing) {
     return (
-      <div
-        style={{
-          height: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f8fafc",
-        }}
-      >
-        <div style={{ textAlign: "center" }}>
+      <div style={loadingContainer}>
+        <div style={loadingContent}>
+          <FiLoader size={48} style={{ animation: "spin 1s linear infinite", marginBottom: 16 }} />
           <h2>GCode Studio</h2>
           <p>
             {isParsing
               ? "Парсинг G-code... Это может занять несколько секунд."
               : "Загрузите G-code"}
           </p>
-
           {!isParsing && (
             <input
               type="file"
               accept=".gcode,.nc,.tap,.txt"
               onChange={handleFileChange}
+              style={fileInput}
             />
           )}
         </div>
@@ -532,319 +527,89 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#f8fafc",
-        padding: 20,
-        color: "#0f172a",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "360px 1fr 320px",
-          gap: 20,
-          maxWidth: 1800,
-          margin: "0 auto",
-        }}
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <div
-            style={{
-              background: "white",
-              borderRadius: 16,
-              padding: 16,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-            }}
-          >
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>GCode Studio</h2>
+    <div style={appContainer}>
+      <div style={gridLayout}>
+        {/* Левая панель */}
+        <LeftPanel
+          fileName={fileName}
+          onFileChange={handleFileChange}
+          onLoadDemo={loadDemo}
+          onResetCamera={() => setCameraResetKey((v) => v + 1)}
+          playing={playing}
+          onPlayPause={() => setPlaying((v) => !v)}
+          onResetPlayback={resetPlayback}
+          progress={progress}
+          onProgressChange={setProgress}
+          speed={speed}
+          onSpeedChange={setSpeed}
+          placementMode={placementMode}
+          onPlacementModeChange={setPlacementMode}
+          stock={stock}
+          onStockChange={setStock}
+          showMaterialRemoval={showMaterialRemoval}
+          onShowMaterialRemovalChange={setShowMaterialRemoval}
+          detailLevel={detailLevel}
+          onDetailLevelChange={setDetailLevel}
+        />
 
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 14, marginBottom: 6 }}>Загрузка G-code</div>
-              <input
-                type="file"
-                accept=".gcode,.nc,.tap,.txt"
-                onChange={handleFileChange}
-              />
-            </div>
+        {/* Центральная область */}
+        <div style={centerArea}>
+          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
 
-            <div
-              style={{
-                background: "#f1f5f9",
-                borderRadius: 12,
-                padding: 12,
-                fontSize: 14,
-                marginBottom: 12,
-              }}
-            >
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>Файл</div>
-              <div style={{ wordBreak: "break-all" }}>{fileName}</div>
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-              <button type="button" onClick={() => setPlaying((value) => !value)}>
-                {playing ? "Пауза" : "Старт"}
-              </button>
-
-              <button type="button" onClick={resetPlayback}>
-                В начало
-              </button>
-
-              <button type="button" onClick={loadDemo}>
-                Демо
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setCameraResetKey((value) => value + 1)}
-              >
-                Сброс вида
-              </button>
-            </div>
-
-            <div style={{ marginBottom: 12, borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Заготовка</div>
-
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                Позиционирование заготовки
+          <div className="tab-content" style={tabContent}>
+            {activeTab === "view" && (
+              <div style={viewCard} className="fade-in">
+                <h3 style={{ marginTop: 0, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <FiEye /> 3D‑превью траектории
+                </h3>
+                <div style={sceneContainer}>
+                  <PathScene
+                    parsed={parsed}
+                    currentState={currentState}
+                    progress={progress}
+                    cameraResetKey={cameraResetKey}
+                    stock={stock}
+                    showMaterialRemoval={showMaterialRemoval}
+                    totalLength={parsed.totalLength}
+                    placementMode={placementMode}
+                    detailLevel={detailLevel}
+                    onCameraUpdate={setCameraInfo}
+                  />
+                </div>
+                <div style={sceneHint}>
+                  <span>ЛКМ/ПКМ — панорама, колесо мыши — масштаб.</span>
+                  <span>Machine zero: X0 Y0 Z0</span>
+                </div>
               </div>
+            )}
 
-              <label style={{ display: "block", marginBottom: 4 }}>
-                <input
-                  type="radio"
-                  name="placementMode"
-                  value="origin"
-                  checked={placementMode === "origin"}
-                  onChange={() => setPlacementMode("origin")}
-                />{" "}
-                Левый нижний угол
-              </label>
-
-              <label style={{ display: "block", marginBottom: 4 }}>
-                <input
-                  type="radio"
-                  name="placementMode"
-                  value="center"
-                  checked={placementMode === "center"}
-                  onChange={() => setPlacementMode("center")}
-                />{" "}
-                Центрировать по траектории
-              </label>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                <label style={{ fontSize: 12 }}>
-                  Ширина, мм
-                  <input
-                    type="number"
-                    min="1"
-                    value={stock.width}
-                    onChange={(event) =>
-                      setStock((prev) => ({
-                        ...prev,
-                        width: Math.max(1, Number(event.target.value) || 1),
-                      }))
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </label>
-
-                <label style={{ fontSize: 12 }}>
-                  Высота, мм
-                  <input
-                    type="number"
-                    min="1"
-                    value={stock.height}
-                    onChange={(event) =>
-                      setStock((prev) => ({
-                        ...prev,
-                        height: Math.max(1, Number(event.target.value) || 1),
-                      }))
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </label>
-
-                <label style={{ fontSize: 12 }}>
-                  Толщина, мм
-                  <input
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value={stock.thickness}
-                    onChange={(event) =>
-                      setStock((prev) => ({
-                        ...prev,
-                        thickness: Math.max(0.1, Number(event.target.value) || 0.1),
-                      }))
-                    }
-                    style={{ width: "100%" }}
-                  />
-                </label>
-              </div>
-
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  marginTop: 10,
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={showMaterialRemoval}
-                  onChange={(event) => setShowMaterialRemoval(event.target.checked)}
+            {activeTab === "gcode" && (
+              <div style={{ height: "100%", display: "flex", flexDirection: "column" }} className="fade-in">
+                <GCodeEditorPanel
+                  source={source}
+                  setSource={setSource}
+                  fileName={fileName}
                 />
-                Показывать снятие материала
-              </label>
-
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
-                  Качество меша
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12 }}>1</span>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={detailLevel}
-                    onChange={(event) => setDetailLevel(Number(event.target.value))}
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ fontSize: 12 }}>10</span>
-                </div>
               </div>
-            </div>
+            )}
 
-            <div style={{ marginBottom: 12 }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 14,
-                  marginBottom: 6,
-                }}
-              >
-                <span>Прогресс</span>
-                <span>{progress.toFixed(1)}%</span>
+            {activeTab === "edit" && (
+              <div style={{ height: "100%", display: "flex", flexDirection: "column" }} className="fade-in">
+                <EditTab
+                  document={editDocument}
+                  setDocument={setEditDocument}
+                  onGenerateGCode={applyGeneratedGCodeFromEdit}
+                  selectedId={selectedShapeId}
+                  onSelect={setSelectedShapeId}
+                />
               </div>
-
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step="0.1"
-                value={progress}
-                onChange={(event) => setProgress(Number(event.target.value))}
-                style={{ width: "100%" }}
-              />
-            </div>
-
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 14,
-                  marginBottom: 6,
-                }}
-              >
-                <span>Скорость</span>
-                <span>{speed.toFixed(1)}x</span>
-              </div>
-
-              <input
-                type="range"
-                min="0.2"
-                max="5"
-                step="0.1"
-                value={speed}
-                onChange={(event) => setSpeed(Number(event.target.value))}
-                style={{ width: "100%" }}
-              />
-            </div>
+            )}
           </div>
         </div>
 
-        <div style={{ minWidth: 0 }}>
-          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
-
+        {/* Правая панель */}
+        <div className="fade-in">
           {activeTab === "view" && (
-            <div
-              style={{
-                background: "white",
-                borderRadius: 16,
-                padding: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-              }}
-            >
-              <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
-
-              <div
-                style={{
-                  height: 760,
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  border: "1px solid #e2e8f0",
-                }}
-              >
-                <PathScene
-                  parsed={parsed}
-                  currentState={currentState}
-                  progress={progress}
-                  cameraResetKey={cameraResetKey}
-                  stock={stock}
-                  showMaterialRemoval={showMaterialRemoval}
-                  totalLength={parsed.totalLength}
-                  placementMode={placementMode}
-                  detailLevel={detailLevel}
-                  onCameraUpdate={setCameraInfo}
-                />
-              </div>
-
-              <div
-                style={{
-                  marginTop: 12,
-                  fontSize: 14,
-                  color: "#64748b",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>ЛКМ/ПКМ — панорама, колесо мыши — масштаб.</span>
-                <span>Machine zero: X0 Y0 Z0</span>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "gcode" && (
-            <div style={{ height: 860 }}>
-              <GCodeEditorPanel
-                source={source}
-                setSource={setSource}
-                fileName={fileName}
-              />
-            </div>
-          )}
-
-          {activeTab === "edit" && (
-  <EditTab
-    document={editDocument}
-    setDocument={setEditDocument}
-    onGenerateGCode={applyGeneratedGCodeFromEdit}
-  />
-)}
-        </div>
-
-        <div>
-          {activeTab === "view" ? (
             <RightInfoPanel
               bounds={parsed.bounds}
               stock={stock}
@@ -853,48 +618,111 @@ const [editDocument, setEditDocument] = useState<SketchDocument>(
               cameraInfo={cameraInfo}
               totalLength={parsed.totalLength}
             />
-          ) : activeTab === "gcode" ? (
-            <div
-              style={{
-                background: "white",
-                borderRadius: 16,
-                padding: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                height: "fit-content",
-              }}
-            >
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Подсказка</h3>
-              <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
-                Здесь можно редактировать исходный G-code, применять изменения и
-                сохранять файл как новую версию.
-              </p>
-              <p style={{ marginBottom: 0, color: "#64748b", lineHeight: 1.5 }}>
-                После нажатия «Применить» траектория будет перепарсена и обновится
-                во вкладке View.
-              </p>
-            </div>
-          ) : (
-            <div
-              style={{
-                background: "white",
-                borderRadius: 16,
-                padding: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                height: "fit-content",
-              }}
-            >
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Edit</h3>
-              <p style={{ margin: 0, color: "#64748b" }}>
-                Пока пусто. Здесь можно будет разместить инструменты геометрического
-                редактирования, трансформации траектории или постпроцессинг.
-              </p>
-            </div>
+          )}
+          {activeTab === "gcode" && (
+            <GCodeRightPanel
+              stats={parsed.stats}
+              totalLength={parsed.totalLength}
+            />
+          )}
+          {activeTab === "edit" && (
+            <EditRightPanel
+              document={editDocument}
+              setDocument={setEditDocument}
+              selectedId={selectedShapeId}
+            />
           )}
         </div>
       </div>
     </div>
   );
 }
+
+// --- Исправленные стили ---
+const appContainer: React.CSSProperties = {
+  height: "100vh",
+  display: "flex",
+  flexDirection: "column",
+  background: "#f9fafb",
+  padding: 24,
+  color: "#0f172a",
+  fontFamily: "Inter, system-ui, -apple-system, sans-serif",
+  transition: "background 0.2s",
+  boxSizing: "border-box",
+};
+
+const gridLayout: React.CSSProperties = {
+  flex: 1,
+  display: "grid",
+  gridTemplateColumns: "340px 1fr 340px",
+  gap: 24,
+  maxWidth: 1920,
+  margin: "0 auto",
+  minHeight: 0, // необходимо для дочерних flex-элементов
+};
+
+const centerArea: React.CSSProperties = {
+  minWidth: 0,
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+};
+
+const tabContent: React.CSSProperties = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  transition: "opacity 0.25s ease-in-out",
+};
+
+const viewCard: React.CSSProperties = {
+  background: "white",
+  borderRadius: 20,
+  padding: 20,
+  boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+  transition: "box-shadow 0.2s, transform 0.2s",
+  cursor: "default",
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+};
+
+const sceneContainer: React.CSSProperties = {
+  flex: 1,
+  borderRadius: 16,
+  overflow: "hidden",
+  border: "1px solid #e2e8f0",
+  minHeight: 0, // важно для корректной работы flex
+};
+
+const sceneHint: React.CSSProperties = {
+  marginTop: 12,
+  fontSize: 13,
+  color: "#64748b",
+  display: "flex",
+  justifyContent: "space-between",
+};
+
+const loadingContainer: React.CSSProperties = {
+  height: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#f9fafb",
+};
+
+const loadingContent: React.CSSProperties = {
+  textAlign: "center",
+  animation: "fadeIn 0.5s ease-out",
+};
+
+const fileInput: React.CSSProperties = {
+  marginTop: 16,
+  padding: "8px 12px",
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  background: "white",
+};
 
 
 path: /src/assets/react.svg
@@ -1006,9 +834,389 @@ export function CameraDebug({ controlsRef, onUpdate }: CameraDebugProps) {
 }
 
 
+path: /src/components/EditRightPanel.tsx
+----------------------------------------
+import { clamp } from "../utils";
+import type { SketchDocument, SketchShape, SketchText } from "../types/sketch";
+
+type EditRightPanelProps = {
+  document: SketchDocument;
+  setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  selectedId: string | null;
+};
+
+const FONT_OPTIONS = [
+  "/fonts/NotoSans-Regular.ttf",
+  "/fonts/NotoSans-Bold.ttf",
+  "/fonts/Roboto-Regular.ttf",
+];
+
+export function EditRightPanel({
+  document,
+  setDocument,
+  selectedId,
+}: EditRightPanelProps) {
+  const selectedShape = document.shapes.find((shape) => shape.id === selectedId) ?? null;
+
+  function updateSelected(patch: Record<string, number | string | boolean | null>) {
+    if (!selectedId) return;
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === selectedId ? { ...shape, ...patch } as SketchShape : shape
+      ),
+    }));
+  }
+
+  return (
+    <div style={panelStyle}>
+      <h3 style={{ marginTop: 0, marginBottom: 16 }}>Параметры документа</h3>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <label style={inputLabel}>
+          Ширина листа
+          <input
+            type="number"
+            value={document.width}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                width: Math.max(1, Number(e.target.value) || 1),
+              }))
+            }
+          />
+        </label>
+
+        <label style={inputLabel}>
+          Высота листа
+          <input
+            type="number"
+            value={document.height}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                height: Math.max(1, Number(e.target.value) || 1),
+              }))
+            }
+          />
+        </label>
+
+        <label style={inputLabel}>
+          Safe Z
+          <input
+            type="number"
+            value={document.safeZ}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                safeZ: Number(e.target.value) || 0,
+              }))
+            }
+          />
+        </label>
+
+        <label style={inputLabel}>
+          Cut Z по умолчанию
+          <input
+            type="number"
+            value={document.cutZ}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                cutZ: Number(e.target.value) || 0,
+              }))
+            }
+          />
+        </label>
+
+        <label style={inputLabel}>
+          Feed cut
+          <input
+            type="number"
+            value={document.feedCut}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                feedCut: Math.max(1, Number(e.target.value) || 1),
+              }))
+            }
+          />
+        </label>
+
+        <label style={inputLabel}>
+          Feed rapid
+          <input
+            type="number"
+            value={document.feedRapid}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                feedRapid: Math.max(1, Number(e.target.value) || 1),
+              }))
+            }
+          />
+        </label>
+
+        <label style={checkboxLabel}>
+          <input
+            type="checkbox"
+            checked={document.spindleOn}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                spindleOn: e.target.checked,
+              }))
+            }
+          />
+          Лазер / spindle M3/M5
+        </label>
+
+        <label style={inputLabel}>
+          S power
+          <input
+            type="number"
+            value={document.laserPower}
+            onChange={(e) =>
+              setDocument((prev) => ({
+                ...prev,
+                laserPower: Math.max(0, Number(e.target.value) || 0),
+              }))
+            }
+          />
+        </label>
+      </div>
+
+      {selectedShape && (
+        <>
+          <h3 style={{ marginTop: 24, marginBottom: 16 }}>Выбранный объект</h3>
+          <div style={{ display: "grid", gap: 12 }}>
+            <label style={inputLabel}>
+              Name
+              <input
+                type="text"
+                value={selectedShape.name}
+                onChange={(e) => updateSelected({ name: e.target.value })}
+              />
+            </label>
+
+            <label style={inputLabel}>
+              Индивидуальная глубина Z
+              <input
+                type="number"
+                value={selectedShape.cutZ ?? document.cutZ}
+                onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
+              />
+            </label>
+
+            {selectedShape.type === "rectangle" && (
+              <>
+                <label style={inputLabel}>
+                  X
+                  <input
+                    type="number"
+                    value={selectedShape.x}
+                    onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Y
+                  <input
+                    type="number"
+                    value={selectedShape.y}
+                    onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Width
+                  <input
+                    type="number"
+                    value={selectedShape.width}
+                    onChange={(e) =>
+                      updateSelected({
+                        width: clamp(Number(e.target.value) || 1, 1, 100000),
+                      })
+                    }
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Height
+                  <input
+                    type="number"
+                    value={selectedShape.height}
+                    onChange={(e) =>
+                      updateSelected({
+                        height: clamp(Number(e.target.value) || 1, 1, 100000),
+                      })
+                    }
+                  />
+                </label>
+              </>
+            )}
+
+            {selectedShape.type === "circle" && (
+              <>
+                <label style={inputLabel}>
+                  CX
+                  <input
+                    type="number"
+                    value={selectedShape.cx}
+                    onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  CY
+                  <input
+                    type="number"
+                    value={selectedShape.cy}
+                    onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Radius
+                  <input
+                    type="number"
+                    value={selectedShape.radius}
+                    onChange={(e) =>
+                      updateSelected({
+                        radius: clamp(Number(e.target.value) || 1, 1, 100000),
+                      })
+                    }
+                  />
+                </label>
+              </>
+            )}
+
+            {selectedShape.type === "polyline" && (
+              <label style={checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={selectedShape.closed}
+                  onChange={(e) => updateSelected({ closed: e.target.checked })}
+                />
+                Closed
+              </label>
+            )}
+
+            {selectedShape.type === "text" && (
+              <>
+                <label style={inputLabel}>
+                  Text
+                  <input
+                    type="text"
+                    value={selectedShape.text}
+                    onChange={(e) => updateSelected({ text: e.target.value })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  X
+                  <input
+                    type="number"
+                    value={selectedShape.x}
+                    onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Y
+                  <input
+                    type="number"
+                    value={selectedShape.y}
+                    onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Height
+                  <input
+                    type="number"
+                    value={selectedShape.height}
+                    onChange={(e) =>
+                      updateSelected({
+                        height: clamp(Number(e.target.value) || 2, 2, 100000),
+                      })
+                    }
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Letter spacing
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={selectedShape.letterSpacing}
+                    onChange={(e) =>
+                      updateSelected({
+                        letterSpacing: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Font
+                  <select
+                    value={selectedShape.fontFile}
+                    onChange={(e) => updateSelected({ fontFile: e.target.value })}
+                  >
+                    {FONT_OPTIONS.map((font) => (
+                      <option key={font} value={font}>
+                        {font.split("/").pop()}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label style={inputLabel}>
+                  Rotation
+                  <input
+                    type="number"
+                    value={selectedShape.rotation ?? 0}
+                    onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })}
+                  />
+                </label>
+                <label style={inputLabel}>
+                  Align
+                  <select
+                    value={selectedShape.align ?? "left"}
+                    onChange={(e) => updateSelected({ align: e.target.value })}
+                  >
+                    <option value="left">left</option>
+                    <option value="center">center</option>
+                    <option value="right">right</option>
+                  </select>
+                </label>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const panelStyle: React.CSSProperties = {
+  background: "white",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+  height: "fit-content",
+};
+
+const inputLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#475569",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const checkboxLabel: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 14,
+  fontWeight: 600,
+};
+
+
 path: /src/components/EditTab.tsx
 ----------------------------------------
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   SketchDocument,
   SketchPolylinePoint,
@@ -1016,11 +1224,11 @@ import type {
   SketchText,
   SketchTool,
 } from "../types/sketch";
+import { getTextPolylines, type CadPoint } from "../utils/fontGeometry";
 import {
   createId,
   generateSketchGCode,
   moveShape,
-  textToStrokePolylines,
 } from "../utils/sketch";
 import {
   cadToScreenPoint,
@@ -1032,6 +1240,8 @@ type EditTabProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   onGenerateGCode: (gcode: string) => void;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
 };
 
 type DraftShape =
@@ -1051,6 +1261,14 @@ type DraftShape =
     }
   | null;
 
+type TextPreviewMap = Record<string, CadPoint[][]>;
+
+const FONT_OPTIONS = [
+  "/fonts/NotoSans-Regular.ttf",
+  "/fonts/NotoSans-Bold.ttf",
+  "/fonts/Roboto-Regular.ttf",
+];
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -1060,7 +1278,6 @@ function getRectangleFromDraft(draft: NonNullable<DraftShape>) {
   const y = Math.min(draft.startY, draft.endY);
   const width = Math.abs(draft.endX - draft.startX);
   const height = Math.abs(draft.endY - draft.startY);
-
   return { x, y, width, height };
 }
 
@@ -1074,15 +1291,19 @@ export function EditTab({
   document,
   setDocument,
   onGenerateGCode,
+  selectedId,
+  onSelect,
 }: EditTabProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [tool, setTool] = useState<SketchTool>("select");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftShape>(null);
   const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
-  const [textDraft, setTextDraft] = useState("HELLO");
+  const [textDraft, setTextDraft] = useState("Привет");
   const [textHeightDraft, setTextHeightDraft] = useState(12);
-  const [textLetterSpacingDraft, setTextLetterSpacingDraft] = useState(2);
+  const [textLetterSpacingDraft, setTextLetterSpacingDraft] = useState(0);
+  const [textFontDraft, setTextFontDraft] = useState(FONT_OPTIONS[0]);
+  const [textPreviewMap, setTextPreviewMap] = useState<TextPreviewMap>({});
+  const [isGenerating, setIsGenerating] = useState(false);
   const [dragState, setDragState] = useState<{
     shapeId: string;
     startX: number;
@@ -1095,78 +1316,73 @@ export function EditTab({
     offsetY: 40,
   });
 
-  const selectedShape = useMemo(
-    () => document.shapes.find((shape) => shape.id === selectedId) ?? null,
-    [document.shapes, selectedId],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    async function buildTextPreview() {
+      const nextMap: TextPreviewMap = {};
+      for (const shape of document.shapes) {
+        if (shape.type !== "text") continue;
+        try {
+          nextMap[shape.id] = await getTextPolylines(shape);
+        } catch {
+          nextMap[shape.id] = [];
+        }
+      }
+      if (!cancelled) setTextPreviewMap(nextMap);
+    }
+    void buildTextPreview();
+    return () => { cancelled = true; };
+  }, [document.shapes]);
 
   function resetView() {
-    setView({
-      scale: 2.5,
-      offsetX: 40,
-      offsetY: 40,
-    });
+    setView({ scale: 2.5, offsetX: 40, offsetY: 40 });
   }
 
   function addRectangle(x: number, y: number, width: number, height: number) {
-    if (width < 1 || height < 1) {
-      return;
-    }
-
+    if (width < 1 || height < 1) return;
     const shape: SketchShape = {
       id: createId("rect"),
       type: "rectangle",
       name: `Rectangle ${document.shapes.filter((s) => s.type === "rectangle").length + 1}`,
-      x,
-      y,
-      width,
-      height,
+      x, y, width, height,
       cutZ: null,
     };
-
     setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    setSelectedId(shape.id);
+    onSelect(shape.id);
   }
 
   function addCircle(cx: number, cy: number, radius: number) {
-    if (radius < 1) {
-      return;
-    }
-
+    if (radius < 1) return;
     const shape: SketchShape = {
       id: createId("circle"),
       type: "circle",
       name: `Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`,
-      cx,
-      cy,
-      radius,
+      cx, cy, radius,
       cutZ: null,
     };
-
     setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    setSelectedId(shape.id);
+    onSelect(shape.id);
   }
 
   function addText(x: number, y: number) {
-    const value = textDraft.trim().toUpperCase();
-    if (!value) {
-      return;
-    }
-
+    const value = textDraft.trim();
+    if (!value) return;
     const shape: SketchShape = {
       id: createId("text"),
       type: "text",
       name: `Text ${document.shapes.filter((s) => s.type === "text").length + 1}`,
-      x,
-      y,
+      x, y,
       text: value,
       height: Math.max(2, textHeightDraft),
       letterSpacing: Math.max(0, textLetterSpacingDraft),
+      fontFile: textFontDraft,
+      rotation: 0,
+      align: "left",
+      cutMode: "outline",
       cutZ: null,
     };
-
     setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    setSelectedId(shape.id);
+    onSelect(shape.id);
   }
 
   function commitPolyline() {
@@ -1174,7 +1390,6 @@ export function EditTab({
       setPolylineDraft([]);
       return;
     }
-
     const shape: SketchShape = {
       id: createId("poly"),
       type: "polyline",
@@ -1183,17 +1398,13 @@ export function EditTab({
       closed: false,
       cutZ: null,
     };
-
     setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    setSelectedId(shape.id);
+    onSelect(shape.id);
     setPolylineDraft([]);
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
-    if (!svgRef.current) {
-      return;
-    }
-
+    if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const cad = screenToCadPoint(
       event.clientX,
@@ -1204,42 +1415,24 @@ export function EditTab({
     );
 
     if (tool === "rectangle") {
-      setDraft({
-        type: "rectangle",
-        startX: cad.x,
-        startY: cad.y,
-        endX: cad.x,
-        endY: cad.y,
-      });
+      setDraft({ type: "rectangle", startX: cad.x, startY: cad.y, endX: cad.x, endY: cad.y });
       return;
     }
-
     if (tool === "circle") {
-      setDraft({
-        type: "circle",
-        startX: cad.x,
-        startY: cad.y,
-        endX: cad.x,
-        endY: cad.y,
-      });
+      setDraft({ type: "circle", startX: cad.x, startY: cad.y, endX: cad.x, endY: cad.y });
       return;
     }
-
     if (tool === "polyline") {
       setPolylineDraft((prev) => [...prev, { x: cad.x, y: cad.y }]);
       return;
     }
-
     if (tool === "text") {
       addText(cad.x, cad.y);
     }
   }
 
   function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
-    if (!svgRef.current) {
-      return;
-    }
-
+    if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const cad = screenToCadPoint(
       event.clientX,
@@ -1250,34 +1443,19 @@ export function EditTab({
     );
 
     if (draft) {
-      setDraft((prev) =>
-        prev
-          ? {
-              ...prev,
-              endX: cad.x,
-              endY: cad.y,
-            }
-          : null,
-      );
+      setDraft((prev) => (prev ? { ...prev, endX: cad.x, endY: cad.y } : null));
       return;
     }
-
     if (dragState) {
       const dx = cad.x - dragState.startX;
       const dy = cad.y - dragState.startY;
-
       setDocument((prev) => ({
         ...prev,
         shapes: prev.shapes.map((shape) =>
-          shape.id === dragState.shapeId ? moveShape(shape, dx, dy) : shape,
+          shape.id === dragState.shapeId ? moveShape(shape, dx, dy) : shape
         ),
       }));
-
-      setDragState({
-        shapeId: dragState.shapeId,
-        startX: cad.x,
-        startY: cad.y,
-      });
+      setDragState({ shapeId: dragState.shapeId, startX: cad.x, startY: cad.y });
     }
   }
 
@@ -1286,55 +1464,26 @@ export function EditTab({
       const rect = getRectangleFromDraft(draft);
       addRectangle(rect.x, rect.y, rect.width, rect.height);
     }
-
     if (draft?.type === "circle") {
-      const radius = distance(
-        { x: draft.startX, y: draft.startY },
-        { x: draft.endX, y: draft.endY },
-      );
+      const radius = distance({ x: draft.startX, y: draft.startY }, { x: draft.endX, y: draft.endY });
       addCircle(draft.startX, draft.startY, radius);
     }
-
     setDraft(null);
     setDragState(null);
   }
 
   function deleteSelected() {
-    if (!selectedId) {
-      return;
-    }
-
+    if (!selectedId) return;
     setDocument((prev) => ({
       ...prev,
       shapes: prev.shapes.filter((shape) => shape.id !== selectedId),
     }));
-    setSelectedId(null);
+    onSelect(null);
   }
 
-  function updateSelected(patch: Record<string, number | string | boolean | null>) {
-    if (!selectedId) {
-      return;
-    }
-
-    setDocument((prev) => ({
-      ...prev,
-      shapes: prev.shapes.map((shape) => {
-        if (shape.id !== selectedId) {
-          return shape;
-        }
-
-        return { ...shape, ...patch } as SketchShape;
-      }),
-    }));
-  }
-
-  function bindSelectStart(
-    event: React.PointerEvent<SVGElement>,
-    shapeId: string,
-  ) {
+  function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
     event.stopPropagation();
     if (!svgRef.current) return;
-
     const rect = svgRef.current.getBoundingClientRect();
     const cad = screenToCadPoint(
       event.clientX,
@@ -1343,28 +1492,17 @@ export function EditTab({
       document.height,
       view,
     );
-
-    setSelectedId(shapeId);
-
+    onSelect(shapeId);
     if (tool === "select") {
-      setDragState({
-        shapeId,
-        startX: cad.x,
-        startY: cad.y,
-      });
+      setDragState({ shapeId, startX: cad.x, startY: cad.y });
     }
   }
 
   function renderShape(shape: SketchShape) {
     const isSelected = shape.id === selectedId;
-
     switch (shape.type) {
       case "rectangle": {
-        const p = cadToScreenPoint(
-          { x: shape.x, y: shape.y + shape.height },
-          document.height,
-          view,
-        );
+        const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, document.height, view);
         return (
           <rect
             key={shape.id}
@@ -1375,11 +1513,10 @@ export function EditTab({
             fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.06)"}
             stroke={isSelected ? "#2563eb" : "#334155"}
             strokeWidth={isSelected ? 2 : 1.5}
-            onPointerDown={(event) => bindSelectStart(event, shape.id)}
+            onPointerDown={(e) => bindSelectStart(e, shape.id)}
           />
         );
       }
-
       case "circle": {
         const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, document.height, view);
         return (
@@ -1391,11 +1528,10 @@ export function EditTab({
             fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.06)"}
             stroke={isSelected ? "#2563eb" : "#334155"}
             strokeWidth={isSelected ? 2 : 1.5}
-            onPointerDown={(event) => bindSelectStart(event, shape.id)}
+            onPointerDown={(e) => bindSelectStart(e, shape.id)}
           />
         );
       }
-
       case "polyline": {
         const points = shape.points
           .map((point) => {
@@ -1403,7 +1539,6 @@ export function EditTab({
             return `${p.x},${p.y}`;
           })
           .join(" ");
-
         return (
           <polyline
             key={shape.id}
@@ -1411,16 +1546,14 @@ export function EditTab({
             fill="none"
             stroke={isSelected ? "#2563eb" : "#334155"}
             strokeWidth={isSelected ? 2 : 1.5}
-            onPointerDown={(event) => bindSelectStart(event, shape.id)}
+            onPointerDown={(e) => bindSelectStart(e, shape.id)}
           />
         );
       }
-
       case "text": {
-        const polylines = textToStrokePolylines(shape);
-
+        const polylines = textPreviewMap[shape.id] ?? [];
         return (
-          <g key={shape.id} onPointerDown={(event) => bindSelectStart(event, shape.id)}>
+          <g key={shape.id} onPointerDown={(e) => bindSelectStart(e, shape.id)}>
             {polylines.map((polyline, index) => (
               <polyline
                 key={`${shape.id}-${index}`}
@@ -1441,532 +1574,98 @@ export function EditTab({
     }
   }
 
-  const generatedGCode = useMemo(() => generateSketchGCode(document), [document]);
-
-  const selectedText = selectedShape?.type === "text" ? (selectedShape as SketchText) : null;
+  async function handleGenerateClick() {
+    setIsGenerating(true);
+    try {
+      const gcode = await generateSketchGCode(document);
+      onGenerateGCode(gcode);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 320px",
-        gap: 16,
-        height: 860,
-      }}
-    >
-      <div
-        style={{
-          background: "white",
-          borderRadius: 16,
-          padding: 16,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
-      >
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <button type="button" onClick={() => setTool("select")}>Select</button>
-          <button type="button" onClick={() => setTool("rectangle")}>Rectangle</button>
-          <button type="button" onClick={() => setTool("circle")}>Circle</button>
-          <button type="button" onClick={() => setTool("polyline")}>Polyline</button>
-          <button type="button" onClick={() => setTool("text")}>Text</button>
-          <button type="button" onClick={commitPolyline}>Finish polyline</button>
-          <button type="button" onClick={deleteSelected}>Delete</button>
-          <button type="button" onClick={resetView}>Reset view</button>
-          <button
-            type="button"
-            onClick={() => onGenerateGCode(generatedGCode)}
-            style={{ marginLeft: "auto" }}
-          >
-            Сгенерировать G-code
-          </button>
-        </div>
-
-        {tool === "text" && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 100px 100px",
-              gap: 8,
-              marginBottom: 12,
-              padding: 12,
-              borderRadius: 12,
-              background: "#f8fafc",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <label style={{ fontSize: 12 }}>
-              Текст
-              <input
-                type="text"
-                value={textDraft}
-                onChange={(event) => setTextDraft(event.target.value.toUpperCase())}
-                style={{ width: "100%" }}
-              />
-            </label>
-
-            <label style={{ fontSize: 12 }}>
-              Высота
-              <input
-                type="number"
-                min="2"
-                value={textHeightDraft}
-                onChange={(event) => setTextHeightDraft(Math.max(2, Number(event.target.value) || 2))}
-                style={{ width: "100%" }}
-              />
-            </label>
-
-            <label style={{ fontSize: 12 }}>
-              Интервал
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={textLetterSpacingDraft}
-                onChange={(event) =>
-                  setTextLetterSpacingDraft(Math.max(0, Number(event.target.value) || 0))
-                }
-                style={{ width: "100%" }}
-              />
-            </label>
-          </div>
-        )}
-
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            border: "1px solid #e2e8f0",
-            borderRadius: 12,
-            overflow: "hidden",
-            background: "#f8fafc",
-          }}
-        >
-          <svg
-            ref={svgRef}
-            width="100%"
-            height="100%"
-            onPointerDown={handleCanvasPointerDown}
-            onPointerMove={handleCanvasPointerMove}
-            onPointerUp={handleCanvasPointerUp}
-            style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
-          >
-            <defs>
-              <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
-                <path
-                  d="M 20 0 L 0 0 0 20"
-                  fill="none"
-                  stroke="#e2e8f0"
-                  strokeWidth="1"
-                />
-              </pattern>
-            </defs>
-
-            <rect width="100%" height="100%" fill="url(#grid)" />
-
-            <rect
-              x={view.offsetX}
-              y={view.offsetY}
-              width={document.width * view.scale}
-              height={document.height * view.scale}
-              fill="rgba(255,255,255,0.72)"
-              stroke="#cbd5e1"
-              strokeWidth={1.5}
-            />
-
-            {(() => {
-              const origin = cadToScreenPoint({ x: 0, y: 0 }, document.height, view);
-              return (
-                <g>
-                  <circle cx={origin.x} cy={origin.y} r={4} fill="#ef4444" />
-                  <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill="#0f172a">
-                    X0 Y0
-                  </text>
-                </g>
-              );
-            })()}
-
-            {document.shapes.map(renderShape)}
-
-            {polylineDraft.length > 1 && (
-              <polyline
-                points={polylineDraft
-                  .map((point) => {
-                    const p = cadToScreenPoint(point, document.height, view);
-                    return `${p.x},${p.y}`;
-                  })
-                  .join(" ")}
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth={1.5}
-                strokeDasharray="6 4"
-              />
-            )}
-
-            {draft?.type === "rectangle" &&
-              (() => {
-                const rect = getRectangleFromDraft(draft);
-                const p = cadToScreenPoint(
-                  { x: rect.x, y: rect.y + rect.height },
-                  document.height,
-                  view,
-                );
-                return (
-                  <rect
-                    x={p.x}
-                    y={p.y}
-                    width={rect.width * view.scale}
-                    height={rect.height * view.scale}
-                    fill="rgba(37,99,235,0.12)"
-                    stroke="#2563eb"
-                    strokeDasharray="6 4"
-                  />
-                );
-              })()}
-
-            {draft?.type === "circle" &&
-              (() => {
-                const r = distance(
-                  { x: draft.startX, y: draft.startY },
-                  { x: draft.endX, y: draft.endY },
-                );
-                const center = cadToScreenPoint(
-                  { x: draft.startX, y: draft.startY },
-                  document.height,
-                  view,
-                );
-                return (
-                  <circle
-                    cx={center.x}
-                    cy={center.y}
-                    r={r * view.scale}
-                    fill="rgba(37,99,235,0.12)"
-                    stroke="#2563eb"
-                    strokeDasharray="6 4"
-                  />
-                );
-              })()}
-          </svg>
-        </div>
+    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Панель инструментов */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <button type="button" onClick={() => setTool("select")}>Select</button>
+        <button type="button" onClick={() => setTool("rectangle")}>Rectangle</button>
+        <button type="button" onClick={() => setTool("circle")}>Circle</button>
+        <button type="button" onClick={() => setTool("polyline")}>Polyline</button>
+        <button type="button" onClick={() => setTool("text")}>Text</button>
+        <button type="button" onClick={commitPolyline}>Finish polyline</button>
+        <button type="button" onClick={deleteSelected}>Delete</button>
+        <button type="button" onClick={resetView}>Reset view</button>
+        <button type="button" onClick={handleGenerateClick} disabled={isGenerating} style={{ marginLeft: "auto" }}>
+          {isGenerating ? "Генерация..." : "Сгенерировать G‑code"}
+        </button>
       </div>
 
-      <div
-        style={{
-          background: "white",
-          borderRadius: 16,
-          padding: 16,
-          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          overflow: "auto",
-        }}
-      >
-        <h3 style={{ marginTop: 0 }}>Параметры</h3>
-
-        <div style={{ display: "grid", gap: 10 }}>
-          <label style={{ fontSize: 12 }}>
-            Ширина листа
-            <input
-              type="number"
-              value={document.width}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  width: Math.max(1, Number(event.target.value) || 1),
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ fontSize: 12 }}>
-            Высота листа
-            <input
-              type="number"
-              value={document.height}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  height: Math.max(1, Number(event.target.value) || 1),
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ fontSize: 12 }}>
-            Safe Z
-            <input
-              type="number"
-              value={document.safeZ}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  safeZ: Number(event.target.value) || 0,
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ fontSize: 12 }}>
-            Cut Z по умолчанию
-            <input
-              type="number"
-              value={document.cutZ}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  cutZ: Number(event.target.value) || 0,
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ fontSize: 12 }}>
-            Feed cut
-            <input
-              type="number"
-              value={document.feedCut}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  feedCut: Math.max(1, Number(event.target.value) || 1),
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ fontSize: 12 }}>
-            Feed rapid
-            <input
-              type="number"
-              value={document.feedRapid}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  feedRapid: Math.max(1, Number(event.target.value) || 1),
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
-
-          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-            <input
-              type="checkbox"
-              checked={document.spindleOn}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  spindleOn: event.target.checked,
-                }))
-              }
-            />
-            Лазер / spindle M3/M5
-          </label>
-
-          <label style={{ fontSize: 12 }}>
-            S power
-            <input
-              type="number"
-              value={document.laserPower}
-              onChange={(event) =>
-                setDocument((prev) => ({
-                  ...prev,
-                  laserPower: Math.max(0, Number(event.target.value) || 0),
-                }))
-              }
-              style={{ width: "100%" }}
-            />
-          </label>
+      {tool === "text" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px", gap: 8, marginBottom: 12, padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+          <label style={{ fontSize: 12 }}>Текст<input type="text" value={textDraft} onChange={(e) => setTextDraft(e.target.value)} style={{ width: "100%" }} /></label>
+          <label style={{ fontSize: 12 }}>Высота<input type="number" min="2" value={textHeightDraft} onChange={(e) => setTextHeightDraft(Math.max(2, Number(e.target.value) || 2))} style={{ width: "100%" }} /></label>
+          <label style={{ fontSize: 12 }}>Интервал<input type="number" min="0" step="0.5" value={textLetterSpacingDraft} onChange={(e) => setTextLetterSpacingDraft(Math.max(0, Number(e.target.value) || 0))} style={{ width: "100%" }} /></label>
+          <label style={{ fontSize: 12, gridColumn: "1 / -1" }}>Шрифт<select value={textFontDraft} onChange={(e) => setTextFontDraft(e.target.value)} style={{ width: "100%" }}>{FONT_OPTIONS.map((font) => (<option key={font} value={font}>{font.split("/").pop()}</option>))}</select></label>
         </div>
+      )}
 
-        {selectedShape && (
-          <>
-            <h3 style={{ marginTop: 20 }}>Выбранный объект</h3>
-
-            <div style={{ display: "grid", gap: 10 }}>
-              <label style={{ fontSize: 12 }}>
-                Name
-                <input
-                  type="text"
-                  value={selectedShape.name}
-                  onChange={(event) => updateSelected({ name: event.target.value })}
-                  style={{ width: "100%" }}
-                />
-              </label>
-
-              <label style={{ fontSize: 12 }}>
-                Индивидуальная глубина Z
-                <input
-                  type="number"
-                  value={selectedShape.cutZ ?? document.cutZ}
-                  onChange={(event) => updateSelected({ cutZ: Number(event.target.value) || 0 })}
-                  style={{ width: "100%" }}
-                />
-              </label>
-
-              {selectedShape.type === "rectangle" && (
-                <>
-                  <label style={{ fontSize: 12 }}>
-                    X
-                    <input
-                      type="number"
-                      value={selectedShape.x}
-                      onChange={(event) => updateSelected({ x: Number(event.target.value) || 0 })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 12 }}>
-                    Y
-                    <input
-                      type="number"
-                      value={selectedShape.y}
-                      onChange={(event) => updateSelected({ y: Number(event.target.value) || 0 })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 12 }}>
-                    Width
-                    <input
-                      type="number"
-                      value={selectedShape.width}
-                      onChange={(event) =>
-                        updateSelected({ width: clamp(Number(event.target.value) || 1, 1, 100000) })
-                      }
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 12 }}>
-                    Height
-                    <input
-                      type="number"
-                      value={selectedShape.height}
-                      onChange={(event) =>
-                        updateSelected({ height: clamp(Number(event.target.value) || 1, 1, 100000) })
-                      }
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                </>
-              )}
-
-              {selectedShape.type === "circle" && (
-                <>
-                  <label style={{ fontSize: 12 }}>
-                    CX
-                    <input
-                      type="number"
-                      value={selectedShape.cx}
-                      onChange={(event) => updateSelected({ cx: Number(event.target.value) || 0 })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 12 }}>
-                    CY
-                    <input
-                      type="number"
-                      value={selectedShape.cy}
-                      onChange={(event) => updateSelected({ cy: Number(event.target.value) || 0 })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                  <label style={{ fontSize: 12 }}>
-                    Radius
-                    <input
-                      type="number"
-                      value={selectedShape.radius}
-                      onChange={(event) =>
-                        updateSelected({
-                          radius: clamp(Number(event.target.value) || 1, 1, 100000),
-                        })
-                      }
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                </>
-              )}
-
-              {selectedShape.type === "polyline" && (
-                <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedShape.closed}
-                    onChange={(event) => updateSelected({ closed: event.target.checked })}
-                  />
-                  Closed
-                </label>
-              )}
-
-              {selectedText && (
-                <>
-                  <label style={{ fontSize: 12 }}>
-                    Text
-                    <input
-                      type="text"
-                      value={selectedText.text}
-                      onChange={(event) => updateSelected({ text: event.target.value.toUpperCase() })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: 12 }}>
-                    X
-                    <input
-                      type="number"
-                      value={selectedText.x}
-                      onChange={(event) => updateSelected({ x: Number(event.target.value) || 0 })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: 12 }}>
-                    Y
-                    <input
-                      type="number"
-                      value={selectedText.y}
-                      onChange={(event) => updateSelected({ y: Number(event.target.value) || 0 })}
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: 12 }}>
-                    Height
-                    <input
-                      type="number"
-                      value={selectedText.height}
-                      onChange={(event) =>
-                        updateSelected({ height: clamp(Number(event.target.value) || 2, 2, 100000) })
-                      }
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-
-                  <label style={{ fontSize: 12 }}>
-                    Letter spacing
-                    <input
-                      type="number"
-                      step="0.5"
-                      value={selectedText.letterSpacing}
-                      onChange={(event) =>
-                        updateSelected({ letterSpacing: Math.max(0, Number(event.target.value) || 0) })
-                      }
-                      style={{ width: "100%" }}
-                    />
-                  </label>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        <h3 style={{ marginTop: 20 }}>Результат</h3>
-        <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5 }}>
-          Теперь у каждого примитива есть своя глубина Z. Текст добавляется кликом по холсту
-          и генерируется как векторный stroke-font без зеркалирования.
-        </p>
+      {/* Холст */}
+      <div style={{ flex: 1, minHeight: 0, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "#f8fafc" }}>
+        <svg
+          ref={svgRef}
+          width="100%"
+          height="100%"
+          onPointerDown={handleCanvasPointerDown}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+        >
+          <defs>
+            <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
+              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="1" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+          <rect
+            x={view.offsetX}
+            y={view.offsetY}
+            width={document.width * view.scale}
+            height={document.height * view.scale}
+            fill="rgba(255,255,255,0.72)"
+            stroke="#cbd5e1"
+            strokeWidth={1.5}
+          />
+          {(() => {
+            const origin = cadToScreenPoint({ x: 0, y: 0 }, document.height, view);
+            return (
+              <g>
+                <circle cx={origin.x} cy={origin.y} r={4} fill="#ef4444" />
+                <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill="#0f172a">X0 Y0</text>
+              </g>
+            );
+          })()}
+          {document.shapes.map(renderShape)}
+          {polylineDraft.length > 1 && (
+            <polyline
+              points={polylineDraft.map((point) => { const p = cadToScreenPoint(point, document.height, view); return `${p.x},${p.y}`; }).join(" ")}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+            />
+          )}
+          {draft?.type === "rectangle" && (() => {
+            const rect = getRectangleFromDraft(draft);
+            const p = cadToScreenPoint({ x: rect.x, y: rect.y + rect.height }, document.height, view);
+            return <rect x={p.x} y={p.y} width={rect.width * view.scale} height={rect.height * view.scale} fill="rgba(37,99,235,0.12)" stroke="#2563eb" strokeDasharray="6 4" />;
+          })()}
+          {draft?.type === "circle" && (() => {
+            const r = distance({ x: draft.startX, y: draft.startY }, { x: draft.endX, y: draft.endY });
+            const center = cadToScreenPoint({ x: draft.startX, y: draft.startY }, document.height, view);
+            return <circle cx={center.x} cy={center.y} r={r * view.scale} fill="rgba(37,99,235,0.12)" stroke="#2563eb" strokeDasharray="6 4" />;
+          })()}
+        </svg>
       </div>
     </div>
   );
@@ -1979,41 +1678,69 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import type { ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { EditorSelection } from "@codemirror/state";
-import { EditorView, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
+import {
+  EditorView,
+  highlightActiveLineGutter,
+  keymap,
+  lineNumbers,
+} from "@codemirror/view";
+import {
+  FiCheck,
+  FiCommand,
+  FiDownload,
+  FiEdit3,
+  FiFileText,
+  FiRefreshCw,
+  FiSearch,
+  FiTrash2,
+  FiX,
+} from "react-icons/fi";
 import { downloadTextFile } from "../utils";
 
 type GCodeEditorProps = {
   source: string;
   setSource: (src: string) => void;
   fileName: string;
-  header?: React.ReactNode;
+  variant?: "panel" | "tab";
+  onClose?: () => void;
+  title?: string;
 };
 
 const COMMON_COMMANDS = [
   "G0",
   "G1",
+  "G2",
+  "G3",
+  "G4 P",
+  "G17",
+  "G18",
+  "G19",
+  "G20",
+  "G21",
+  "G28",
   "G90",
   "G91",
-  "G21",
-  "G20",
   "M3",
   "M5",
   "M6 T",
-  "G04 P",
-  "S",
-  "F",
+  "S1000",
+  "F300",
 ];
 
 export function GCodeEditor({
   source,
   setSource,
   fileName,
-  header,
+  variant = "panel",
+  onClose,
+  title = "Редактор G-code",
 }: GCodeEditorProps) {
   const editorRef = useRef<ReactCodeMirrorRef | null>(null);
   const localValueRef = useRef(source);
+
   const [editorValue, setEditorValue] = useState(source);
   const [isDirty, setIsDirty] = useState(false);
+  const [commandSearch, setCommandSearch] = useState("");
 
   useEffect(() => {
     if (!isDirty) {
@@ -2027,6 +1754,83 @@ export function GCodeEditor({
     downloadTextFile(localValueRef.current, outputName);
   }, [fileName]);
 
+  const handleChange = useCallback((value: string) => {
+    localValueRef.current = value;
+    setEditorValue(value);
+    setIsDirty(true);
+  }, []);
+
+  const handleApply = useCallback(() => {
+    setSource(localValueRef.current);
+    setIsDirty(false);
+    editorRef.current?.view?.focus();
+  }, [setSource]);
+
+  const handleReset = useCallback(() => {
+    localValueRef.current = source;
+    setEditorValue(source);
+    setIsDirty(false);
+    editorRef.current?.view?.focus();
+  }, [source]);
+
+  const handleClear = useCallback(() => {
+    localValueRef.current = "";
+    setEditorValue("");
+    setIsDirty(true);
+    editorRef.current?.view?.focus();
+  }, []);
+
+  const insertTextAtCursor = useCallback((textToInsert: string) => {
+    const view = editorRef.current?.view;
+    if (!view) return;
+
+    const selection = view.state.selection.main;
+    const from = selection.from;
+    const to = selection.to;
+
+    const prevChar = from > 0 ? view.state.doc.sliceString(from - 1, from) : "";
+    const nextChar = view.state.doc.sliceString(to, to + 1);
+
+    const needsLeadingBreak = from > 0 && prevChar !== "\n";
+    const needsTrailingBreak = nextChar && nextChar !== "\n";
+
+    const insertText =
+      (needsLeadingBreak ? "\n" : "") +
+      textToInsert +
+      (needsTrailingBreak ? "\n" : "");
+
+    view.dispatch({
+      changes: { from, to, insert: insertText },
+      selection: EditorSelection.cursor(from + insertText.length),
+      scrollIntoView: true,
+    });
+
+    const nextValue = view.state.doc.toString();
+    localValueRef.current = nextValue;
+    setEditorValue(nextValue);
+    setIsDirty(true);
+    view.focus();
+  }, []);
+
+  const handleAddCommand = useCallback(
+    (cmd: string) => {
+      insertTextAtCursor(cmd);
+    },
+    [insertTextAtCursor],
+  );
+
+  const stats = useMemo(() => {
+    const lines = editorValue.length ? editorValue.split("\n").length : 0;
+    const chars = editorValue.length;
+    return { lines, chars };
+  }, [editorValue]);
+
+  const filteredCommands = useMemo(() => {
+    const q = commandSearch.trim().toLowerCase();
+    if (!q) return COMMON_COMMANDS;
+    return COMMON_COMMANDS.filter((cmd) => cmd.toLowerCase().includes(q));
+  }, [commandSearch]);
+
   const extensions = useMemo(
     () => [
       lineNumbers(),
@@ -2036,22 +1840,52 @@ export function GCodeEditor({
       EditorView.theme({
         "&": {
           height: "100%",
-          fontSize: "12px",
+          width: "100%",
+          fontSize: "13px",
+          backgroundColor: "#0f172a",
+          color: "#e2e8f0",
+        },
+        ".cm-editor": {
+          height: "100%",
         },
         ".cm-scroller": {
-          overflow: "auto",
-          fontFamily: "monospace",
+          overflow: "auto !important",
+          fontFamily:
+            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          lineHeight: "1.6",
+          padding: "8px 0",
         },
         ".cm-content": {
-          fontFamily: "monospace",
+          minHeight: "100%",
+          padding: "14px 16px",
           whiteSpace: "pre",
+          caretColor: "#38bdf8",
+        },
+        ".cm-line": {
+          padding: "0 4px",
         },
         ".cm-focused": {
           outline: "none",
         },
-        ".cm-editor": {
-          borderRadius: "8px",
+        ".cm-gutters": {
+          backgroundColor: "#0b1220",
+          color: "#64748b",
+          borderRight: "1px solid rgba(148, 163, 184, 0.18)",
         },
+        ".cm-activeLine": {
+          backgroundColor: "rgba(59, 130, 246, 0.10)",
+        },
+        ".cm-activeLineGutter": {
+          backgroundColor: "rgba(59, 130, 246, 0.16)",
+          color: "#cbd5e1",
+        },
+        ".cm-cursor": {
+          borderLeftColor: "#38bdf8",
+        },
+        "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+          {
+            backgroundColor: "rgba(56, 189, 248, 0.28)",
+          },
       }),
       keymap.of([
         {
@@ -2067,75 +1901,217 @@ export function GCodeEditor({
     [handleSave],
   );
 
-  const handleChange = useCallback((value: string) => {
-    localValueRef.current = value;
-    setEditorValue(value);
-    setIsDirty(true);
-  }, []);
-
-  const handleApply = useCallback(() => {
-    setSource(localValueRef.current);
-    setIsDirty(false);
-  }, [setSource]);
-
-  const handleAddCommand = useCallback((cmd: string) => {
-    const view = editorRef.current?.view;
-    if (!view) {
-      return;
-    }
-
-    const selection = view.state.selection.main;
-    const from = selection.from;
-    const to = selection.to;
-    const needsLeadingBreak =
-      from > 0 && view.state.doc.sliceString(from - 1, from) !== "\n";
-
-    const text = needsLeadingBreak ? `\n${cmd}` : cmd;
-
-    view.dispatch({
-      changes: { from, to, insert: text },
-      selection: EditorSelection.cursor(from + text.length),
-      scrollIntoView: true,
-    });
-
-    const nextValue = view.state.doc.toString();
-    localValueRef.current = nextValue;
-    setEditorValue(nextValue);
-    setIsDirty(true);
-    view.focus();
-  }, []);
+  const isTab = variant === "tab";
 
   return (
     <div
       style={{
-        background: "white",
-        borderRadius: 16,
-        padding: 16,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
         height: "100%",
+        minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        minHeight: 0,
+        borderRadius: isTab ? 20 : 24,
+        overflow: "hidden",
+        background:
+          "linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(241,245,249,1) 100%)",
+        border: "1px solid #e2e8f0",
+        boxShadow:
+          "0 10px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.05)",
       }}
     >
-      {header}
+      <div
+        style={{
+          padding: "16px 16px 14px",
+          borderBottom: "1px solid #e2e8f0",
+          background: "rgba(255,255,255,0.78)",
+          backdropFilter: "blur(10px)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={iconBadgeStyle}>
+              <FiFileText size={18} />
+            </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-          Часто используемые команды
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: "#0f172a",
+                  }}
+                >
+                  {title}
+                </h3>
+
+                {isDirty && (
+                  <span style={dirtyBadgeStyle}>Есть изменения</span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 4,
+                  fontSize: 12,
+                  color: "#64748b",
+                }}
+              >
+                {fileName} · {stats.lines} строк · {stats.chars} символов
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                style={toolbarGhostButtonStyle}
+                title="Закрыть редактор"
+              >
+                <FiX size={15} />
+                <span>Закрыть</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleApply}
+              style={toolbarPrimaryButtonStyle}
+              title="Применить изменения"
+            >
+              <FiCheck size={16} />
+              <span>Применить</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              style={toolbarButtonStyle}
+              title="Сохранить как файл"
+            >
+              <FiDownload size={16} />
+              <span>Сохранить</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleReset}
+              style={toolbarButtonStyle}
+              title="Вернуть исходный текст"
+            >
+              <FiRefreshCw size={16} />
+              <span>Сбросить</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClear}
+              style={toolbarDangerButtonStyle}
+              title="Очистить редактор"
+            >
+              <FiTrash2 size={16} />
+              <span>Очистить</span>
+            </button>
+          </div>
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {COMMON_COMMANDS.map((cmd) => (
-            <button
-              key={cmd}
-              type="button"
-              onClick={() => handleAddCommand(cmd)}
-              style={{ padding: "4px 8px", fontSize: 12 }}
-            >
-              {cmd}
-            </button>
-          ))}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: 12,
+            borderRadius: 16,
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            position: "sticky",
+            top: 0,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#0f172a",
+            }}
+          >
+            <FiCommand size={16} />
+            <span>Быстрые команды</span>
+          </div>
+
+          <div style={{ position: "relative", maxWidth: 280 }}>
+            <FiSearch
+              size={15}
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#64748b",
+              }}
+            />
+            <input
+              type="text"
+              value={commandSearch}
+              onChange={(e) => setCommandSearch(e.target.value)}
+              placeholder="Найти команду..."
+              style={searchInputStyle}
+            />
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              maxHeight: 96,
+              overflowY: "auto",
+              paddingRight: 4,
+            }}
+          >
+            {filteredCommands.map((cmd) => (
+              <button
+                key={cmd}
+                type="button"
+                onClick={() => handleAddCommand(cmd)}
+                style={commandButtonStyle}
+                title={`Вставить ${cmd}`}
+              >
+                <FiEdit3 size={14} />
+                <span>{cmd}</span>
+              </button>
+            ))}
+
+            {filteredCommands.length === 0 && (
+              <div style={{ fontSize: 13, color: "#64748b" }}>
+                Команды не найдены
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2143,44 +2119,153 @@ export function GCodeEditor({
         style={{
           flex: 1,
           minHeight: 0,
-          border: "1px solid #e2e8f0",
-          borderRadius: 8,
-          overflow: "hidden",
+          padding: 16,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
         }}
       >
-        <CodeMirror
-          ref={editorRef}
-          value={editorValue}
-          height="100%"
-          extensions={extensions}
-          basicSetup={{
-            foldGutter: false,
-            dropCursor: false,
-            allowMultipleSelections: false,
-            indentOnInput: false,
-            syntaxHighlighting: false,
-            bracketMatching: false,
-            closeBrackets: false,
-            autocompletion: false,
-            highlightActiveLine: true,
-            highlightSelectionMatches: false,
-            searchKeymap: true,
+        <div
+          style={{
+            padding: "8px 12px",
+            borderRadius: 12,
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            fontSize: 12,
+            color: "#64748b",
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 10,
+            flexWrap: "wrap",
           }}
-          onChange={handleChange}
-        />
-      </div>
+        >
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <span>⌘/Ctrl + S — сохранить</span>
+            <span>Кнопки команд вставляют текст в курсор</span>
+          </div>
 
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <button type="button" onClick={handleApply} style={{ flex: 1 }}>
-          Применить
-        </button>
-        <button type="button" onClick={handleSave} style={{ flex: 1 }}>
-          Сохранить как...
-        </button>
+          <div style={{ fontWeight: 600, color: isDirty ? "#b45309" : "#16a34a" }}>
+            {isDirty ? "Не сохранено" : "Синхронизировано"}
+          </div>
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            borderRadius: 18,
+            overflow: "hidden",
+            border: "1px solid #1e293b",
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+            background: "#0f172a",
+          }}
+        >
+          <CodeMirror
+            ref={editorRef}
+            value={editorValue}
+            height="100%"
+            extensions={extensions}
+            basicSetup={{
+              foldGutter: false,
+              dropCursor: false,
+              allowMultipleSelections: false,
+              indentOnInput: false,
+              syntaxHighlighting: false,
+              bracketMatching: false,
+              closeBrackets: false,
+              autocompletion: false,
+              highlightActiveLine: true,
+              highlightSelectionMatches: false,
+              searchKeymap: true,
+            }}
+            onChange={handleChange}
+          />
+        </div>
       </div>
     </div>
   );
 }
+
+const iconBadgeStyle: React.CSSProperties = {
+  width: 42,
+  height: 42,
+  borderRadius: 14,
+  display: "grid",
+  placeItems: "center",
+  background: "#dbeafe",
+  color: "#2563eb",
+  flexShrink: 0,
+};
+
+const dirtyBadgeStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#92400e",
+  background: "#fef3c7",
+  border: "1px solid #fde68a",
+  padding: "2px 8px",
+  borderRadius: 999,
+};
+
+const searchInputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 36,
+  borderRadius: 10,
+  border: "1px solid #cbd5e1",
+  padding: "0 12px 0 32px",
+  fontSize: 13,
+  outline: "none",
+  background: "#f8fafc",
+};
+
+const toolbarButtonStyle: React.CSSProperties = {
+  height: 38,
+  padding: "0 14px",
+  borderRadius: 12,
+  border: "1px solid #cbd5e1",
+  background: "#ffffff",
+  color: "#0f172a",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  fontWeight: 600,
+  cursor: "pointer",
+};
+
+const toolbarGhostButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  background: "#f8fafc",
+};
+
+const toolbarPrimaryButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  background: "linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%)",
+  color: "#ffffff",
+  border: "1px solid #1d4ed8",
+};
+
+const toolbarDangerButtonStyle: React.CSSProperties = {
+  ...toolbarButtonStyle,
+  background: "#fff1f2",
+  color: "#be123c",
+  border: "1px solid #fecdd3",
+};
+
+const commandButtonStyle: React.CSSProperties = {
+  height: 34,
+  padding: "0 12px",
+  borderRadius: 10,
+  border: "1px solid #cbd5e1",
+  background: "#f8fafc",
+  color: "#0f172a",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+};
 
 
 path: /src/components/GCodeEditorPanel.tsx
@@ -2203,7 +2288,8 @@ export function GCodeEditorPanel({
       source={source}
       setSource={setSource}
       fileName={fileName}
-      header={<h3 style={{ marginTop: 0, marginBottom: 12 }}>Редактор G-code</h3>}
+      variant="panel"
+      title="Редактор G-code"
     />
   );
 }
@@ -2231,24 +2317,480 @@ export function GCodeEditorTab({
       source={source}
       setSource={setSource}
       fileName={fileName}
-      header={
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-          }}
-        >
-          <h3 style={{ margin: 0 }}>Редактор G-code</h3>
-          <button type="button" onClick={onClose} style={{ padding: "4px 8px" }}>
-            Закрыть
-          </button>
-        </div>
-      }
+      variant="tab"
+      title="Редактор G-code"
+      onClose={onClose}
     />
   );
 }
+
+
+path: /src/components/GCodeRightPanel.tsx
+----------------------------------------
+import { FiActivity, FiMove, FiScissors, FiTrendingUp } from "react-icons/fi";
+import type { ParsedStats } from "../types/gcode";
+import { fmt } from "../utils";
+
+type GCodeRightPanelProps = {
+  stats: ParsedStats;
+  totalLength: number;
+};
+
+export function GCodeRightPanel({ stats, totalLength }: GCodeRightPanelProps) {
+  return (
+    <div style={panelStyle}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <div style={panelIconStyle}>
+          <FiActivity size={18} />
+        </div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 17 }}>Статистика G-code</h3>
+          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+            Краткая сводка по текущему файлу
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <StatItem icon={<FiFileMini />} label="Всего строк" value={stats.totalLines} />
+        <StatItem icon={<FiMove size={16} />} label="Перемещений (G0/G1)" value={stats.totalMoves} />
+        <StatItem icon={<FiTrendingUp size={16} />} label="Холостых (G0)" value={stats.rapidMoves} />
+        <StatItem icon={<FiScissors size={16} />} label="Рабочих (G1)" value={stats.workMoves} />
+        <StatItem icon={<FiScissors size={16} />} label="Режущих" value={stats.cuttingMoves} />
+        <StatItem icon={<FiActivity size={16} />} label="Длина пути" value={`${fmt(totalLength)} мм`} />
+      </div>
+
+      <p style={hintStyle}>
+        Подсказка: быстрые команды в редакторе вставляются прямо в позицию курсора.
+      </p>
+    </div>
+  );
+}
+
+function FiFileMini() {
+  return <span style={{ fontSize: 15, lineHeight: 1 }}>≡</span>;
+}
+
+function StatItem({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div style={statCardStyle}>
+      <div style={statIconStyle}>{icon}</div>
+
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>{label}</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
+const panelStyle: React.CSSProperties = {
+  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+  borderRadius: 20,
+  padding: 16,
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
+  height: "fit-content",
+};
+
+const panelIconStyle: React.CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: 12,
+  display: "grid",
+  placeItems: "center",
+  background: "#e0f2fe",
+  color: "#0369a1",
+};
+
+const statCardStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  background: "#ffffff",
+  borderRadius: 14,
+  padding: "12px 14px",
+  border: "1px solid #e2e8f0",
+};
+
+const statIconStyle: React.CSSProperties = {
+  width: 34,
+  height: 34,
+  borderRadius: 10,
+  display: "grid",
+  placeItems: "center",
+  background: "#f1f5f9",
+  color: "#334155",
+  flexShrink: 0,
+};
+
+const hintStyle: React.CSSProperties = {
+  marginTop: 18,
+  marginBottom: 0,
+  color: "#64748b",
+  fontSize: 13,
+  lineHeight: 1.6,
+};
+
+
+path: /src/components/LeftPanel.tsx
+----------------------------------------
+import type { ChangeEvent } from "react";
+import type { PlacementMode, StockDimensions } from "../types/gcode";
+import { useState } from "react";
+import {
+  FiFolder,
+  FiPlay,
+  FiPause,
+  FiSkipBack,
+  FiCamera,
+  FiBox,
+  FiChevronDown,
+  FiChevronUp,
+} from "react-icons/fi";
+
+type LeftPanelProps = {
+  fileName: string;
+  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onLoadDemo: () => void;
+  onResetCamera: () => void;
+  playing: boolean;
+  onPlayPause: () => void;
+  onResetPlayback: () => void;
+  progress: number;
+  onProgressChange: (value: number) => void;
+  speed: number;
+  onSpeedChange: (value: number) => void;
+  placementMode: PlacementMode;
+  onPlacementModeChange: (mode: PlacementMode) => void;
+  stock: StockDimensions;
+  onStockChange: (stock: StockDimensions) => void;
+  showMaterialRemoval: boolean;
+  onShowMaterialRemovalChange: (checked: boolean) => void;
+  detailLevel: number;
+  onDetailLevelChange: (level: number) => void;
+};
+
+export function LeftPanel({
+  fileName,
+  onFileChange,
+  onLoadDemo,
+  onResetCamera,
+  playing,
+  onPlayPause,
+  onResetPlayback,
+  progress,
+  onProgressChange,
+  speed,
+  onSpeedChange,
+  placementMode,
+  onPlacementModeChange,
+  stock,
+  onStockChange,
+  showMaterialRemoval,
+  onShowMaterialRemovalChange,
+  detailLevel,
+  onDetailLevelChange,
+}: LeftPanelProps) {
+  const [stockCollapsed, setStockCollapsed] = useState(false);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Блок Файл */}
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>
+          <FiFolder style={{ marginRight: 8 }} /> Файл
+        </h3>
+        <div style={{ marginBottom: 12 }}>
+          <input
+            type="file"
+            accept=".gcode,.nc,.tap,.txt"
+            onChange={onFileChange}
+            style={{ width: "100%" }}
+          />
+        </div>
+        <div style={infoRow}>
+          <span style={infoLabel}>Текущий файл</span>
+          <span style={infoValue}>{fileName}</span>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button type="button" onClick={onLoadDemo} style={smallButton}>
+            🚀 Демо
+          </button>
+          <button type="button" onClick={onResetCamera} style={smallButton}>
+            <FiCamera style={{ marginRight: 4 }} /> Сброс вида
+          </button>
+        </div>
+      </div>
+
+      {/* Блок Воспроизведение */}
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>
+          {playing ? <FiPause style={{ marginRight: 8 }} /> : <FiPlay style={{ marginRight: 8 }} />}
+          Воспроизведение
+        </h3>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <button type="button" onClick={onPlayPause} style={actionButton}>
+            {playing ? <FiPause style={{ marginRight: 6 }} /> : <FiPlay style={{ marginRight: 6 }} />}
+            {playing ? "Пауза" : "Старт"}
+          </button>
+          <button type="button" onClick={onResetPlayback} style={actionButton}>
+            <FiSkipBack style={{ marginRight: 6 }} /> В начало
+          </button>
+        </div>
+        <div style={sliderRow}>
+          <span style={sliderLabel}>Прогресс</span>
+          <span style={sliderValue}>{progress.toFixed(1)}%</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="0.1"
+            value={progress}
+            onChange={(e) => onProgressChange(Number(e.target.value))}
+            style={slider}
+          />
+        </div>
+        <div style={sliderRow}>
+          <span style={sliderLabel}>Скорость</span>
+          <span style={sliderValue}>{speed.toFixed(1)}x</span>
+          <input
+            type="range"
+            min="0.2"
+            max="5"
+            step="0.1"
+            value={speed}
+            onChange={(e) => onSpeedChange(Number(e.target.value))}
+            style={slider}
+          />
+        </div>
+      </div>
+
+      {/* Блок Заготовка (сворачиваемый) */}
+      <div style={cardStyle}>
+        <div
+          onClick={() => setStockCollapsed(!stockCollapsed)}
+          style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+        >
+          <h3 style={cardTitle}>
+            <FiBox style={{ marginRight: 8 }} /> Заготовка
+          </h3>
+          <span>{stockCollapsed ? <FiChevronDown /> : <FiChevronUp />}</span>
+        </div>
+
+        {!stockCollapsed && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Позиционирование</div>
+              <label style={radioLabel}>
+                <input
+                  type="radio"
+                  name="placementMode"
+                  value="origin"
+                  checked={placementMode === "origin"}
+                  onChange={() => onPlacementModeChange("origin")}
+                />
+                Левый нижний угол
+              </label>
+              <label style={radioLabel}>
+                <input
+                  type="radio"
+                  name="placementMode"
+                  value="center"
+                  checked={placementMode === "center"}
+                  onChange={() => onPlacementModeChange("center")}
+                />
+                Центрировать по траектории
+              </label>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+              <label style={inputLabel}>
+                Ширина, мм
+                <input
+                  type="number"
+                  min="1"
+                  value={stock.width}
+                  onChange={(e) =>
+                    onStockChange({
+                      ...stock,
+                      width: Math.max(1, Number(e.target.value) || 1),
+                    })
+                  }
+                />
+              </label>
+              <label style={inputLabel}>
+                Высота, мм
+                <input
+                  type="number"
+                  min="1"
+                  value={stock.height}
+                  onChange={(e) =>
+                    onStockChange({
+                      ...stock,
+                      height: Math.max(1, Number(e.target.value) || 1),
+                    })
+                  }
+                />
+              </label>
+              <label style={inputLabel}>
+                Толщина, мм
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={stock.thickness}
+                  onChange={(e) =>
+                    onStockChange({
+                      ...stock,
+                      thickness: Math.max(0.1, Number(e.target.value) || 0.1),
+                    })
+                  }
+                />
+              </label>
+            </div>
+
+            <label style={checkboxLabel}>
+              <input
+                type="checkbox"
+                checked={showMaterialRemoval}
+                onChange={(e) => onShowMaterialRemovalChange(e.target.checked)}
+              />
+              Показывать снятие материала
+            </label>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={sliderRow}>
+                <span style={sliderLabel}>Качество меша</span>
+                <span style={sliderValue}>{detailLevel}</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="1"
+                  value={detailLevel}
+                  onChange={(e) => onDetailLevelChange(Number(e.target.value))}
+                  style={slider}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// --- Стили (без изменений) ---
+const cardStyle: React.CSSProperties = {
+  background: "white",
+  borderRadius: 16,
+  padding: 16,
+  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+};
+
+const cardTitle: React.CSSProperties = {
+  margin: "0 0 12px 0",
+  fontSize: 16,
+  fontWeight: 600,
+  color: "#0f172a",
+  display: "flex",
+  alignItems: "center",
+};
+
+const infoRow: React.CSSProperties = {
+  background: "#f1f5f9",
+  borderRadius: 8,
+  padding: "8px 12px",
+  fontSize: 14,
+};
+
+const infoLabel: React.CSSProperties = {
+  color: "#64748b",
+  marginRight: 8,
+};
+
+const infoValue: React.CSSProperties = {
+  fontWeight: 600,
+  wordBreak: "break-all",
+};
+
+const smallButton: React.CSSProperties = {
+  padding: "6px 12px",
+  fontSize: 13,
+  borderRadius: 8,
+  border: "1px solid #cbd5e1",
+  background: "white",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+};
+
+const actionButton: React.CSSProperties = {
+  flex: 1,
+  padding: "8px 12px",
+  fontSize: 14,
+  fontWeight: 600,
+  borderRadius: 10,
+  border: "1px solid #2563eb",
+  background: "#dbeafe",
+  color: "#1d4ed8",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const sliderRow: React.CSSProperties = {
+  marginBottom: 12,
+};
+
+const sliderLabel: React.CSSProperties = {
+  fontSize: 14,
+  color: "#0f172a",
+  display: "block",
+  marginBottom: 4,
+};
+
+const sliderValue: React.CSSProperties = {
+  fontSize: 14,
+  fontWeight: 600,
+  float: "right",
+};
+
+const slider: React.CSSProperties = {
+  width: "100%",
+  marginTop: 4,
+};
+
+const radioLabel: React.CSSProperties = {
+  display: "block",
+  fontSize: 14,
+  marginBottom: 6,
+  color: "#0f172a",
+};
+
+const inputLabel: React.CSSProperties = {
+  fontSize: 12,
+  color: "#475569",
+};
+
+const checkboxLabel: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 14,
+  fontWeight: 600,
+  marginTop: 8,
+};
 
 
 path: /src/components/MainTabs.tsx
@@ -2260,10 +2802,10 @@ type MainTabsProps = {
   onChange: (tab: MainTab) => void;
 };
 
-const tabs: Array<{ id: MainTab; label: string }> = [
-  { id: "view", label: "View" },
-  { id: "gcode", label: "G-code Editor" },
-  { id: "edit", label: "Edit" },
+const tabs: Array<{ id: MainTab; label: string; icon: string }> = [
+  { id: "view", label: "3D View", icon: "🌐" },
+  { id: "gcode", label: "G‑code Editor", icon: "📝" },
+  { id: "edit", label: "Edit", icon: "✏️" },
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
@@ -2272,9 +2814,9 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
       style={{
         display: "flex",
         gap: 8,
-        marginBottom: 12,
-        borderBottom: "1px solid #e2e8f0",
-        paddingBottom: 12,
+        marginBottom: 16,
+        borderBottom: "2px solid #e2e8f0",
+        paddingBottom: 8,
       }}
     >
       {tabs.map((tab) => {
@@ -2286,15 +2828,21 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
             type="button"
             onClick={() => onChange(tab.id)}
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: isActive ? "1px solid #2563eb" : "1px solid #cbd5e1",
-              background: isActive ? "#dbeafe" : "white",
-              color: isActive ? "#1d4ed8" : "#0f172a",
+              padding: "10px 20px",
+              borderRadius: 30,
+              border: "none",
+              background: isActive ? "#2563eb" : "transparent",
+              color: isActive ? "white" : "#64748b",
               fontWeight: 600,
+              fontSize: 15,
               cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.2s",
             }}
           >
+            <span>{tab.icon}</span>
             {tab.label}
           </button>
         );
@@ -3436,7 +3984,7 @@ export type SketchPolyline = SketchBase & {
   closed: boolean;
 };
 
-export type SketchText = {
+export type SketchText = SketchBase & {
   type: "text";
   x: number;
   y: number;
@@ -3447,7 +3995,6 @@ export type SketchText = {
   rotation?: number;
   align?: "left" | "center" | "right";
   cutMode?: "outline" | "pocket";
-  cutZ?: number | null;
 };
 
 export type SketchShape =
@@ -3554,7 +4101,240 @@ export function machineToScenePoint(p: Point3): THREE.Vector3 {
 
 path: /src/utils/fontGeometry.ts
 ----------------------------------------
+import opentype from "opentype.js";
+import type { SketchText } from "../types/sketch";
 
+export type CadPoint = {
+  x: number;
+  y: number;
+};
+
+type FontLike = Awaited<ReturnType<typeof opentype.load>>;
+
+const fontCache = new Map<string, Promise<FontLike>>();
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function getFontUrl(fontFile: string): string {
+  if (!fontFile) {
+    return "/fonts/NotoSans-Regular.ttf";
+  }
+
+  if (fontFile.startsWith("/")) {
+    return fontFile;
+  }
+
+  return `/fonts/${fontFile}`;
+}
+
+export async function loadFont(fontFile: string): Promise<FontLike> {
+  const url = getFontUrl(fontFile);
+
+  if (!fontCache.has(url)) {
+    fontCache.set(url, opentype.load(url));
+  }
+
+  return fontCache.get(url)!;
+}
+
+function quad(p0: CadPoint, p1: CadPoint, p2: CadPoint, t: number): CadPoint {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+    y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
+  };
+}
+
+function cubic(
+  p0: CadPoint,
+  p1: CadPoint,
+  p2: CadPoint,
+  p3: CadPoint,
+  t: number,
+): CadPoint {
+  const mt = 1 - t;
+  return {
+    x:
+      mt * mt * mt * p0.x +
+      3 * mt * mt * t * p1.x +
+      3 * mt * t * t * p2.x +
+      t * t * t * p3.x,
+    y:
+      mt * mt * mt * p0.y +
+      3 * mt * mt * t * p1.y +
+      3 * mt * t * t * p2.y +
+      t * t * t * p3.y,
+  };
+}
+
+export function pathCommandsToPolylines(
+  commands: Array<Record<string, number | string>>,
+  curveSteps = 14,
+): CadPoint[][] {
+  const result: CadPoint[][] = [];
+  let current: CadPoint[] = [];
+  let pen: CadPoint = { x: 0, y: 0 };
+  let subpathStart: CadPoint | null = null;
+
+  function pushPoint(x: number, y: number) {
+    const point = { x: round(x), y: round(y) };
+    current.push(point);
+    pen = point;
+  }
+
+  function flushCurrent() {
+    if (current.length > 1) {
+      result.push(current);
+    }
+    current = [];
+    subpathStart = null;
+  }
+
+  for (const cmd of commands) {
+    const type = String(cmd.type);
+
+    if (type === "M") {
+      flushCurrent();
+      pushPoint(Number(cmd.x), Number(cmd.y));
+      subpathStart = { ...pen };
+      continue;
+    }
+
+    if (type === "L") {
+      pushPoint(Number(cmd.x), Number(cmd.y));
+      continue;
+    }
+
+    if (type === "Q") {
+      const p0 = pen;
+      const p1 = { x: Number(cmd.x1), y: Number(cmd.y1) };
+      const p2 = { x: Number(cmd.x), y: Number(cmd.y) };
+
+      for (let i = 1; i <= curveSteps; i += 1) {
+        const p = quad(p0, p1, p2, i / curveSteps);
+        pushPoint(p.x, p.y);
+      }
+      continue;
+    }
+
+    if (type === "C") {
+      const p0 = pen;
+      const p1 = { x: Number(cmd.x1), y: Number(cmd.y1) };
+      const p2 = { x: Number(cmd.x2), y: Number(cmd.y2) };
+      const p3 = { x: Number(cmd.x), y: Number(cmd.y) };
+
+      for (let i = 1; i <= curveSteps; i += 1) {
+        const p = cubic(p0, p1, p2, p3, i / curveSteps);
+        pushPoint(p.x, p.y);
+      }
+      continue;
+    }
+
+    if (type === "Z") {
+      if (subpathStart && current.length > 0) {
+        const last = current[current.length - 1];
+        if (
+          Math.abs(last.x - subpathStart.x) > 0.001 ||
+          Math.abs(last.y - subpathStart.y) > 0.001
+        ) {
+          pushPoint(subpathStart.x, subpathStart.y);
+        }
+      }
+      flushCurrent();
+    }
+  }
+
+  flushCurrent();
+  return result;
+}
+
+function rotatePoint(point: CadPoint, origin: CadPoint, angleDeg: number): CadPoint {
+  if (!angleDeg) {
+    return point;
+  }
+
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+
+  const dx = point.x - origin.x;
+  const dy = point.y - origin.y;
+
+  return {
+    x: round(origin.x + dx * cos - dy * sin),
+    y: round(origin.y + dx * sin + dy * cos),
+  };
+}
+
+function getTextWidthApprox(polylines: CadPoint[][]): number {
+  if (polylines.length === 0) {
+    return 0;
+  }
+
+  const xs = polylines.flat().map((p) => p.x);
+  return Math.max(...xs) - Math.min(...xs);
+}
+
+export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]> {
+  const font = await loadFont(shape.fontFile);
+  const path = font.getPath(shape.text, 0, 0, shape.height, {
+    kerning: true,
+    letterSpacing: shape.letterSpacing ?? 0,
+  });
+
+  let polylines = pathCommandsToPolylines(
+    path.commands as Array<Record<string, number | string>>,
+    14,
+  );
+
+  if (polylines.length === 0) {
+    return [];
+  }
+
+  // Инверсия Y из font-space -> CAD-space
+  polylines = polylines.map((polyline) =>
+    polyline.map((point) => ({
+      x: point.x,
+      y: -point.y,
+    })),
+  );
+
+  const xs = polylines.flat().map((p) => p.x);
+  const ys = polylines.flat().map((p) => p.y);
+
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+
+  const width = maxX - minX;
+
+  let shiftX = 0;
+  const align = shape.align ?? "left";
+
+  if (align === "center") {
+    shiftX = -width / 2;
+  } else if (align === "right") {
+    shiftX = -width;
+  }
+
+  polylines = polylines.map((polyline) =>
+    polyline.map((point) => ({
+      x: round(point.x - minX + shape.x + shiftX),
+      y: round(point.y - minY + shape.y),
+    })),
+  );
+
+  if ((shape.rotation ?? 0) !== 0) {
+    const origin = { x: shape.x, y: shape.y };
+    polylines = polylines.map((polyline) =>
+      polyline.map((point) => rotatePoint(point, origin, shape.rotation ?? 0)),
+    );
+  }
+
+  return polylines;
+}
 
 
 path: /src/utils/index.ts
@@ -3657,14 +4437,7 @@ import type {
   SketchShape,
   SketchText,
 } from "../types/sketch";
-
-import { loadFont, pathToPolylines } from "./ttfText";
-
-export async function textToTtfPolylines(shape: SketchText) {
-  const font = await loadFont(shape.fontFile || "/fonts/NotoSans-Regular.ttf");
-  const path = font.getPath(shape.text, shape.x, shape.y, shape.height);
-  return pathToPolylines(path.commands, 10);
-}
+import { getTextPolylines } from "./fontGeometry";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
@@ -3696,31 +4469,6 @@ export function createEmptySketchDocument(): SketchDocument {
   };
 }
 
-export function textToStrokePolylines(shape: SketchText): StrokePoint[][] {
-  const text = shape.text.toUpperCase();
-  const result: StrokePoint[][] = [];
-  const sx = shape.height * 0.7;
-  const sy = shape.height;
-  let cursorX = shape.x;
-
-  for (const ch of text) {
-    const glyph = getGlyph(ch);
-
-    for (const stroke of glyph.strokes) {
-      result.push(
-        stroke.map((p) => ({
-          x: round(cursorX + p.x * sx),
-          y: round(shape.y + p.y * sy),
-        })),
-      );
-    }
-
-    cursorX += glyph.width * sx + shape.letterSpacing;
-  }
-
-  return result;
-}
-
 export function shapeBounds(shape: SketchShape) {
   switch (shape.type) {
     case "rectangle":
@@ -3730,6 +4478,7 @@ export function shapeBounds(shape: SketchShape) {
         maxX: shape.x + shape.width,
         maxY: shape.y + shape.height,
       };
+
     case "circle":
       return {
         minX: shape.cx - shape.radius,
@@ -3737,6 +4486,7 @@ export function shapeBounds(shape: SketchShape) {
         maxX: shape.cx + shape.radius,
         maxY: shape.cy + shape.radius,
       };
+
     case "polyline": {
       const xs = shape.points.map((p) => p.x);
       const ys = shape.points.map((p) => p.y);
@@ -3747,24 +4497,27 @@ export function shapeBounds(shape: SketchShape) {
         maxY: Math.max(...ys),
       };
     }
+
     case "text": {
-      const polylines = textToStrokePolylines(shape);
-      if (polylines.length === 0) {
-        return {
-          minX: shape.x,
-          minY: shape.y,
-          maxX: shape.x,
-          maxY: shape.y + shape.height,
-        };
-      }
-      const points = polylines.flat();
-      const xs = points.map((p) => p.x);
-      const ys = points.map((p) => p.y);
+      const widthApprox =
+        Math.max(1, shape.text.length) *
+        (shape.height * 0.62 + shape.letterSpacing);
+
       return {
-        minX: Math.min(...xs),
-        minY: Math.min(...ys),
-        maxX: Math.max(...xs),
-        maxY: Math.max(...ys),
+        minX:
+          shape.align === "center"
+            ? shape.x - widthApprox / 2
+            : shape.align === "right"
+              ? shape.x - widthApprox
+              : shape.x,
+        minY: shape.y - shape.height * 0.25,
+        maxX:
+          shape.align === "center"
+            ? shape.x + widthApprox / 2
+            : shape.align === "right"
+              ? shape.x
+              : shape.x + widthApprox,
+        maxY: shape.y + shape.height,
       };
     }
   }
@@ -3774,8 +4527,10 @@ export function moveShape(shape: SketchShape, dx: number, dy: number): SketchSha
   switch (shape.type) {
     case "rectangle":
       return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+
     case "circle":
       return { ...shape, cx: round(shape.cx + dx), cy: round(shape.cy + dy) };
+
     case "polyline":
       return {
         ...shape,
@@ -3784,6 +4539,7 @@ export function moveShape(shape: SketchShape, dx: number, dy: number): SketchSha
           y: round(p.y + dy),
         })),
       };
+
     case "text":
       return {
         ...shape,
@@ -3853,7 +4609,7 @@ function rectangleToGCode(shape: SketchRectangle, doc: SketchDocument): string[]
   ];
 }
 
-function circleToPolylinePoints(shape: SketchCircle, segments = 64) {
+function circleToPolylinePoints(shape: SketchCircle, segments = 72) {
   const points: Array<{ x: number; y: number }> = [];
 
   for (let i = 0; i <= segments; i += 1) {
@@ -3912,9 +4668,9 @@ function polylineToGCode(shape: SketchPolyline, doc: SketchDocument): string[] {
   );
 }
 
-function textToGCode(shape: SketchText, doc: SketchDocument): string[] {
+async function textToGCode(shape: SketchText, doc: SketchDocument): Promise<string[]> {
   const cutZ = resolveCutZ(shape, doc);
-  const polylines = textToStrokePolylines(shape);
+  const polylines = await getTextPolylines(shape);
   const lines: string[] = [`; TEXT ${shape.name}: ${shape.text}`];
 
   for (const polyline of polylines) {
@@ -3935,7 +4691,7 @@ function textToGCode(shape: SketchText, doc: SketchDocument): string[] {
   return lines;
 }
 
-export function generateSketchGCode(doc: SketchDocument): string {
+export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
   const lines: string[] = [
     "; Generated by GCode Studio / EditTab",
     "G21",
@@ -3948,14 +4704,17 @@ export function generateSketchGCode(doc: SketchDocument): string {
       case "rectangle":
         lines.push(...rectangleToGCode(shape, doc));
         break;
+
       case "circle":
         lines.push(...circleToGCode(shape, doc));
         break;
+
       case "polyline":
         lines.push(...polylineToGCode(shape, doc));
         break;
+
       case "text":
-        lines.push(...textToGCode(shape, doc));
+        lines.push(...(await textToGCode(shape, doc)));
         break;
     }
   }
@@ -3965,90 +4724,6 @@ export function generateSketchGCode(doc: SketchDocument): string {
 
   return lines.join("\n") + "\n";
 }
-
-
-path: /src/utils/ttfText.ts
-----------------------------------------
-import opentype from "opentype.js";
-
-export type CadPoint = { x: number; y: number };
-
-export async function loadFont(fontUrl: string) {
-  return await opentype.load(fontUrl);
-}
-
-export function pathToPolylines(
-  commands: Array<any>,
-  curveSteps = 12,
-): CadPoint[][] {
-  const result: CadPoint[][] = [];
-  let current: CadPoint[] = [];
-  let pen = { x: 0, y: 0 };
-
-  function pushPoint(x: number, y: number) {
-    current.push({ x, y });
-    pen = { x, y };
-  }
-
-  function quad(p0: CadPoint, p1: CadPoint, p2: CadPoint, t: number) {
-    const mt = 1 - t;
-    return {
-      x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
-      y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
-    };
-  }
-
-  function cubic(p0: CadPoint, p1: CadPoint, p2: CadPoint, p3: CadPoint, t: number) {
-    const mt = 1 - t;
-    return {
-      x:
-        mt * mt * mt * p0.x +
-        3 * mt * mt * t * p1.x +
-        3 * mt * t * t * p2.x +
-        t * t * t * p3.x,
-      y:
-        mt * mt * mt * p0.y +
-        3 * mt * mt * t * p1.y +
-        3 * mt * t * t * p2.y +
-        t * t * t * p3.y,
-    };
-  }
-
-  for (const cmd of commands) {
-    if (cmd.type === "M") {
-      if (current.length > 1) result.push(current);
-      current = [];
-      pushPoint(cmd.x, cmd.y);
-    } else if (cmd.type === "L") {
-      pushPoint(cmd.x, cmd.y);
-    } else if (cmd.type === "Q") {
-      const p0 = pen;
-      for (let i = 1; i <= curveSteps; i++) {
-        const p = quad(p0, { x: cmd.x1, y: cmd.y1 }, { x: cmd.x, y: cmd.y }, i / curveSteps);
-        pushPoint(p.x, p.y);
-      }
-    } else if (cmd.type === "C") {
-      const p0 = pen;
-      for (let i = 1; i <= curveSteps; i++) {
-        const p = cubic(
-          p0,
-          { x: cmd.x1, y: cmd.y1 },
-          { x: cmd.x2, y: cmd.y2 },
-          { x: cmd.x, y: cmd.y },
-          i / curveSteps,
-        );
-        pushPoint(p.x, p.y);
-      }
-    } else if (cmd.type === "Z") {
-      if (current.length > 1) result.push(current);
-      current = [];
-    }
-  }
-
-  if (current.length > 1) result.push(current);
-
-  return result;
-}r
 
 
 path: /src/workers/gcodeParser.worker.ts
@@ -4343,8 +5018,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 44
+included: 46
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 117751
+totalBytes(approx): 136647

@@ -1,75 +1,81 @@
-/* Убираем все лишнее, оставляем только базовый сброс */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  /* Отключаем принудительную цветовую схему — пусть приложение само управляет цветами */
-  color-scheme: light dark;
-  color: #213547; /* базовый цвет текста (светлая тема по умолчанию) */
-  background-color: #ffffff;
-
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --ring: rgba(37, 99, 235, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
 }
 
 body {
-  margin: 0;
-  /* Убираем flex и центрирование — они мешают вашей сетке */
-  display: block;
-  min-width: 320px;
-  min-height: 100vh;
-  background-color: #f8fafc; /* задаём фон, как в вашем приложении */
+  overflow: hidden;
 }
 
-/* Стили для ссылок и кнопок можно оставить, но они не должны влиять на ваши компоненты */
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #f9f9f9;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease,
+    opacity 0.16s ease;
 }
 
-/* Адаптация под тёмную тему (если пользователь предпочитает тёмную) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: rgba(255, 255, 255, 0.87);
-    background-color: #242424;
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+.fade-in {
+  animation: fadeIn 0.24s ease-out;
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
-  body {
-    background-color: #242424;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
-  button {
-    background-color: #1a1a1a;
-    color: #ffffff;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }

@@ -1,14 +1,16 @@
+import { FiCode, FiEdit3, FiEye } from "react-icons/fi";
 import type { MainTab } from "../types/ui";
+import { theme } from "../styles/ui";
 
 type MainTabsProps = {
   activeTab: MainTab;
   onChange: (tab: MainTab) => void;
 };
 
-const tabs: Array<{ id: MainTab; label: string }> = [
-  { id: "view", label: "View" },
-  { id: "gcode", label: "G-code Editor" },
-  { id: "edit", label: "Edit" },
+const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
+  { id: "view", label: "3D Preview", icon: <FiEye size={16} /> },
+  { id: "gcode", label: "G-code", icon: <FiCode size={16} /> },
+  { id: "edit", label: "Editor", icon: <FiEdit3 size={16} /> },
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
@@ -16,10 +18,8 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
     <div
       style={{
         display: "flex",
-        gap: 8,
-        marginBottom: 12,
-        borderBottom: "1px solid #e2e8f0",
-        paddingBottom: 12,
+        gap: 10,
+        flexWrap: "wrap",
       }}
     >
       {tabs.map((tab) => {
@@ -31,15 +31,28 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
             type="button"
             onClick={() => onChange(tab.id)}
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: isActive ? "1px solid #2563eb" : "1px solid #cbd5e1",
-              background: isActive ? "#dbeafe" : "white",
-              color: isActive ? "#1d4ed8" : "#0f172a",
-              fontWeight: 600,
+              height: 42,
+              padding: "0 16px",
+              borderRadius: 999,
+              border: isActive
+                ? "1px solid #1d4ed8"
+                : `1px solid ${theme.border}`,
+              background: isActive
+                ? "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)"
+                : "#fff",
+              color: isActive ? "#fff" : theme.textSoft,
+              fontWeight: 800,
+              fontSize: 13,
               cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: isActive
+                ? "0 10px 20px rgba(37, 99, 235, 0.18)"
+                : "none",
             }}
           >
+            {tab.icon}
             {tab.label}
           </button>
         );
