@@ -41,6 +41,7 @@ import {
   reorderShapes,
   toggleGroupCollapsed,
 } from "./modules/cad/model/grouping";
+import { loadSettings, saveSettings } from "./utils/settings";
 
 const UNDO_HISTORY_LIMIT = 10;
 
@@ -86,6 +87,22 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
+  const [settings, setSettings] = useState(() => loadSettings());
+
+  function updateSettings(
+    update:
+      | typeof settings
+      | ((prev: typeof settings) => typeof settings),
+  ) {
+    setSettings((prev) => {
+      const next = typeof update === "function"
+        ? (update as (prev: typeof settings) => typeof settings)(prev)
+        : update;
+
+      saveSettings(next);
+      return next;
+    });
+  }
 
   const initialCadState = useMemo<HistoryCadState>(
     () => ({
@@ -647,6 +664,7 @@ export default function App() {
                     onRedo={redo}
                     canUndo={canUndo}
                     canRedo={canRedo}
+                    panButtonMode={settings.cad.panButton}
                   />
                 </div>
               )}
@@ -693,6 +711,16 @@ export default function App() {
                   document={editDocument}
                   setDocument={setEditDocument}
                   selection={selection}
+                  panButtonMode={settings.cad.panButton}
+                  onPanButtonModeChange={(value) =>
+                    updateSettings((prev) => ({
+                      ...prev,
+                      cad: {
+                        ...prev.cad,
+                        panButton: value,
+                      },
+                    }))
+                  }
                 />
               )}
             </div>

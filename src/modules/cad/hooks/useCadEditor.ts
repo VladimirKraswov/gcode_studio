@@ -54,6 +54,7 @@ import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
 import { renameGroup, reorderShapes, toggleGroupCollapsed } from "../model/grouping";
+import type { CadPanButtonMode } from "../../../utils/settings";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -67,6 +68,7 @@ type UseCadEditorParams = {
   onViewChange: React.Dispatch<React.SetStateAction<ViewTransform>>;
   onViewChangeSilently: React.Dispatch<React.SetStateAction<ViewTransform>>;
   checkpointHistory: () => void;
+  panButtonMode: CadPanButtonMode;
 };
 
 type PanState = {
@@ -89,6 +91,7 @@ export function useCadEditor({
   onViewChange,
   onViewChangeSilently,
   checkpointHistory,
+  panButtonMode,
 }: UseCadEditorParams) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -101,6 +104,32 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  function isPanMouseButton(button: number): boolean {
+    if (panButtonMode === "middle") {
+      return button === 1;
+    }
+
+    if (panButtonMode === "right") {
+      return button === 2;
+    }
+
+    return button === 1 || button === 2;
+  }
+
+  function startPan(event: React.PointerEvent<SVGElement | SVGSVGElement>) {
+    event.preventDefault();
+
+    checkpointHistory();
+
+    setPanState({
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startOffsetX: view.offsetX,
+      startOffsetY: view.offsetY,
+    });
+  }
 
   function renameGroupById(groupId: string, name: string) {
     setDocument((prev) => renameGroup(prev, groupId, name));
@@ -235,16 +264,8 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
-    if (event.button === 1) {
-      event.preventDefault();
-      checkpointHistory();
-      setPanState({
-        pointerId: event.pointerId,
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-        startOffsetX: view.offsetX,
-        startOffsetY: view.offsetY,
-      });
+    if (isPanMouseButton(event.button)) {
+      startPan(event);
       return;
     }
 
@@ -413,7 +434,8 @@ export function useCadEditor({
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
     event.stopPropagation();
 
-    if (event.button === 1) {
+    if (isPanMouseButton(event.button)) {
+      startPan(event);
       return;
     }
 
@@ -457,6 +479,11 @@ export function useCadEditor({
 
   function bindSelectionDragStart(event: React.PointerEvent<SVGRectElement>) {
     event.stopPropagation();
+
+    if (isPanMouseButton(event.button)) {
+      startPan(event);
+      return;
+    }
 
     if (tool !== "select" || event.button !== 0) {
       return;

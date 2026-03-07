@@ -7,6 +7,7 @@ import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
 import type { ViewTransform } from "../modules/cad/model/view";
+import type { CadPanButtonMode } from "../utils/settings";
 import { ui } from "../styles/ui";
 
 type EditTabProps = {
@@ -25,6 +26,7 @@ type EditTabProps = {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  panButtonMode: CadPanButtonMode;
 };
 
 export function EditTab({
@@ -43,7 +45,9 @@ export function EditTab({
   onRedo,
   canUndo,
   canRedo,
+  panButtonMode,
 }: EditTabProps) {
+
   const editor = useCadEditor({
     document,
     setDocument,
@@ -56,6 +60,7 @@ export function EditTab({
     onViewChange,
     onViewChangeSilently,
     checkpointHistory,
+    panButtonMode,
   });
 
   return (

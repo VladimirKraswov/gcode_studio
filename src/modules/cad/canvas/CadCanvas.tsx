@@ -1,8 +1,3 @@
-
-// =============================
-// FILE: src/modules/cad/canvas/CadCanvas.tsx
-// =============================
-
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
@@ -17,7 +12,6 @@ import type {
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
-import { isSelected } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
@@ -57,9 +51,12 @@ export function CadCanvas({
   onSelectionPointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
   const selectedIds = new Set(
     primary?.groupId
-      ? document.shapes.filter((shape) => shape.groupId === primary.groupId).map((shape) => shape.id)
+      ? document.shapes
+          .filter((shape) => shape.groupId === primary.groupId)
+          .map((shape) => shape.id)
       : selection.ids,
   );
 
@@ -73,6 +70,7 @@ export function CadCanvas({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
       onWheel={onWheel}
+      onContextMenu={(event) => event.preventDefault()}
       style={{
         display: "block",
         width: "100%",

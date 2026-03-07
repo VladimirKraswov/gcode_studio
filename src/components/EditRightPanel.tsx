@@ -3,18 +3,23 @@ import { DocumentSettingsPanel } from "../modules/cad/panels/DocumentSettingsPan
 import { ShapePropertiesPanel } from "../modules/cad/panels/ShapePropertiesPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
+import type { CadPanButtonMode } from "../utils/settings";
 import { theme, ui } from "../styles/ui";
 
 type EditRightPanelProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   selection: SelectionState;
+  panButtonMode: CadPanButtonMode;
+  onPanButtonModeChange: (value: CadPanButtonMode) => void;
 };
 
 export function EditRightPanel({
   document,
   setDocument,
   selection,
+  panButtonMode,
+  onPanButtonModeChange,
 }: EditRightPanelProps) {
   const selectedShape =
     document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
@@ -46,6 +51,27 @@ export function EditRightPanel({
       </div>
 
       <DocumentSettingsPanel document={document} setDocument={setDocument} />
+
+      <div style={{ height: 1, background: theme.border, margin: "18px 0" }} />
+
+      <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+          Управление
+        </div>
+
+        <label style={ui.inputLabel}>
+          Кнопка панорамы
+          <select
+            value={panButtonMode}
+            onChange={(e) => onPanButtonModeChange(e.target.value as CadPanButtonMode)}
+            style={ui.select}
+          >
+            <option value="right">Правая кнопка</option>
+            <option value="middle">Средняя кнопка</option>
+            <option value="both">Правая и средняя</option>
+          </select>
+        </label>
+      </div>
 
       {selectedShape && (
         <ShapePropertiesPanel
