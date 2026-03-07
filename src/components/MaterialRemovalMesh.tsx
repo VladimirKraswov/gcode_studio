@@ -10,6 +10,7 @@ type MaterialRemovalMeshProps = {
   totalLength: number;
   placementMode: PlacementMode;
   detailLevel?: number;
+  toolDiameter?: number;
 };
 
 export function MaterialRemovalMesh({
@@ -19,12 +20,11 @@ export function MaterialRemovalMesh({
   totalLength,
   placementMode,
   detailLevel = 5,
+  toolDiameter = 1,
 }: MaterialRemovalMeshProps) {
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
 
-  // В preview сцена зеркалится по X, поэтому карту выборки
-  // нужно зеркалить так же, иначе съём материала уедет в другой угол.
   const previewMirrorX = true;
 
   const level = clamp(detailLevel, 1, 10);
@@ -73,6 +73,55 @@ export function MaterialRemovalMesh({
     heights.fill(0);
 
     let accumulated = 0;
+    const toolRadius = Math.max(0.001, toolDiameter / 2);
+    const cellSizeX = width / Math.max(1, gridX - 1);
+    const cellSizeY = depth / Math.max(1, gridY - 1);
+
+    function carveAt(localX: number, localY: number, z: number) {
+      if (localX < -toolRadius || localX > width + toolRadius) return;
+      if (localY < -toolRadius || localY > depth + toolRadius) return;
+
+      const mappedCenterX = previewMirrorX ? width - localX : localX;
+
+      const radiusCellsX = Math.ceil(toolRadius / Math.max(cellSizeX, 0.0001));
+      const radiusCellsY = Math.ceil(toolRadius / Math.max(cellSizeY, 0.0001));
+
+      const centerGX = clamp(
+        Math.round((mappedCenterX / width) * (gridX - 1)),
+        0,
+        gridX - 1,
+      );
+      const centerGY = clamp(
+        Math.round((localY / depth) * (gridY - 1)),
+        0,
+        gridY - 1,
+      );
+
+      const nextZ = Math.max(z, -thickness);
+
+      for (let oy = -radiusCellsY; oy <= radiusCellsY; oy += 1) {
+        const gy = centerGY + oy;
+        if (gy < 0 || gy >= gridY) continue;
+
+        for (let ox = -radiusCellsX; ox <= radiusCellsX; ox += 1) {
+          const gx = centerGX + ox;
+          if (gx < 0 || gx >= gridX) continue;
+
+          const sampleX = (gx / (gridX - 1)) * width;
+          const sampleY = (gy / (gridY - 1)) * depth;
+
+          const dx = sampleX - mappedCenterX;
+          const dy = sampleY - localY;
+
+          if (dx * dx + dy * dy <= toolRadius * toolRadius) {
+            const index = gy * gridX + gx;
+            if (nextZ < heights[index]) {
+              heights[index] = nextZ;
+            }
+          }
+        }
+      }
+    }
 
     for (let s = 0; s < segments.length; s += 1) {
       const seg = segments[s];
@@ -115,19 +164,7 @@ export function MaterialRemovalMesh({
         const localX = x - placement.left;
         const localY = y - placement.bottom;
 
-        if (localX < 0 || localX > width || localY < 0 || localY > depth) {
-          continue;
-        }
-
-        const mappedX = previewMirrorX ? width - localX : localX;
-        const gx = clamp(Math.round((mappedX / width) * (gridX - 1)), 0, gridX - 1);
-        const gy = clamp(Math.round((localY / depth) * (gridY - 1)), 0, gridY - 1);
-        const index = gy * gridX + gx;
-
-        const nextZ = Math.max(z, -thickness);
-        if (nextZ < heights[index]) {
-          heights[index] = nextZ;
-        }
+        carveAt(localX, localY, z);
       }
 
       if (segEnd > targetLength) {
@@ -161,6 +198,7 @@ export function MaterialRemovalMesh({
     segments,
     stepDensity,
     thickness,
+    toolDiameter,
     totalLength,
     width,
   ]);

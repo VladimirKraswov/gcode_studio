@@ -30,6 +30,7 @@ type PathSceneProps = {
   totalLength: number;
   placementMode: PlacementMode;
   detailLevel: number;
+  toolDiameter?: number;
   onCameraUpdate: (camera: CameraInfo) => void;
 };
 
@@ -47,6 +48,7 @@ export function PathScene({
   totalLength,
   placementMode,
   detailLevel,
+  toolDiameter = 3,
   onCameraUpdate,
 }: PathSceneProps) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
@@ -212,6 +214,7 @@ export function PathScene({
           totalLength={totalLength}
           placementMode={placementMode}
           detailLevel={detailLevel}
+          toolDiameter={toolDiameter}
         />
       ) : (
         <>
@@ -252,6 +255,7 @@ export function PathScene({
       <ToolHead
         position={currentState.position}
         cutting={currentState.position.z <= 0}
+        toolDiameter={toolDiameter}
         toScenePoint={toScenePoint}
       />
 

@@ -10,7 +10,13 @@ type PolylineShapeViewProps = {
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
 };
 
-export function PolylineShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: PolylineShapeViewProps) {
+export function PolylineShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: PolylineShapeViewProps) {
   const points = shape.points
     .map((point) => {
       const p = cadToScreenPoint(point, documentHeight, view);
@@ -18,16 +24,17 @@ export function PolylineShapeView({ shape, documentHeight, view, isSelected, onP
     })
     .join(" ");
 
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+
   return (
     <polyline
       points={points}
       fill="none"
       stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={isSelected ? 2 : 1.5}
+      strokeWidth={strokeWidth}
       strokeLinecap="round"
       strokeLinejoin="round"
       onPointerDown={onPointerDown}
     />
   );
 }
-

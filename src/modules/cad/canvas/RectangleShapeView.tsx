@@ -18,6 +18,7 @@ export function RectangleShapeView({
   onPointerDown,
 }: RectangleShapeViewProps) {
   const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, documentHeight, view);
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
 
   return (
     <rect
@@ -25,9 +26,10 @@ export function RectangleShapeView({
       y={p.y}
       width={shape.width * view.scale}
       height={shape.height * view.scale}
-      fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
+      fill="none"
       stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={isSelected ? 2 : 1.5}
+      strokeWidth={strokeWidth}
+      opacity={0.95}
       onPointerDown={onPointerDown}
     />
   );

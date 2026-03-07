@@ -4,6 +4,7 @@ export type SketchBase = {
   id: string;
   name: string;
   cutZ?: number | null;
+  strokeWidth?: number;
 };
 
 export type SketchRectangle = SketchBase & {
@@ -51,15 +52,39 @@ export type SketchShape =
   | SketchPolyline
   | SketchText;
 
+export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
+export type UnitsMode = "mm" | "inch";
+export type SpindleDirection = "cw" | "ccw";
+
 export type SketchDocument = {
   width: number;
   height: number;
+
+  units: UnitsMode;
+  workOffset: "G54" | "G55" | "G56" | "G57" | "G58" | "G59";
+
+  startZ: number;
   safeZ: number;
   cutZ: number;
+  passDepth: number;
+
   feedCut: number;
+  feedPlunge: number;
   feedRapid: number;
+
   spindleOn: boolean;
+  spindleSpeed: number;
+  spindleDirection: SpindleDirection;
   laserPower: number;
+  dwellMs: number;
+  coolant: boolean;
+  returnHome: boolean;
+
+  toolType: MachineToolType;
+  toolNumber: number;
+  toolDiameter: number;
+  stepover: number;
+
   snapEnabled: boolean;
   snapStep: number;
   shapes: SketchShape[];

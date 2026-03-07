@@ -10,17 +10,24 @@ type CircleShapeViewProps = {
   onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
 };
 
-export function CircleShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: CircleShapeViewProps) {
+export function CircleShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: CircleShapeViewProps) {
   const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, documentHeight, view);
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
 
   return (
     <circle
       cx={p.x}
       cy={p.y}
       r={shape.radius * view.scale}
-      fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
+      fill="none"
       stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={isSelected ? 2 : 1.5}
+      strokeWidth={strokeWidth}
       onPointerDown={onPointerDown}
     />
   );

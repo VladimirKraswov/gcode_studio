@@ -20,6 +20,8 @@ export function TextShapeView({
   polylines,
   onPointerDown,
 }: TextShapeViewProps) {
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+
   return (
     <g onPointerDown={onPointerDown}>
       {polylines.map((polyline, index) => (
@@ -33,7 +35,7 @@ export function TextShapeView({
             .join(" ")}
           fill="none"
           stroke={isSelected ? "#2563eb" : "#475569"}
-          strokeWidth={isSelected ? 2 : 1.5}
+          strokeWidth={strokeWidth}
           strokeLinecap="round"
           strokeLinejoin="round"
         />

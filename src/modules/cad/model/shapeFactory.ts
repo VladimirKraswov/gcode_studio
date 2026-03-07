@@ -23,6 +23,7 @@ export function createRectangleShape(
     width,
     height,
     cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -40,6 +41,7 @@ export function createCircleShape(
     cy,
     radius,
     cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -55,6 +57,7 @@ export function createPolylineShape(
     points,
     closed,
     cutZ: null,
+    strokeWidth: 1,
   };
 }
 
@@ -81,5 +84,6 @@ export function createTextShape(
     align: "left",
     cutMode: "outline",
     cutZ: null,
+    strokeWidth: 1,
   };
 }

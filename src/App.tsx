@@ -530,6 +530,7 @@ export default function App() {
                       totalLength={parsed.totalLength}
                       placementMode={placementMode}
                       detailLevel={detailLevel}
+                      toolDiameter={editDocument.toolDiameter}
                       onCameraUpdate={setCameraInfo}
                     />
                   </div>
