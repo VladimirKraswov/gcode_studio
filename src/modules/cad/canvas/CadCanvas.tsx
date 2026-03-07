@@ -24,6 +24,10 @@ type CadCanvasProps = {
   polylineDraft: SketchPolylinePoint[];
   textPreviewMap: Record<string, CadPoint[][]>;
   tool: SketchTool;
+  isDragging: boolean;
+  isPanning: boolean;
+  isSelectionHover: boolean;
+  onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp: () => void;
@@ -42,6 +46,10 @@ export function CadCanvas({
   polylineDraft,
   textPreviewMap,
   tool,
+  isDragging,
+  isPanning,
+  isSelectionHover,
+  onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -60,6 +68,15 @@ export function CadCanvas({
       : selection.ids,
   );
 
+  function resolveCanvasCursor() {
+    if (isPanning) return "grabbing";
+    if (tool === "text") return "text";
+    if (tool !== "select") return "crosshair";
+    if (isDragging) return "grabbing";
+    if (isSelectionHover) return "grab";
+    return "default";
+  }
+
   return (
     <svg
       ref={svgRef}
@@ -77,12 +94,7 @@ export function CadCanvas({
         height: "100%",
         touchAction: "none",
         userSelect: "none",
-        cursor:
-          tool === "text"
-            ? "text"
-            : tool === "select"
-              ? "default"
-              : "crosshair",
+        cursor: resolveCanvasCursor(),
       }}
     >
       <CadGrid document={document} view={view} />
@@ -107,6 +119,9 @@ export function CadCanvas({
         documentHeight={document.height}
         view={view}
         onPointerDown={onSelectionPointerDown}
+        isDragging={isDragging}
+        isHover={isSelectionHover}
+        onHoverChange={onSelectionHoverChange}
       />
 
       <DraftOverlay

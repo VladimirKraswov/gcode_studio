@@ -10,6 +10,9 @@ type SelectionOverlayProps = {
   documentHeight: number;
   view: ViewTransform;
   onPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
+  isDragging?: boolean;
+  isHover?: boolean;
+  onHoverChange?: (value: boolean) => void;
 };
 
 export function SelectionOverlay({
@@ -18,6 +21,9 @@ export function SelectionOverlay({
   documentHeight,
   view,
   onPointerDown,
+  isDragging = false,
+  isHover = false,
+  onHoverChange,
 }: SelectionOverlayProps) {
   if (selection.ids.length === 0) return null;
 
@@ -38,6 +44,30 @@ export function SelectionOverlay({
   const width = (bounds.maxX - bounds.minX) * view.scale + 12;
   const height = (bounds.maxY - bounds.minY) * view.scale + 12;
 
+  const palette = isDragging
+    ? {
+        stroke: "#d97706",
+        fill: "rgba(245, 158, 11, 0.12)",
+        dash: "10 6",
+        width: 2,
+        handleCursor: "grabbing" as const,
+      }
+    : isHover
+      ? {
+          stroke: "#1d4ed8",
+          fill: "rgba(37, 99, 235, 0.12)",
+          dash: "8 4",
+          width: 1.75,
+          handleCursor: "grab" as const,
+        }
+      : {
+          stroke: "#2563eb",
+          fill: "rgba(37, 99, 235, 0.06)",
+          dash: "6 4",
+          width: 1.5,
+          handleCursor: "grab" as const,
+        };
+
   return (
     <g>
       {onPointerDown && (
@@ -48,10 +78,12 @@ export function SelectionOverlay({
           height={height}
           fill="transparent"
           stroke="transparent"
-          strokeWidth={12}
+          strokeWidth={18}
           rx={10}
-          style={{ cursor: "move" }}
+          style={{ cursor: palette.handleCursor }}
           onPointerDown={onPointerDown}
+          onPointerEnter={() => onHoverChange?.(true)}
+          onPointerLeave={() => onHoverChange?.(false)}
         />
       )}
 
@@ -60,13 +92,54 @@ export function SelectionOverlay({
         y={y}
         width={width}
         height={height}
-        fill="rgba(37,99,235,0.08)"
-        stroke="#2563eb"
-        strokeWidth={1.5}
-        strokeDasharray="8 4"
+        fill={palette.fill}
+        stroke={palette.stroke}
+        strokeWidth={palette.width}
+        strokeDasharray={palette.dash}
         rx={10}
         pointerEvents="none"
       />
+
+      {!isDragging && (
+        <>
+          <circle
+            cx={x}
+            cy={y}
+            r={4}
+            fill="#ffffff"
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
+          <circle
+            cx={x + width}
+            cy={y}
+            r={4}
+            fill="#ffffff"
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
+          <circle
+            cx={x}
+            cy={y + height}
+            r={4}
+            fill="#ffffff"
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
+          <circle
+            cx={x + width}
+            cy={y + height}
+            r={4}
+            fill="#ffffff"
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
+        </>
+      )}
     </g>
   );
 }

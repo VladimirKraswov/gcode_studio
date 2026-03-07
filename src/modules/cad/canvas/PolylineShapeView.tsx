@@ -25,16 +25,29 @@ export function PolylineShapeView({
     .join(" ");
 
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+  const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
   return (
-    <polyline
-      points={points}
-      fill="none"
-      stroke={isSelected ? "#2563eb" : "#475569"}
-      strokeWidth={strokeWidth}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      onPointerDown={onPointerDown}
-    />
+    <>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pointerEvents="none"
+      />
+
+      <polyline
+        points={points}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={hitStrokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        onPointerDown={onPointerDown}
+      />
+    </>
   );
 }

@@ -1,6 +1,35 @@
 import { theme } from "../../../styles/ui";
+import type { SketchTool } from "../model/types";
 
-export function EditStatusBar({ objectCount }: { objectCount: number }) {
+type EditStatusBarProps = {
+  objectCount: number;
+  tool: SketchTool;
+  isDragging: boolean;
+  isPanning: boolean;
+};
+
+export function EditStatusBar({
+  objectCount,
+  tool,
+  isDragging,
+  isPanning,
+}: EditStatusBarProps) {
+  const interactionLabel = isDragging
+    ? "Перетаскивание объекта"
+    : isPanning
+      ? "Панорамирование"
+      : tool === "select"
+        ? "Выделение"
+        : tool === "text"
+          ? "Вставка текста"
+          : tool === "polyline"
+            ? "Рисование полилинии"
+            : tool === "rectangle"
+              ? "Рисование прямоугольника"
+              : tool === "circle"
+                ? "Рисование окружности"
+                : "Редактирование";
+
   return (
     <div
       style={{
@@ -14,8 +43,12 @@ export function EditStatusBar({ objectCount }: { objectCount: number }) {
         flexShrink: 0,
       }}
     >
-      <span>Инструменты сверху работают по подсказкам при наведении</span>
-      <span>Объектов: {objectCount}</span>
+      <span>
+        Выделение: grab/grabbing. Тонкие линии имеют расширенную область попадания.
+      </span>
+      <span>
+        {interactionLabel} · Объектов: {objectCount}
+      </span>
     </div>
   );
 }

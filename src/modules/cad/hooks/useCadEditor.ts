@@ -102,6 +102,7 @@ export function useCadEditor({
   const [isGenerating, setIsGenerating] = useState(false);
   const [dragState, setDragState] = useState<DragState>(null);
   const [panState, setPanState] = useState<PanState>(null);
+  const [isSelectionHover, setIsSelectionHover] = useState(false);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
 
@@ -119,6 +120,7 @@ export function useCadEditor({
 
   function startPan(event: React.PointerEvent<SVGElement | SVGSVGElement>) {
     event.preventDefault();
+    setIsSelectionHover(false);
 
     checkpointHistory();
 
@@ -168,6 +170,7 @@ export function useCadEditor({
       checkpointHistory();
       setDocument((prev) => addShape(prev, shape));
       onSelectionChange(selectOnly(shape.id));
+      setIsSelectionHover(false);
     },
   });
 
@@ -184,6 +187,7 @@ export function useCadEditor({
 
   function resetView() {
     onViewChange(createDefaultView());
+    setIsSelectionHover(false);
   }
 
   function addRectangle(x: number, y: number, width: number, height: number) {
@@ -199,6 +203,7 @@ export function useCadEditor({
 
     setDocument((prev) => addShape(prev, shape));
     onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
   }
 
   function addCircle(cx: number, cy: number, radius: number) {
@@ -213,6 +218,7 @@ export function useCadEditor({
 
     setDocument((prev) => addShape(prev, shape));
     onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
   }
 
   function addText(x: number, y: number) {
@@ -231,6 +237,7 @@ export function useCadEditor({
 
     setDocument((prev) => addShape(prev, shape));
     onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
   }
 
   function commitPolyline() {
@@ -248,6 +255,7 @@ export function useCadEditor({
     setDocument((prev) => addShape(prev, shape));
     onSelectionChange(selectOnly(shape.id));
     setPolylineDraft([]);
+    setIsSelectionHover(false);
   }
 
   function getCadPoint(event: React.PointerEvent<SVGElement>) {
@@ -277,16 +285,19 @@ export function useCadEditor({
 
     if (tool === "rectangle") {
       setDraft(startRectangleDraft(cad.x, cad.y));
+      setIsSelectionHover(false);
       return;
     }
 
     if (tool === "circle") {
       setDraft(startCircleDraft(cad.x, cad.y));
+      setIsSelectionHover(false);
       return;
     }
 
     if (tool === "polyline") {
       setPolylineDraft((prev) => appendPolylinePoint(prev, { x: cad.x, y: cad.y }));
+      setIsSelectionHover(false);
       return;
     }
 
@@ -297,6 +308,7 @@ export function useCadEditor({
 
     if (tool === "select") {
       onSelectionChangeSilently(clearSelection());
+      setIsSelectionHover(false);
     }
   }
 
@@ -353,6 +365,7 @@ export function useCadEditor({
     setDraft(null);
     setDragState(finishDrag());
     setPanState(null);
+    setIsSelectionHover(false);
   }
 
   function handleCanvasWheel(event: React.WheelEvent<SVGSVGElement>) {
@@ -388,6 +401,7 @@ export function useCadEditor({
 
     setDocument(nextDocument);
     onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
+    setIsSelectionHover(false);
   }
 
   function deleteShape(shapeId: string) {
@@ -400,6 +414,7 @@ export function useCadEditor({
 
     setDocument(nextDocument);
     onSelectionChange(normalizeSelectionAfterDelete(nextDocument, selection));
+    setIsSelectionHover(false);
   }
 
   function renameShape(shapeId: string, name: string) {
@@ -424,11 +439,13 @@ export function useCadEditor({
   function groupSelected() {
     checkpointHistory();
     setDocument((prev) => groupSelectedShapes(prev, selection));
+    setIsSelectionHover(false);
   }
 
   function ungroupSelected() {
     checkpointHistory();
     setDocument((prev) => ungroupSelectedShapes(prev, selection));
+    setIsSelectionHover(false);
   }
 
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
@@ -466,6 +483,7 @@ export function useCadEditor({
     }
 
     checkpointHistory();
+    setIsSelectionHover(false);
 
     setDragState(
       startDrag(
@@ -498,6 +516,7 @@ export function useCadEditor({
     const cad = normalizePoint(rawCad);
 
     checkpointHistory();
+    setIsSelectionHover(false);
 
     setDragState(
       startDrag(
@@ -519,6 +538,9 @@ export function useCadEditor({
       setIsGenerating(false);
     }
   }
+
+  const isDragging = dragState !== null;
+  const isPanning = panState !== null;
 
   return {
     svgRef,
@@ -558,5 +580,10 @@ export function useCadEditor({
     renameGroup: renameGroupById,
     toggleGroupCollapsed: toggleGroupCollapsedById,
     reorderDocumentShapes,
+
+    isDragging,
+    isPanning,
+    isSelectionHover,
+    setIsSelectionHover,
   };
 }

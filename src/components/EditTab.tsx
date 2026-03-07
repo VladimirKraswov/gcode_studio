@@ -47,7 +47,6 @@ export function EditTab({
   canRedo,
   panButtonMode,
 }: EditTabProps) {
-
   const editor = useCadEditor({
     document,
     setDocument,
@@ -146,6 +145,10 @@ export function EditTab({
                 polylineDraft={editor.polylineDraft}
                 textPreviewMap={editor.textPreviewMap}
                 tool={editor.tool}
+                isDragging={editor.isDragging}
+                isPanning={editor.isPanning}
+                isSelectionHover={editor.isSelectionHover}
+                onSelectionHoverChange={editor.setIsSelectionHover}
                 onPointerDown={editor.handleCanvasPointerDown}
                 onPointerMove={editor.handleCanvasPointerMove}
                 onPointerUp={editor.handleCanvasPointerUp}
@@ -158,7 +161,12 @@ export function EditTab({
           </div>
         </div>
 
-        <EditStatusBar objectCount={document.shapes.length} />
+        <EditStatusBar
+          objectCount={document.shapes.length}
+          tool={editor.tool}
+          isDragging={editor.isDragging}
+          isPanning={editor.isPanning}
+        />
       </div>
 
       <SvgImportModal

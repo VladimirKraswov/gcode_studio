@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T21:09:24.492Z
+generated: 2026-03-07T21:37:46.382Z
 
 
 
@@ -470,6 +470,7 @@ import {
   reorderShapes,
   toggleGroupCollapsed,
 } from "./modules/cad/model/grouping";
+import { loadSettings, saveSettings } from "./utils/settings";
 
 const UNDO_HISTORY_LIMIT = 10;
 
@@ -515,6 +516,22 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
+  const [settings, setSettings] = useState(() => loadSettings());
+
+  function updateSettings(
+    update:
+      | typeof settings
+      | ((prev: typeof settings) => typeof settings),
+  ) {
+    setSettings((prev) => {
+      const next = typeof update === "function"
+        ? (update as (prev: typeof settings) => typeof settings)(prev)
+        : update;
+
+      saveSettings(next);
+      return next;
+    });
+  }
 
   const initialCadState = useMemo<HistoryCadState>(
     () => ({
@@ -1076,6 +1093,7 @@ export default function App() {
                     onRedo={redo}
                     canUndo={canUndo}
                     canRedo={canRedo}
+                    panButtonMode={settings.cad.panButton}
                   />
                 </div>
               )}
@@ -1122,6 +1140,16 @@ export default function App() {
                   document={editDocument}
                   setDocument={setEditDocument}
                   selection={selection}
+                  panButtonMode={settings.cad.panButton}
+                  onPanButtonModeChange={(value) =>
+                    updateSettings((prev) => ({
+                      ...prev,
+                      cad: {
+                        ...prev.cad,
+                        panButton: value,
+                      },
+                    }))
+                  }
                 />
               )}
             </div>
@@ -1254,18 +1282,23 @@ import { DocumentSettingsPanel } from "../modules/cad/panels/DocumentSettingsPan
 import { ShapePropertiesPanel } from "../modules/cad/panels/ShapePropertiesPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
+import type { CadPanButtonMode } from "../utils/settings";
 import { theme, ui } from "../styles/ui";
 
 type EditRightPanelProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   selection: SelectionState;
+  panButtonMode: CadPanButtonMode;
+  onPanButtonModeChange: (value: CadPanButtonMode) => void;
 };
 
 export function EditRightPanel({
   document,
   setDocument,
   selection,
+  panButtonMode,
+  onPanButtonModeChange,
 }: EditRightPanelProps) {
   const selectedShape =
     document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
@@ -1298,6 +1331,27 @@ export function EditRightPanel({
 
       <DocumentSettingsPanel document={document} setDocument={setDocument} />
 
+      <div style={{ height: 1, background: theme.border, margin: "18px 0" }} />
+
+      <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+          Управление
+        </div>
+
+        <label style={ui.inputLabel}>
+          Кнопка панорамы
+          <select
+            value={panButtonMode}
+            onChange={(e) => onPanButtonModeChange(e.target.value as CadPanButtonMode)}
+            style={ui.select}
+          >
+            <option value="right">Правая кнопка</option>
+            <option value="middle">Средняя кнопка</option>
+            <option value="both">Правая и средняя</option>
+          </select>
+        </label>
+      </div>
+
       {selectedShape && (
         <ShapePropertiesPanel
           document={document}
@@ -1321,6 +1375,7 @@ import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
 import type { ViewTransform } from "../modules/cad/model/view";
+import type { CadPanButtonMode } from "../utils/settings";
 import { ui } from "../styles/ui";
 
 type EditTabProps = {
@@ -1339,6 +1394,7 @@ type EditTabProps = {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  panButtonMode: CadPanButtonMode;
 };
 
 export function EditTab({
@@ -1357,7 +1413,9 @@ export function EditTab({
   onRedo,
   canUndo,
   canRedo,
+  panButtonMode,
 }: EditTabProps) {
+
   const editor = useCadEditor({
     document,
     setDocument,
@@ -1370,6 +1428,7 @@ export function EditTab({
     onViewChange,
     onViewChangeSilently,
     checkpointHistory,
+    panButtonMode,
   });
 
   return (
@@ -4553,11 +4612,6 @@ createRoot(document.getElementById("root")!).render(
 
 path: /src/modules/cad/canvas/CadCanvas.tsx
 ----------------------------------------
-
-// =============================
-// FILE: src/modules/cad/canvas/CadCanvas.tsx
-// =============================
-
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
@@ -4572,7 +4626,6 @@ import type {
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
-import { isSelected } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
@@ -4612,9 +4665,12 @@ export function CadCanvas({
   onSelectionPointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
   const selectedIds = new Set(
     primary?.groupId
-      ? document.shapes.filter((shape) => shape.groupId === primary.groupId).map((shape) => shape.id)
+      ? document.shapes
+          .filter((shape) => shape.groupId === primary.groupId)
+          .map((shape) => shape.id)
       : selection.ids,
   );
 
@@ -4628,6 +4684,7 @@ export function CadCanvas({
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
       onWheel={onWheel}
+      onContextMenu={(event) => event.preventDefault()}
       style={{
         display: "block",
         width: "100%",
@@ -6090,6 +6147,7 @@ import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
 import { renameGroup, reorderShapes, toggleGroupCollapsed } from "../model/grouping";
+import type { CadPanButtonMode } from "../../../utils/settings";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -6103,6 +6161,7 @@ type UseCadEditorParams = {
   onViewChange: React.Dispatch<React.SetStateAction<ViewTransform>>;
   onViewChangeSilently: React.Dispatch<React.SetStateAction<ViewTransform>>;
   checkpointHistory: () => void;
+  panButtonMode: CadPanButtonMode;
 };
 
 type PanState = {
@@ -6125,6 +6184,7 @@ export function useCadEditor({
   onViewChange,
   onViewChangeSilently,
   checkpointHistory,
+  panButtonMode,
 }: UseCadEditorParams) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -6137,6 +6197,32 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  function isPanMouseButton(button: number): boolean {
+    if (panButtonMode === "middle") {
+      return button === 1;
+    }
+
+    if (panButtonMode === "right") {
+      return button === 2;
+    }
+
+    return button === 1 || button === 2;
+  }
+
+  function startPan(event: React.PointerEvent<SVGElement | SVGSVGElement>) {
+    event.preventDefault();
+
+    checkpointHistory();
+
+    setPanState({
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startOffsetX: view.offsetX,
+      startOffsetY: view.offsetY,
+    });
+  }
 
   function renameGroupById(groupId: string, name: string) {
     setDocument((prev) => renameGroup(prev, groupId, name));
@@ -6271,16 +6357,8 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
-    if (event.button === 1) {
-      event.preventDefault();
-      checkpointHistory();
-      setPanState({
-        pointerId: event.pointerId,
-        startClientX: event.clientX,
-        startClientY: event.clientY,
-        startOffsetX: view.offsetX,
-        startOffsetY: view.offsetY,
-      });
+    if (isPanMouseButton(event.button)) {
+      startPan(event);
       return;
     }
 
@@ -6449,7 +6527,8 @@ export function useCadEditor({
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
     event.stopPropagation();
 
-    if (event.button === 1) {
+    if (isPanMouseButton(event.button)) {
+      startPan(event);
       return;
     }
 
@@ -6493,6 +6572,11 @@ export function useCadEditor({
 
   function bindSelectionDragStart(event: React.PointerEvent<SVGRectElement>) {
     event.stopPropagation();
+
+    if (isPanMouseButton(event.button)) {
+      startPan(event);
+      return;
+    }
 
     if (tool !== "select" || event.button !== 0) {
       return;
@@ -10517,6 +10601,68 @@ export function parseProjectFile(text: string): GCodeStudioProject {
 }
 
 
+path: /src/utils/settings.ts
+----------------------------------------
+export type CadPanButtonMode = "middle" | "right" | "both";
+
+export type UserSettings = {
+  cad: {
+    panButton: CadPanButtonMode;
+  };
+};
+
+const STORAGE_KEY = "gcode-studio-settings";
+
+const DEFAULT_SETTINGS: UserSettings = {
+  cad: {
+    panButton: "right",
+  },
+};
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isPanButtonMode(value: unknown): value is CadPanButtonMode {
+  return value === "middle" || value === "right" || value === "both";
+}
+
+export function getDefaultSettings(): UserSettings {
+  return DEFAULT_SETTINGS;
+}
+
+export function loadSettings(): UserSettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_SETTINGS;
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!isObject(parsed)) {
+      return DEFAULT_SETTINGS;
+    }
+
+    const cad = isObject(parsed.cad) ? parsed.cad : {};
+    const panButton = isPanButtonMode(cad.panButton)
+      ? cad.panButton
+      : DEFAULT_SETTINGS.cad.panButton;
+
+    return {
+      cad: {
+        panButton,
+      },
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function saveSettings(settings: UserSettings): void {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+}
+
+
 path: /src/utils/sketch.ts
 ----------------------------------------
 import type {
@@ -10853,8 +10999,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 100
+included: 101
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 286338
+totalBytes(approx): 290142
