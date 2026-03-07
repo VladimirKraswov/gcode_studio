@@ -4,8 +4,10 @@ import { CadSheet } from "./CadSheet";
 import { DraftOverlay } from "./DraftOverlay";
 import { ShapeRenderer } from "./ShapeRenderer";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { CadConstraintOverlay } from "./CadConstraintOverlay";
 import type { DraftShape } from "../geometry/draftGeometry";
 import type {
+  ConstraintEdge,
   SketchDocument,
   SketchPolylinePoint,
   SketchTool,
@@ -16,6 +18,24 @@ import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
+
+type ConstraintDraftTarget =
+  | {
+      kind: "sheet";
+      edge: ConstraintEdge;
+    }
+  | {
+      kind: "shape";
+      shapeId: string;
+      edge: ConstraintEdge;
+    };
+
+type ConstraintDraftState = {
+  shapeId: string;
+  edge: ConstraintEdge;
+  pointer: { x: number; y: number };
+  hoverTarget: ConstraintDraftTarget | null;
+} | null;
 
 type CadCanvasProps = {
   svgRef: React.RefObject<SVGSVGElement | null>;
@@ -30,11 +50,12 @@ type CadCanvasProps = {
   isPanning: boolean;
   isSelectionHover: boolean;
   isTransforming: boolean;
+  constraintDraft: ConstraintDraftState;
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
-  onPointerUp: () => void;
-  onPointerLeave: () => void;
+  onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerLeave: (event: React.PointerEvent<SVGSVGElement>) => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
   onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
@@ -43,6 +64,14 @@ type CadCanvasProps = {
     handle: ScaleHandle,
   ) => void;
   onRotateHandlePointerDown?: (event: React.PointerEvent<SVGCircleElement>) => void;
+  onConstraintEdgeHandlePointerDown?: (
+    event: React.PointerEvent<SVGCircleElement>,
+    edge: ConstraintEdge,
+  ) => void;
+  onConstraintLabelPointerDown?: (
+    event: React.PointerEvent<SVGRectElement>,
+    constraintId: string,
+  ) => void;
 };
 
 export function CadCanvas({
@@ -58,6 +87,7 @@ export function CadCanvas({
   isPanning,
   isSelectionHover,
   isTransforming,
+  constraintDraft,
   onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
@@ -68,6 +98,8 @@ export function CadCanvas({
   onSelectionPointerDown,
   onScaleHandlePointerDown,
   onRotateHandlePointerDown,
+  onConstraintEdgeHandlePointerDown,
+  onConstraintLabelPointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
@@ -85,6 +117,7 @@ export function CadCanvas({
     if (tool !== "select") return "crosshair";
     if (isDragging || isTransforming) return "grabbing";
     if (isSelectionHover) return "grab";
+    if (constraintDraft) return "crosshair";
     return "default";
   }
 
@@ -136,6 +169,18 @@ export function CadCanvas({
         isHover={isSelectionHover}
         onHoverChange={onSelectionHoverChange}
       />
+
+      {tool === "select" && selection.primaryId && onConstraintEdgeHandlePointerDown && onConstraintLabelPointerDown && (
+        <CadConstraintOverlay
+          document={document}
+          selection={selection}
+          documentHeight={document.height}
+          view={view}
+          constraintDraft={constraintDraft}
+          onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
+          onConstraintLabelPointerDown={onConstraintLabelPointerDown}
+        />
+      )}
 
       <DraftOverlay
         draft={draft}

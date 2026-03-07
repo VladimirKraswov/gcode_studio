@@ -1,5 +1,3 @@
-
-
 // =============================
 // FILE: src/modules/cad/model/document.ts
 // =============================
@@ -48,6 +46,7 @@ export function createEmptySketchDocument(): SketchDocument {
     snapStep: 5,
     shapes: [],
     groups: [],
+    constraints: [],
   };
 }
 
@@ -59,6 +58,11 @@ export function removeShape(document: SketchDocument, shapeId: string): SketchDo
   return {
     ...document,
     shapes: document.shapes.filter((shape) => shape.id !== shapeId),
+    constraints: document.constraints.filter(
+      (constraint) =>
+        constraint.shapeId !== shapeId &&
+        !(constraint.target.kind === "shape" && constraint.target.shapeId === shapeId),
+    ),
   };
 }
 

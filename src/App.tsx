@@ -25,7 +25,7 @@ import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
 import type { SketchDocument } from "./modules/cad/model/types";
 import type { SelectionState } from "./modules/cad/model/selection";
-import { createSelection, selectOnly } from "./modules/cad/model/selection";
+import { createSelection } from "./modules/cad/model/selection";
 import { createEmptySketchDocument } from "./modules/cad/model/document";
 import { theme, ui } from "./styles/ui";
 import { downloadTextFile } from "./utils";
@@ -42,6 +42,7 @@ import {
   toggleGroupCollapsed,
 } from "./modules/cad/model/grouping";
 import { loadSettings, saveSettings } from "./utils/settings";
+import { applyDistanceConstraints } from "./modules/cad/model/constraints";
 
 const UNDO_HISTORY_LIMIT = 10;
 
@@ -76,6 +77,10 @@ const TAB_META: Record<
     icon: <FiTool size={18} />,
   },
 };
+
+function withAppliedConstraints(document: SketchDocument): SketchDocument {
+  return applyDistanceConstraints(document).document;
+}
 
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
@@ -137,10 +142,21 @@ export default function App() {
     options?: { record?: boolean },
   ) {
     setCadHistoryState(
-      (prev) => ({
-        ...prev,
-        [key]: resolveUpdate(update, prev[key]),
-      }),
+      (prev) => {
+        const nextValue = resolveUpdate(update, prev[key]);
+
+        if (key === "editDocument") {
+          return {
+            ...prev,
+            editDocument: withAppliedConstraints(nextValue as SketchDocument),
+          };
+        }
+
+        return {
+          ...prev,
+          [key]: nextValue,
+        };
+      },
       options,
     );
   }
@@ -250,7 +266,7 @@ export default function App() {
       setActiveTab(project.activeTab);
 
       setCadHistoryState({
-        editDocument: project.editDocument,
+        editDocument: withAppliedConstraints(project.editDocument),
         selection: project.selection,
         cadView: project.cadView,
       });
@@ -316,6 +332,11 @@ export default function App() {
     const nextDocument = {
       ...editDocument,
       shapes: editDocument.shapes.filter((shape) => shape.id !== shapeId),
+      constraints: editDocument.constraints.filter(
+        (constraint) =>
+          constraint.shapeId !== shapeId &&
+          !(constraint.target.kind === "shape" && constraint.target.shapeId === shapeId),
+      ),
     };
 
     setEditDocument(nextDocument);

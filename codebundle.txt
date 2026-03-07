@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T21:57:57.706Z
+generated: 2026-03-07T22:24:26.409Z
 
 
 
@@ -454,7 +454,7 @@ import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
 import type { SketchDocument } from "./modules/cad/model/types";
 import type { SelectionState } from "./modules/cad/model/selection";
-import { createSelection, selectOnly } from "./modules/cad/model/selection";
+import { createSelection } from "./modules/cad/model/selection";
 import { createEmptySketchDocument } from "./modules/cad/model/document";
 import { theme, ui } from "./styles/ui";
 import { downloadTextFile } from "./utils";
@@ -471,6 +471,7 @@ import {
   toggleGroupCollapsed,
 } from "./modules/cad/model/grouping";
 import { loadSettings, saveSettings } from "./utils/settings";
+import { applyDistanceConstraints } from "./modules/cad/model/constraints";
 
 const UNDO_HISTORY_LIMIT = 10;
 
@@ -505,6 +506,10 @@ const TAB_META: Record<
     icon: <FiTool size={18} />,
   },
 };
+
+function withAppliedConstraints(document: SketchDocument): SketchDocument {
+  return applyDistanceConstraints(document).document;
+}
 
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
@@ -566,10 +571,21 @@ export default function App() {
     options?: { record?: boolean },
   ) {
     setCadHistoryState(
-      (prev) => ({
-        ...prev,
-        [key]: resolveUpdate(update, prev[key]),
-      }),
+      (prev) => {
+        const nextValue = resolveUpdate(update, prev[key]);
+
+        if (key === "editDocument") {
+          return {
+            ...prev,
+            editDocument: withAppliedConstraints(nextValue as SketchDocument),
+          };
+        }
+
+        return {
+          ...prev,
+          [key]: nextValue,
+        };
+      },
       options,
     );
   }
@@ -679,7 +695,7 @@ export default function App() {
       setActiveTab(project.activeTab);
 
       setCadHistoryState({
-        editDocument: project.editDocument,
+        editDocument: withAppliedConstraints(project.editDocument),
         selection: project.selection,
         cadView: project.cadView,
       });
@@ -745,6 +761,11 @@ export default function App() {
     const nextDocument = {
       ...editDocument,
       shapes: editDocument.shapes.filter((shape) => shape.id !== shapeId),
+      constraints: editDocument.constraints.filter(
+        (constraint) =>
+          constraint.shapeId !== shapeId &&
+          !(constraint.target.kind === "shape" && constraint.target.shapeId === shapeId),
+      ),
     };
 
     setEditDocument(nextDocument);
@@ -7462,10 +7483,346 @@ export function useTextPreviewMap(shapes: SketchShape[]) {
 }
 
 
+path: /src/modules/cad/model/constraints.ts
+----------------------------------------
+import { moveShape } from "./shapeTransforms";
+import { shapeBounds } from "./shapeBounds";
+import { createId } from "./ids";
+import type {
+  ConstraintEdge,
+  SketchDistanceConstraint,
+  SketchDocument,
+  SketchShape,
+} from "./types";
+
+export type ConstraintIssue = {
+  constraintId: string;
+  message: string;
+};
+
+type Axis = "x" | "y";
+
+const EPS = 0.001;
+const MAX_PASSES = 6;
+
+function isHorizontalEdge(edge: ConstraintEdge): boolean {
+  return edge === "left" || edge === "right";
+}
+
+function edgeAxis(edge: ConstraintEdge): Axis {
+  return isHorizontalEdge(edge) ? "x" : "y";
+}
+
+function areCompatibleEdges(a: ConstraintEdge, b: ConstraintEdge): boolean {
+  return edgeAxis(a) === edgeAxis(b);
+}
+
+function edgeLabel(edge: ConstraintEdge): string {
+  switch (edge) {
+    case "left":
+      return "левого";
+    case "right":
+      return "правого";
+    case "top":
+      return "верхнего";
+    case "bottom":
+      return "нижнего";
+  }
+}
+
+function targetLabel(constraint: SketchDistanceConstraint): string {
+  return constraint.target.kind === "sheet" ? "границы листа" : "другого объекта";
+}
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function getTargetBounds(
+  document: SketchDocument,
+  constraint: SketchDistanceConstraint,
+) {
+  if (constraint.target.kind === "sheet") {
+    return {
+      minX: 0,
+      minY: 0,
+      maxX: document.width,
+      maxY: document.height,
+    };
+  }
+
+  const targetShape = document.shapes.find(
+    (shape) => shape.id === (constraint.target as { shapeId: string }).shapeId,
+  );
+
+  if (!targetShape) {
+    return null;
+  }
+
+  return shapeBounds(targetShape);
+}
+
+function getEdgeValue(
+  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  edge: ConstraintEdge,
+): number {
+  switch (edge) {
+    case "left":
+      return bounds.minX;
+    case "right":
+      return bounds.maxX;
+    case "bottom":
+      return bounds.minY;
+    case "top":
+      return bounds.maxY;
+  }
+}
+
+function computeDesiredMin(
+  shape: SketchShape,
+  targetBounds: { minX: number; minY: number; maxX: number; maxY: number },
+  constraint: SketchDistanceConstraint,
+): { axis: Axis; desiredMin: number } {
+  const bounds = shapeBounds(shape);
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  const targetValue = getEdgeValue(targetBounds, constraint.targetEdge);
+
+  switch (constraint.edge) {
+    case "left":
+      return {
+        axis: "x",
+        desiredMin: round(targetValue + constraint.distance),
+      };
+
+    case "right":
+      return {
+        axis: "x",
+        desiredMin: round(targetValue - constraint.distance - width),
+      };
+
+    case "bottom":
+      return {
+        axis: "y",
+        desiredMin: round(targetValue + constraint.distance),
+      };
+
+    case "top":
+      return {
+        axis: "y",
+        desiredMin: round(targetValue - constraint.distance - height),
+      };
+  }
+}
+
+function buildIssue(
+  constraint: SketchDistanceConstraint,
+  message: string,
+): ConstraintIssue {
+  return {
+    constraintId: constraint.id,
+    message,
+  };
+}
+
+function uniqueIssues(issues: ConstraintIssue[]): ConstraintIssue[] {
+  const seen = new Set<string>();
+  const result: ConstraintIssue[] = [];
+
+  for (const issue of issues) {
+    const key = `${issue.constraintId}::${issue.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(issue);
+  }
+
+  return result;
+}
+
+export function createDistanceConstraint(
+  input: Omit<SketchDistanceConstraint, "id">,
+): SketchDistanceConstraint {
+  return {
+    id: createId("constraint"),
+    ...input,
+  };
+}
+
+export function removeConstraint(
+  document: SketchDocument,
+  constraintId: string,
+): SketchDocument {
+  return {
+    ...document,
+    constraints: document.constraints.filter(
+      (constraint) => constraint.id !== constraintId,
+    ),
+  };
+}
+
+export function updateConstraint(
+  document: SketchDocument,
+  constraintId: string,
+  patch: Partial<SketchDistanceConstraint>,
+): SketchDocument {
+  return {
+    ...document,
+    constraints: document.constraints.map((constraint) =>
+      constraint.id === constraintId ? { ...constraint, ...patch } : constraint,
+    ),
+  };
+}
+
+export function addConstraint(
+  document: SketchDocument,
+  constraint: Omit<SketchDistanceConstraint, "id">,
+): SketchDocument {
+  return {
+    ...document,
+    constraints: [...document.constraints, createDistanceConstraint(constraint)],
+  };
+}
+
+export function applyDistanceConstraints(document: SketchDocument): {
+  document: SketchDocument;
+  issues: ConstraintIssue[];
+} {
+  const issues: ConstraintIssue[] = [];
+  let nextDocument: SketchDocument = {
+    ...document,
+    shapes: [...document.shapes],
+  };
+
+  for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+    let changed = false;
+    const lockedByAxis = new Map<string, number>();
+
+    for (const constraint of nextDocument.constraints) {
+      if (!constraint.enabled) {
+        continue;
+      }
+
+      const shape = nextDocument.shapes.find((item) => item.id === constraint.shapeId);
+      if (!shape) {
+        issues.push(
+          buildIssue(
+            constraint,
+            "Ограничение не может быть применено: исходный объект не найден.",
+          ),
+        );
+        continue;
+      }
+
+      if (
+        constraint.target.kind === "shape" &&
+        constraint.target.shapeId === constraint.shapeId
+      ) {
+        issues.push(
+          buildIssue(
+            constraint,
+            "Ограничение не может быть применено: нельзя привязать объект к самому себе.",
+          ),
+        );
+        continue;
+      }
+
+      if (!areCompatibleEdges(constraint.edge, constraint.targetEdge)) {
+        issues.push(
+          buildIssue(
+            constraint,
+            `Ограничение не может быть применено: расстояние от ${edgeLabel(
+              constraint.edge,
+            )} ребра до ${edgeLabel(
+              constraint.targetEdge,
+            )} ребра ${targetLabel(constraint)} задано по другой оси.`,
+          ),
+        );
+        continue;
+      }
+
+      const targetBounds = getTargetBounds(nextDocument, constraint);
+      if (!targetBounds) {
+        issues.push(
+          buildIssue(
+            constraint,
+            "Ограничение не может быть применено: целевой объект не найден.",
+          ),
+        );
+        continue;
+      }
+
+      const { axis, desiredMin } = computeDesiredMin(shape, targetBounds, constraint);
+      const lockKey = `${shape.id}:${axis}`;
+      const existingLock = lockedByAxis.get(lockKey);
+
+      if (
+        existingLock !== undefined &&
+        Math.abs(existingLock - desiredMin) > EPS
+      ) {
+        issues.push(
+          buildIssue(
+            constraint,
+            "Такое расстояние не может быть установлено, потому что оно противоречит другому ограничению по той же оси.",
+          ),
+        );
+        continue;
+      }
+
+      lockedByAxis.set(lockKey, desiredMin);
+
+      const bounds = shapeBounds(shape);
+      const currentMin = axis === "x" ? bounds.minX : bounds.minY;
+      const delta = desiredMin - currentMin;
+
+      if (Math.abs(delta) <= EPS) {
+        continue;
+      }
+
+      nextDocument = {
+        ...nextDocument,
+        shapes: nextDocument.shapes.map((item) =>
+          item.id === shape.id
+            ? moveShape(item, axis === "x" ? delta : 0, axis === "y" ? delta : 0)
+            : item,
+        ),
+      };
+
+      changed = true;
+    }
+
+    if (!changed) {
+      break;
+    }
+  }
+
+  return {
+    document: nextDocument,
+    issues: uniqueIssues(issues),
+  };
+}
+
+export function getConstraintIssues(
+  document: SketchDocument,
+  shapeId?: string,
+): ConstraintIssue[] {
+  const { issues } = applyDistanceConstraints(document);
+
+  if (!shapeId) {
+    return issues;
+  }
+
+  const ownConstraintIds = new Set(
+    document.constraints
+      .filter((constraint) => constraint.shapeId === shapeId)
+      .map((constraint) => constraint.id),
+  );
+
+  return issues.filter((issue) => ownConstraintIds.has(issue.constraintId));
+}
+
+
 path: /src/modules/cad/model/document.ts
 ----------------------------------------
-
-
 // =============================
 // FILE: src/modules/cad/model/document.ts
 // =============================
@@ -7514,6 +7871,7 @@ export function createEmptySketchDocument(): SketchDocument {
     snapStep: 5,
     shapes: [],
     groups: [],
+    constraints: [],
   };
 }
 
@@ -7525,6 +7883,11 @@ export function removeShape(document: SketchDocument, shapeId: string): SketchDo
   return {
     ...document,
     shapes: document.shapes.filter((shape) => shape.id !== shapeId),
+    constraints: document.constraints.filter(
+      (constraint) =>
+        constraint.shapeId !== shapeId &&
+        !(constraint.target.kind === "shape" && constraint.target.shapeId === shapeId),
+    ),
   };
 }
 
@@ -7763,135 +8126,175 @@ export function setPrimary(selection: SelectionState, id: string | null): Select
 
 path: /src/modules/cad/model/shapeBounds.ts
 ----------------------------------------
-import type {
-  SketchCircle,
-  SketchPolyline,
-  SketchPolylinePoint,
-  SketchRectangle,
-  SketchSvg,
-  SketchText,
-} from "./types";
-import { createId } from "./ids";
+// path: /src/modules/cad/model/shapeBounds.ts
+import type { SketchDocument, SketchShape } from "./types";
 
-const baseShapeFields = {
-  visible: true,
-  groupId: null,
-} as const;
+export type Bounds2D = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
 
-export function createRectangleShape(
-  name: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): SketchRectangle {
+function rotatePoint(
+  point: { x: number; y: number },
+  origin: { x: number; y: number },
+  angleDeg: number,
+) {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = point.x - origin.x;
+  const dy = point.y - origin.y;
+
   return {
-    id: createId("rect"),
-    type: "rectangle",
-    name,
-    x,
-    y,
-    width,
-    height,
-    rotation: 0,
-    cutZ: null,
-    strokeWidth: 1,
-    ...baseShapeFields,
+    x: origin.x + dx * cos - dy * sin,
+    y: origin.y + dx * sin + dy * cos,
   };
 }
 
-export function createCircleShape(
-  name: string,
-  cx: number,
-  cy: number,
-  radius: number,
-): SketchCircle {
+function boundsFromPoints(points: Array<{ x: number; y: number }>): Bounds2D {
   return {
-    id: createId("circle"),
-    type: "circle",
-    name,
-    cx,
-    cy,
-    radius,
-    cutZ: null,
-    strokeWidth: 1,
-    ...baseShapeFields,
+    minX: Math.min(...points.map((p) => p.x)),
+    minY: Math.min(...points.map((p) => p.y)),
+    maxX: Math.max(...points.map((p) => p.x)),
+    maxY: Math.max(...points.map((p) => p.y)),
   };
 }
 
-export function createPolylineShape(
-  name: string,
-  points: SketchPolylinePoint[],
-  closed = false,
-): SketchPolyline {
+export function shapeBounds(shape: SketchShape): Bounds2D {
+  switch (shape.type) {
+    case "rectangle": {
+      const rotation = shape.rotation ?? 0;
+
+      if (!rotation) {
+        return {
+          minX: shape.x,
+          minY: shape.y,
+          maxX: shape.x + shape.width,
+          maxY: shape.y + shape.height,
+        };
+      }
+
+      const cx = shape.x + shape.width / 2;
+      const cy = shape.y + shape.height / 2;
+
+      const points = [
+        { x: shape.x, y: shape.y },
+        { x: shape.x + shape.width, y: shape.y },
+        { x: shape.x + shape.width, y: shape.y + shape.height },
+        { x: shape.x, y: shape.y + shape.height },
+      ].map((point) => rotatePoint(point, { x: cx, y: cy }, rotation));
+
+      return boundsFromPoints(points);
+    }
+
+    case "circle":
+      return {
+        minX: shape.cx - shape.radius,
+        minY: shape.cy - shape.radius,
+        maxX: shape.cx + shape.radius,
+        maxY: shape.cy + shape.radius,
+      };
+
+    case "polyline": {
+      const xs = shape.points.map((p) => p.x);
+      const ys = shape.points.map((p) => p.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+
+    case "text": {
+      const widthApprox =
+        Math.max(1, shape.text.length) * (shape.height * 0.62 + shape.letterSpacing);
+
+      const baseBounds = {
+        minX:
+          shape.align === "center"
+            ? shape.x - widthApprox / 2
+            : shape.align === "right"
+              ? shape.x - widthApprox
+              : shape.x,
+        minY: shape.y - shape.height * 0.25,
+        maxX:
+          shape.align === "center"
+            ? shape.x + widthApprox / 2
+            : shape.align === "right"
+              ? shape.x
+              : shape.x + widthApprox,
+        maxY: shape.y + shape.height,
+      };
+
+      const rotation = shape.rotation ?? 0;
+      if (!rotation) {
+        return baseBounds;
+      }
+
+      const corners = [
+        { x: baseBounds.minX, y: baseBounds.minY },
+        { x: baseBounds.maxX, y: baseBounds.minY },
+        { x: baseBounds.maxX, y: baseBounds.maxY },
+        { x: baseBounds.minX, y: baseBounds.maxY },
+      ].map((point) => rotatePoint(point, { x: shape.x, y: shape.y }, rotation));
+
+      return boundsFromPoints(corners);
+    }
+
+    case "svg": {
+      const rotation = shape.rotation ?? 0;
+
+      if (!rotation) {
+        return {
+          minX: shape.x,
+          minY: shape.y,
+          maxX: shape.x + shape.width,
+          maxY: shape.y + shape.height,
+        };
+      }
+
+      const cx = shape.x + shape.width / 2;
+      const cy = shape.y + shape.height / 2;
+
+      const corners = [
+        { x: shape.x, y: shape.y },
+        { x: shape.x + shape.width, y: shape.y },
+        { x: shape.x + shape.width, y: shape.y + shape.height },
+        { x: shape.x, y: shape.y + shape.height },
+      ].map((point) => rotatePoint(point, { x: cx, y: cy }, rotation));
+
+      return boundsFromPoints(corners);
+    }
+  }
+}
+
+export function documentBounds(document: SketchDocument): Bounds2D {
+  if (document.shapes.length === 0) {
+    return { minX: 0, minY: 0, maxX: document.width, maxY: document.height };
+  }
+
+  return selectionBounds(document.shapes);
+}
+
+export function selectionBounds(shapes: SketchShape[]): Bounds2D {
+  if (shapes.length === 0) {
+    return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  }
+
+  const bounds = shapes.map(shapeBounds);
   return {
-    id: createId("poly"),
-    type: "polyline",
-    name,
-    points,
-    closed,
-    cutZ: null,
-    strokeWidth: 1,
-    ...baseShapeFields,
+    minX: Math.min(...bounds.map((b) => b.minX)),
+    minY: Math.min(...bounds.map((b) => b.minY)),
+    maxX: Math.max(...bounds.map((b) => b.maxX)),
+    maxY: Math.max(...bounds.map((b) => b.maxY)),
   };
 }
 
-export function createTextShape(
-  name: string,
-  x: number,
-  y: number,
-  text: string,
-  height: number,
-  letterSpacing: number,
-  fontFile: string,
-): SketchText {
-  return {
-    id: createId("text"),
-    type: "text",
-    name,
-    x,
-    y,
-    text,
-    height,
-    letterSpacing,
-    fontFile,
-    rotation: 0,
-    align: "left",
-    cutMode: "outline",
-    cutZ: null,
-    strokeWidth: 1,
-    ...baseShapeFields,
-  };
-}
-
-export function createSvgShape(params: {
-  name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  sourceWidth: number;
-  sourceHeight: number;
-  preserveAspectRatio: boolean;
-  contours: SketchPolylinePoint[][];
-}): SketchSvg {
-  return {
-    id: createId("svg"),
-    type: "svg",
-    name: params.name,
-    x: params.x,
-    y: params.y,
-    width: params.width,
-    height: params.height,
-    sourceWidth: params.sourceWidth,
-    sourceHeight: params.sourceHeight,
-    preserveAspectRatio: params.preserveAspectRatio,
-    contours: params.contours,
-    rotation: 0,
-    cutZ: null,
-    strokeWidth: 1,
-    ...baseShapeFields,
-  };
+export function groupBounds(document: SketchDocument, groupId: string): Bounds2D {
+  return selectionBounds(document.shapes.filter((shape) => shape.groupId === groupId));
 }
 
 
@@ -8286,6 +8689,28 @@ export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
 export type UnitsMode = "mm" | "inch";
 export type SpindleDirection = "cw" | "ccw";
 
+export type ConstraintEdge = "left" | "right" | "top" | "bottom";
+
+export type SketchDistanceConstraintTarget =
+  | {
+      kind: "sheet";
+    }
+  | {
+      kind: "shape";
+      shapeId: string;
+    };
+
+export type SketchDistanceConstraint = {
+  id: string;
+  name?: string;
+  enabled: boolean;
+  shapeId: string;
+  edge: ConstraintEdge;
+  target: SketchDistanceConstraintTarget;
+  targetEdge: ConstraintEdge;
+  distance: number;
+};
+
 export type SketchDocument = {
   width: number;
   height: number;
@@ -8319,6 +8744,7 @@ export type SketchDocument = {
   snapStep: number;
   shapes: SketchShape[];
   groups: SketchGroup[];
+  constraints: SketchDistanceConstraint[];
 };
 
 export type SketchTool =
@@ -9514,12 +9940,24 @@ const iconButtonStyle: React.CSSProperties = {
 path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
 ----------------------------------------
 // path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
+import { useEffect, useMemo, useState } from "react";
 import { FiBox, FiCircle, FiEdit3, FiImage, FiMove, FiType } from "react-icons/fi";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
-import type { SketchDocument, SketchShape } from "../model/types";
+import type {
+  ConstraintEdge,
+  SketchDistanceConstraintTarget,
+  SketchDocument,
+  SketchShape,
+} from "../model/types";
 import { updateShape } from "../model/document";
 import { DEFAULT_FONT_OPTIONS } from "../editor-state/textToolState";
+import {
+  addConstraint,
+  getConstraintIssues,
+  removeConstraint,
+  updateConstraint,
+} from "../model/constraints";
 
 type ShapePropertiesPanelProps = {
   document: SketchDocument;
@@ -9527,7 +9965,13 @@ type ShapePropertiesPanelProps = {
   selectedShape: SketchShape;
 };
 
-function CardBlock({ children }: { children: React.ReactNode }) {
+function CardBlock({
+  children,
+  title,
+}: {
+  children: React.ReactNode;
+  title?: string;
+}) {
   return (
     <div
       style={{
@@ -9538,6 +9982,18 @@ function CardBlock({ children }: { children: React.ReactNode }) {
         minWidth: 0,
       }}
     >
+      {title && (
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 800,
+            color: theme.text,
+            marginBottom: 10,
+          }}
+        >
+          {title}
+        </div>
+      )}
       {children}
     </div>
   );
@@ -9581,14 +10037,85 @@ function getShapeIcon(type: SketchShape["type"]) {
   }
 }
 
+function edgeTitle(edge: ConstraintEdge): string {
+  switch (edge) {
+    case "left":
+      return "Левый";
+    case "right":
+      return "Правый";
+    case "top":
+      return "Верхний";
+    case "bottom":
+      return "Нижний";
+  }
+}
+
 export function ShapePropertiesPanel({
   document,
   setDocument,
   selectedShape,
 }: ShapePropertiesPanelProps) {
+  const otherShapes = useMemo(
+    () => document.shapes.filter((shape) => shape.id !== selectedShape.id),
+    [document.shapes, selectedShape.id],
+  );
+
+  const [newConstraintEdge, setNewConstraintEdge] = useState<ConstraintEdge>("left");
+  const [newTargetKind, setNewTargetKind] = useState<SketchDistanceConstraintTarget["kind"]>(
+    otherShapes.length > 0 ? "shape" : "sheet",
+  );
+  const [newTargetShapeId, setNewTargetShapeId] = useState<string>(
+    otherShapes[0]?.id ?? "",
+  );
+  const [newTargetEdge, setNewTargetEdge] = useState<ConstraintEdge>("left");
+  const [newDistance, setNewDistance] = useState<number>(0);
+
+  useEffect(() => {
+    setNewTargetKind(otherShapes.length > 0 ? "shape" : "sheet");
+    setNewTargetShapeId(otherShapes[0]?.id ?? "");
+  }, [selectedShape.id, otherShapes]);
+
+  const selectedConstraints = useMemo(
+    () =>
+      document.constraints.filter(
+        (constraint) => constraint.shapeId === selectedShape.id,
+      ),
+    [document.constraints, selectedShape.id],
+  );
+
+  const constraintIssues = useMemo(
+    () => getConstraintIssues(document, selectedShape.id),
+    [document, selectedShape.id],
+  );
+
   function updateSelected(patch: Record<string, number | string | boolean | null>) {
     setDocument((prev) =>
       updateShape(prev, selectedShape.id, patch as Partial<SketchShape>),
+    );
+  }
+
+  function handleAddConstraint() {
+    const target =
+      newTargetKind === "sheet"
+        ? ({ kind: "sheet" } as const)
+        : ({
+            kind: "shape",
+            shapeId: newTargetShapeId,
+          } as const);
+
+    if (newTargetKind === "shape" && !newTargetShapeId) {
+      return;
+    }
+
+    setDocument((prev) =>
+      addConstraint(prev, {
+        enabled: true,
+        shapeId: selectedShape.id,
+        edge: newConstraintEdge,
+        target,
+        targetEdge: newTargetEdge,
+        distance: Number.isFinite(newDistance) ? newDistance : 0,
+      }),
     );
   }
 
@@ -9655,19 +10182,65 @@ export function ShapePropertiesPanel({
             <div style={twoColumnGrid}>
               <label style={fieldLabel}>
                 X
-                <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.x}
+                  onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
+                />
               </label>
+
               <label style={fieldLabel}>
                 Y
-                <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.y}
+                  onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
+                />
               </label>
+
               <label style={fieldLabel}>
                 Width
-                <input style={ui.input} type="number" value={selectedShape.width} onChange={(e) => updateSelected({ width: clamp(Number(e.target.value) || 1, 1, 100000) })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.width}
+                  onChange={(e) =>
+                    updateSelected({
+                      width: clamp(Number(e.target.value) || 1, 1, 100000),
+                    })
+                  }
+                />
               </label>
+
               <label style={fieldLabel}>
                 Height
-                <input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 1, 1, 100000) })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.height}
+                  onChange={(e) =>
+                    updateSelected({
+                      height: clamp(Number(e.target.value) || 1, 1, 100000),
+                    })
+                  }
+                />
+              </label>
+
+              <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>
+                Угол поворота
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.1"
+                  value={selectedShape.rotation ?? 0}
+                  onChange={(e) =>
+                    updateSelected({
+                      rotation: Number(e.target.value) || 0,
+                    })
+                  }
+                />
               </label>
             </div>
           </CardBlock>
@@ -9678,15 +10251,36 @@ export function ShapePropertiesPanel({
             <div style={twoColumnGrid}>
               <label style={fieldLabel}>
                 CX
-                <input style={ui.input} type="number" value={selectedShape.cx} onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.cx}
+                  onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
+                />
               </label>
+
               <label style={fieldLabel}>
                 CY
-                <input style={ui.input} type="number" value={selectedShape.cy} onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.cy}
+                  onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
+                />
               </label>
+
               <label style={fieldLabel}>
                 Radius
-                <input style={ui.input} type="number" value={selectedShape.radius} onChange={(e) => updateSelected({ radius: clamp(Number(e.target.value) || 1, 1, 100000) })} />
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.radius}
+                  onChange={(e) =>
+                    updateSelected({
+                      radius: clamp(Number(e.target.value) || 1, 1, 100000),
+                    })
+                  }
+                />
               </label>
             </div>
           </CardBlock>
@@ -9709,19 +10303,69 @@ export function ShapePropertiesPanel({
               <div style={twoColumnGrid}>
                 <label style={fieldLabel}>
                   X
-                  <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    value={selectedShape.x}
+                    onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
+                  />
                 </label>
+
                 <label style={fieldLabel}>
                   Y
-                  <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    value={selectedShape.y}
+                    onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
+                  />
                 </label>
+
                 <label style={fieldLabel}>
                   Width
-                  <input style={ui.input} type="number" min="0.001" step="0.001" value={selectedShape.width} onChange={(e) => updateSelected({ width: Math.max(0.001, Number(e.target.value) || 0.001) })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={selectedShape.width}
+                    onChange={(e) =>
+                      updateSelected({
+                        width: Math.max(0.001, Number(e.target.value) || 0.001),
+                      })
+                    }
+                  />
                 </label>
+
                 <label style={fieldLabel}>
                   Height
-                  <input style={ui.input} type="number" min="0.001" step="0.001" value={selectedShape.height} onChange={(e) => updateSelected({ height: Math.max(0.001, Number(e.target.value) || 0.001) })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    value={selectedShape.height}
+                    onChange={(e) =>
+                      updateSelected({
+                        height: Math.max(0.001, Number(e.target.value) || 0.001),
+                      })
+                    }
+                  />
+                </label>
+
+                <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>
+                  Угол поворота
+                  <input
+                    style={ui.input}
+                    type="number"
+                    step="0.1"
+                    value={selectedShape.rotation ?? 0}
+                    onChange={(e) =>
+                      updateSelected({
+                        rotation: Number(e.target.value) || 0,
+                      })
+                    }
+                  />
                 </label>
               </div>
             </CardBlock>
@@ -9755,19 +10399,51 @@ export function ShapePropertiesPanel({
               <div style={twoColumnGrid}>
                 <label style={fieldLabel}>
                   X
-                  <input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    value={selectedShape.x}
+                    onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
+                  />
                 </label>
+
                 <label style={fieldLabel}>
                   Y
-                  <input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    value={selectedShape.y}
+                    onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
+                  />
                 </label>
+
                 <label style={fieldLabel}>
                   Height
-                  <input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 2, 2, 100000) })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    value={selectedShape.height}
+                    onChange={(e) =>
+                      updateSelected({
+                        height: clamp(Number(e.target.value) || 2, 2, 100000),
+                      })
+                    }
+                  />
                 </label>
+
                 <label style={fieldLabel}>
                   Letter spacing
-                  <input style={ui.input} type="number" step="0.5" value={selectedShape.letterSpacing} onChange={(e) => updateSelected({ letterSpacing: Math.max(0, Number(e.target.value) || 0) })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    step="0.5"
+                    value={selectedShape.letterSpacing}
+                    onChange={(e) =>
+                      updateSelected({
+                        letterSpacing: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                  />
                 </label>
               </div>
             </CardBlock>
@@ -9776,7 +10452,11 @@ export function ShapePropertiesPanel({
               <div style={twoColumnGrid}>
                 <label style={fieldLabel}>
                   Font
-                  <select value={selectedShape.fontFile} onChange={(e) => updateSelected({ fontFile: e.target.value })} style={ui.select}>
+                  <select
+                    value={selectedShape.fontFile}
+                    onChange={(e) => updateSelected({ fontFile: e.target.value })}
+                    style={ui.select}
+                  >
                     {DEFAULT_FONT_OPTIONS.map((font) => (
                       <option key={font} value={font}>
                         {font.split("/").pop()}
@@ -9787,12 +10467,21 @@ export function ShapePropertiesPanel({
 
                 <label style={fieldLabel}>
                   Rotation
-                  <input style={ui.input} type="number" value={selectedShape.rotation ?? 0} onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })} />
+                  <input
+                    style={ui.input}
+                    type="number"
+                    value={selectedShape.rotation ?? 0}
+                    onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })}
+                  />
                 </label>
 
                 <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>
                   Align
-                  <select value={selectedShape.align ?? "left"} onChange={(e) => updateSelected({ align: e.target.value })} style={ui.select}>
+                  <select
+                    value={selectedShape.align ?? "left"}
+                    onChange={(e) => updateSelected({ align: e.target.value })}
+                    style={ui.select}
+                  >
                     <option value="left">left</option>
                     <option value="center">center</option>
                     <option value="right">right</option>
@@ -9802,6 +10491,306 @@ export function ShapePropertiesPanel({
             </CardBlock>
           </>
         )}
+
+        <CardBlock title="Расстояния / ограничения">
+          <div style={{ display: "grid", gap: 10 }}>
+            {selectedConstraints.length === 0 ? (
+              <div
+                style={{
+                  ...ui.panelInset,
+                  padding: 12,
+                  fontSize: 13,
+                  color: theme.textMuted,
+                }}
+              >
+                Для этого объекта ограничения ещё не заданы.
+              </div>
+            ) : (
+              selectedConstraints.map((constraint) => (
+                <div
+                  key={constraint.id}
+                  style={{
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 12,
+                    padding: 10,
+                    display: "grid",
+                    gap: 8,
+                    background: "#fff",
+                  }}
+                >
+                  <div style={twoColumnGrid}>
+                    <label style={fieldLabel}>
+                      Ребро объекта
+                      <select
+                        value={constraint.edge}
+                        onChange={(e) =>
+                          setDocument((prev) =>
+                            updateConstraint(prev, constraint.id, {
+                              edge: e.target.value as ConstraintEdge,
+                            }),
+                          )
+                        }
+                        style={ui.select}
+                      >
+                        <option value="left">Левый</option>
+                        <option value="right">Правый</option>
+                        <option value="top">Верхний</option>
+                        <option value="bottom">Нижний</option>
+                      </select>
+                    </label>
+
+                    <label style={fieldLabel}>
+                      До ребра
+                      <select
+                        value={constraint.targetEdge}
+                        onChange={(e) =>
+                          setDocument((prev) =>
+                            updateConstraint(prev, constraint.id, {
+                              targetEdge: e.target.value as ConstraintEdge,
+                            }),
+                          )
+                        }
+                        style={ui.select}
+                      >
+                        <option value="left">Левый</option>
+                        <option value="right">Правый</option>
+                        <option value="top">Верхний</option>
+                        <option value="bottom">Нижний</option>
+                      </select>
+                    </label>
+
+                    <label style={fieldLabel}>
+                      Цель
+                      <select
+                        value={constraint.target.kind}
+                        onChange={(e) =>
+                          setDocument((prev) =>
+                            updateConstraint(prev, constraint.id, {
+                              target:
+                                e.target.value === "sheet"
+                                  ? { kind: "sheet" }
+                                  : {
+                                      kind: "shape",
+                                      shapeId:
+                                        otherShapes[0]?.id ??
+                                        (constraint.target.kind === "shape"
+                                          ? constraint.target.shapeId
+                                          : ""),
+                                    },
+                            }),
+                          )
+                        }
+                        style={ui.select}
+                      >
+                        <option value="sheet">Лист</option>
+                        <option value="shape">Объект</option>
+                      </select>
+                    </label>
+
+                    <label style={fieldLabel}>
+                      Расстояние
+                      <input
+                        style={ui.input}
+                        type="number"
+                        step="0.001"
+                        value={constraint.distance}
+                        onChange={(e) =>
+                          setDocument((prev) =>
+                            updateConstraint(prev, constraint.id, {
+                              distance: Number(e.target.value) || 0,
+                            }),
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  {constraint.target.kind === "shape" && (
+                    <label style={fieldLabel}>
+                      Целевой объект
+                      <select
+                        value={constraint.target.shapeId}
+                        onChange={(e) =>
+                          setDocument((prev) =>
+                            updateConstraint(prev, constraint.id, {
+                              target: {
+                                kind: "shape",
+                                shapeId: e.target.value,
+                              },
+                            }),
+                          )
+                        }
+                        style={ui.select}
+                      >
+                        {otherShapes.map((shape) => (
+                          <option key={shape.id} value={shape.id}>
+                            {shape.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <label style={checkboxRow}>
+                      <input
+                        type="checkbox"
+                        checked={constraint.enabled}
+                        onChange={(e) =>
+                          setDocument((prev) =>
+                            updateConstraint(prev, constraint.id, {
+                              enabled: e.target.checked,
+                            }),
+                          )
+                        }
+                      />
+                      <span>Включено</span>
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDocument((prev) => removeConstraint(prev, constraint.id))
+                      }
+                      style={ui.buttonDanger}
+                    >
+                      Удалить
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: theme.textMuted,
+                    }}
+                  >
+                    {edgeTitle(constraint.edge)} край объекта →{" "}
+                    {constraint.target.kind === "sheet"
+                      ? "граница листа"
+                      : otherShapes.find((shape) => shape.id === (constraint.target.kind === "shape" ? constraint.target.shapeId : ""))
+                          ?.name ?? "объект"}{" "}
+                    / {edgeTitle(constraint.targetEdge).toLowerCase()} край
+                  </div>
+                </div>
+              ))
+            )}
+
+            <div
+              style={{
+                height: 1,
+                background: theme.border,
+                margin: "2px 0",
+              }}
+            />
+
+            <div style={{ fontSize: 13, fontWeight: 800, color: theme.text }}>
+              Добавить ограничение
+            </div>
+
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                Ребро объекта
+                <select
+                  value={newConstraintEdge}
+                  onChange={(e) => setNewConstraintEdge(e.target.value as ConstraintEdge)}
+                  style={ui.select}
+                >
+                  <option value="left">Левый</option>
+                  <option value="right">Правый</option>
+                  <option value="top">Верхний</option>
+                  <option value="bottom">Нижний</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                До ребра
+                <select
+                  value={newTargetEdge}
+                  onChange={(e) => setNewTargetEdge(e.target.value as ConstraintEdge)}
+                  style={ui.select}
+                >
+                  <option value="left">Левый</option>
+                  <option value="right">Правый</option>
+                  <option value="top">Верхний</option>
+                  <option value="bottom">Нижний</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                Цель
+                <select
+                  value={newTargetKind}
+                  onChange={(e) =>
+                    setNewTargetKind(
+                      e.target.value as SketchDistanceConstraintTarget["kind"],
+                    )
+                  }
+                  style={ui.select}
+                >
+                  <option value="sheet">Лист</option>
+                  <option value="shape">Объект</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                Расстояние
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.001"
+                  value={newDistance}
+                  onChange={(e) => setNewDistance(Number(e.target.value) || 0)}
+                />
+              </label>
+            </div>
+
+            {newTargetKind === "shape" && (
+              <label style={fieldLabel}>
+                Целевой объект
+                <select
+                  value={newTargetShapeId}
+                  onChange={(e) => setNewTargetShapeId(e.target.value)}
+                  style={ui.select}
+                >
+                  {otherShapes.map((shape) => (
+                    <option key={shape.id} value={shape.id}>
+                      {shape.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            <button type="button" onClick={handleAddConstraint} style={ui.buttonPrimary}>
+              Добавить расстояние
+            </button>
+
+            {constraintIssues.length > 0 && (
+              <div
+                style={{
+                  borderRadius: 12,
+                  border: "1px solid #fecaca",
+                  background: "#fff1f2",
+                  color: "#9f1239",
+                  padding: 12,
+                  display: "grid",
+                  gap: 8,
+                  fontSize: 13,
+                }}
+              >
+                <div style={{ fontWeight: 800 }}>
+                  Предупреждения по ограничениям
+                </div>
+
+                {constraintIssues.map((issue, index) => (
+                  <div key={`${issue.constraintId}-${index}`}>
+                    • {issue.message}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </CardBlock>
       </div>
     </>
   );
@@ -11659,8 +12648,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 101
+included: 102
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 307377
+totalBytes(approx): 337089

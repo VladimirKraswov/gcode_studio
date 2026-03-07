@@ -156,16 +156,19 @@ export function EditTab({
                 isDragging={editor.isDragging}
                 isPanning={editor.isPanning}
                 isSelectionHover={editor.isSelectionHover}
+                constraintDraft={editor.constraintDraft}
                 onSelectionHoverChange={editor.setIsSelectionHover}
                 onPointerDown={editor.handleCanvasPointerDown}
                 onPointerMove={editor.handleCanvasPointerMove}
                 onPointerUp={editor.handleCanvasPointerUp}
-                onPointerLeave={editor.handleCanvasPointerUp}
+                onPointerLeave={editor.handleCanvasPointerLeave}
                 onWheel={editor.handleCanvasWheel}
                 onShapePointerDown={editor.bindSelectStart}
                 onSelectionPointerDown={editor.bindSelectionDragStart}
                 onScaleHandlePointerDown={editor.bindScaleHandleStart}
                 onRotateHandlePointerDown={editor.bindRotateHandleStart}
+                onConstraintEdgeHandlePointerDown={editor.bindConstraintEdgeHandleStart}
+                onConstraintLabelPointerDown={editor.bindConstraintLabelDragStart}
                 isTransforming={editor.isTransforming}
               />
             </div>

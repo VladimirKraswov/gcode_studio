@@ -17,7 +17,7 @@ export function EditStatusBar({
   isTransforming,
 }: EditStatusBarProps) {
   const interactionLabel = isTransforming
-    ? "Масштабирование / поворот"
+    ? "Трансформация / ограничение"
     : isDragging
       ? "Перетаскивание объекта"
       : isPanning
@@ -48,7 +48,7 @@ export function EditStatusBar({
       }}
     >
       <span>
-        Углы рамки — масштаб. Круг сверху — поворот. Тонкие линии имеют расширенную область попадания.
+        Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.
       </span>
       <span>
         {interactionLabel} · Объектов: {objectCount}

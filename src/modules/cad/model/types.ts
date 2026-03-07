@@ -83,6 +83,28 @@ export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
 export type UnitsMode = "mm" | "inch";
 export type SpindleDirection = "cw" | "ccw";
 
+export type ConstraintEdge = "left" | "right" | "top" | "bottom";
+
+export type SketchDistanceConstraintTarget =
+  | {
+      kind: "sheet";
+    }
+  | {
+      kind: "shape";
+      shapeId: string;
+    };
+
+export type SketchDistanceConstraint = {
+  id: string;
+  name?: string;
+  enabled: boolean;
+  shapeId: string;
+  edge: ConstraintEdge;
+  target: SketchDistanceConstraintTarget;
+  targetEdge: ConstraintEdge;
+  distance: number;
+};
+
 export type SketchDocument = {
   width: number;
   height: number;
@@ -116,6 +138,7 @@ export type SketchDocument = {
   snapStep: number;
   shapes: SketchShape[];
   groups: SketchGroup[];
+  constraints: SketchDistanceConstraint[];
 };
 
 export type SketchTool =
