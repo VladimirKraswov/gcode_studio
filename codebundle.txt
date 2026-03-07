@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T11:46:52.242Z
+generated: 2026-03-07T13:55:42.054Z
 
 
 
@@ -395,6 +395,7 @@ path: /package.json
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@uiw/react-codemirror": "^4.25.7",
+    "opentype.js": "^1.3.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "three": "^0.183.2"
@@ -424,13 +425,18 @@ path: /src/App.tsx
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CameraInfo, PlacementMode, StockDimensions } from "./types/gcode";
+import type { MainTab } from "./types/ui";
 import { DEMO_GCODE } from "./constants/demo";
-import { GCodeEditorTab } from "./components/GCodeEditorTab";
+import { EditTab } from "./components/EditTab";
+import { GCodeEditorPanel } from "./components/GCodeEditorPanel";
+import { MainTabs } from "./components/MainTabs";
 import { PathScene } from "./components/PathScene";
 import { RightInfoPanel } from "./components/RightInfoPanel";
 import { useCurrentState } from "./hooks/useCurrentState";
 import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
+import type { SketchDocument } from "./types/sketch";
+import { createEmptySketchDocument } from "./utils/sketch";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -438,8 +444,12 @@ const DEFAULT_STOCK: StockDimensions = {
   thickness: 3,
 };
 
+
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
+const [editDocument, setEditDocument] = useState<SketchDocument>(
+  createEmptySketchDocument(),
+);
   const [fileName, setFileName] = useState("demo.gcode");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
@@ -447,7 +457,7 @@ export default function App() {
   const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
   const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
-  const [showEditor, setShowEditor] = useState(false);
+  const [activeTab, setActiveTab] = useState<MainTab>("view");
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -461,6 +471,13 @@ export default function App() {
   } = usePlayback();
 
   const currentState = useCurrentState(parsed, progress);
+
+  function applyGeneratedGCodeFromEdit(gcode: string) {
+  setSource(gcode);
+  setFileName("edit-generated.gcode");
+  resetPlayback();
+  setCameraResetKey((value) => value + 1);
+}
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -756,71 +773,124 @@ export default function App() {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "white",
-            borderRadius: 16,
-            padding: 16,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
+        <div style={{ minWidth: 0 }}>
+          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
 
-          <div
-            style={{
-              height: 760,
-              borderRadius: 16,
-              overflow: "hidden",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <PathScene
-              parsed={parsed}
-              currentState={currentState}
-              progress={progress}
-              cameraResetKey={cameraResetKey}
-              stock={stock}
-              showMaterialRemoval={showMaterialRemoval}
-              totalLength={parsed.totalLength}
-              placementMode={placementMode}
-              detailLevel={detailLevel}
-              onCameraUpdate={setCameraInfo}
-            />
-          </div>
+          {activeTab === "view" && (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
 
-          <div
-            style={{
-              marginTop: 12,
-              fontSize: 14,
-              color: "#64748b",
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>ЛКМ — вращение, ПКМ — панорама, колесо мыши — масштаб.</span>
-            <button type="button" onClick={() => setShowEditor((value) => !value)}>
-              {showEditor ? "Показать информацию" : "Редактор G-code"}
-            </button>
-          </div>
+              <div
+                style={{
+                  height: 760,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <PathScene
+                  parsed={parsed}
+                  currentState={currentState}
+                  progress={progress}
+                  cameraResetKey={cameraResetKey}
+                  stock={stock}
+                  showMaterialRemoval={showMaterialRemoval}
+                  totalLength={parsed.totalLength}
+                  placementMode={placementMode}
+                  detailLevel={detailLevel}
+                  onCameraUpdate={setCameraInfo}
+                />
+              </div>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  fontSize: 14,
+                  color: "#64748b",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>ЛКМ/ПКМ — панорама, колесо мыши — масштаб.</span>
+                <span>Machine zero: X0 Y0 Z0</span>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "gcode" && (
+            <div style={{ height: 860 }}>
+              <GCodeEditorPanel
+                source={source}
+                setSource={setSource}
+                fileName={fileName}
+              />
+            </div>
+          )}
+
+          {activeTab === "edit" && (
+  <EditTab
+    document={editDocument}
+    setDocument={setEditDocument}
+    onGenerateGCode={applyGeneratedGCodeFromEdit}
+  />
+)}
         </div>
 
-        {showEditor ? (
-          <GCodeEditorTab
-            source={source}
-            setSource={setSource}
-            fileName={fileName}
-            onClose={() => setShowEditor(false)}
-          />
-        ) : (
-          <RightInfoPanel
-            bounds={parsed.bounds}
-            stock={stock}
-            parsedStats={parsed.stats}
-            currentState={currentState}
-            cameraInfo={cameraInfo}
-            totalLength={parsed.totalLength}
-          />
-        )}
+        <div>
+          {activeTab === "view" ? (
+            <RightInfoPanel
+              bounds={parsed.bounds}
+              stock={stock}
+              parsedStats={parsed.stats}
+              currentState={currentState}
+              cameraInfo={cameraInfo}
+              totalLength={parsed.totalLength}
+            />
+          ) : activeTab === "gcode" ? (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                height: "fit-content",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Подсказка</h3>
+              <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
+                Здесь можно редактировать исходный G-code, применять изменения и
+                сохранять файл как новую версию.
+              </p>
+              <p style={{ marginBottom: 0, color: "#64748b", lineHeight: 1.5 }}>
+                После нажатия «Применить» траектория будет перепарсена и обновится
+                во вкладке View.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                height: "fit-content",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Edit</h3>
+              <p style={{ margin: 0, color: "#64748b" }}>
+                Пока пусто. Здесь можно будет разместить инструменты геометрического
+                редактирования, трансформации траектории или постпроцессинг.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -873,12 +943,10 @@ export function AutoFitCamera({
     const targetScene = toScenePoint({ x: 0, y: 0, z: 0 });
     const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
 
-    // Небольшой фиксированный наклон:
-    // +Y = сверху, +Z = лёгкий наклон "спереди"
     const cameraPosition = new THREE.Vector3(
       targetScene.x,
       targetScene.y + distance,
-      targetScene.z + distance * -0.22,
+      targetScene.z - distance * 0.22,
     );
 
     camera.position.copy(cameraPosition);
@@ -935,6 +1003,973 @@ export function CameraDebug({ controlsRef, onUpdate }: CameraDebugProps) {
   }, [camera, controlsRef, onUpdate]);
 
   return null;
+}
+
+
+path: /src/components/EditTab.tsx
+----------------------------------------
+import { useMemo, useRef, useState } from "react";
+import type {
+  SketchDocument,
+  SketchPolylinePoint,
+  SketchShape,
+  SketchText,
+  SketchTool,
+} from "../types/sketch";
+import {
+  createId,
+  generateSketchGCode,
+  moveShape,
+  textToStrokePolylines,
+} from "../utils/sketch";
+import {
+  cadToScreenPoint,
+  screenToCadPoint,
+  type ViewTransform,
+} from "../utils/coordinates";
+
+type EditTabProps = {
+  document: SketchDocument;
+  setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  onGenerateGCode: (gcode: string) => void;
+};
+
+type DraftShape =
+  | {
+      type: "rectangle";
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+    }
+  | {
+      type: "circle";
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+    }
+  | null;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getRectangleFromDraft(draft: NonNullable<DraftShape>) {
+  const x = Math.min(draft.startX, draft.endX);
+  const y = Math.min(draft.startY, draft.endY);
+  const width = Math.abs(draft.endX - draft.startX);
+  const height = Math.abs(draft.endY - draft.startY);
+
+  return { x, y, width, height };
+}
+
+function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function EditTab({
+  document,
+  setDocument,
+  onGenerateGCode,
+}: EditTabProps) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [tool, setTool] = useState<SketchTool>("select");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftShape>(null);
+  const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
+  const [textDraft, setTextDraft] = useState("HELLO");
+  const [textHeightDraft, setTextHeightDraft] = useState(12);
+  const [textLetterSpacingDraft, setTextLetterSpacingDraft] = useState(2);
+  const [dragState, setDragState] = useState<{
+    shapeId: string;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  const [view, setView] = useState<ViewTransform>({
+    scale: 2.5,
+    offsetX: 40,
+    offsetY: 40,
+  });
+
+  const selectedShape = useMemo(
+    () => document.shapes.find((shape) => shape.id === selectedId) ?? null,
+    [document.shapes, selectedId],
+  );
+
+  function resetView() {
+    setView({
+      scale: 2.5,
+      offsetX: 40,
+      offsetY: 40,
+    });
+  }
+
+  function addRectangle(x: number, y: number, width: number, height: number) {
+    if (width < 1 || height < 1) {
+      return;
+    }
+
+    const shape: SketchShape = {
+      id: createId("rect"),
+      type: "rectangle",
+      name: `Rectangle ${document.shapes.filter((s) => s.type === "rectangle").length + 1}`,
+      x,
+      y,
+      width,
+      height,
+      cutZ: null,
+    };
+
+    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
+    setSelectedId(shape.id);
+  }
+
+  function addCircle(cx: number, cy: number, radius: number) {
+    if (radius < 1) {
+      return;
+    }
+
+    const shape: SketchShape = {
+      id: createId("circle"),
+      type: "circle",
+      name: `Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`,
+      cx,
+      cy,
+      radius,
+      cutZ: null,
+    };
+
+    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
+    setSelectedId(shape.id);
+  }
+
+  function addText(x: number, y: number) {
+    const value = textDraft.trim().toUpperCase();
+    if (!value) {
+      return;
+    }
+
+    const shape: SketchShape = {
+      id: createId("text"),
+      type: "text",
+      name: `Text ${document.shapes.filter((s) => s.type === "text").length + 1}`,
+      x,
+      y,
+      text: value,
+      height: Math.max(2, textHeightDraft),
+      letterSpacing: Math.max(0, textLetterSpacingDraft),
+      cutZ: null,
+    };
+
+    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
+    setSelectedId(shape.id);
+  }
+
+  function commitPolyline() {
+    if (polylineDraft.length < 2) {
+      setPolylineDraft([]);
+      return;
+    }
+
+    const shape: SketchShape = {
+      id: createId("poly"),
+      type: "polyline",
+      name: `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
+      points: polylineDraft,
+      closed: false,
+      cutZ: null,
+    };
+
+    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
+    setSelectedId(shape.id);
+    setPolylineDraft([]);
+  }
+
+  function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
+    if (!svgRef.current) {
+      return;
+    }
+
+    const rect = svgRef.current.getBoundingClientRect();
+    const cad = screenToCadPoint(
+      event.clientX,
+      event.clientY,
+      rect,
+      document.height,
+      view,
+    );
+
+    if (tool === "rectangle") {
+      setDraft({
+        type: "rectangle",
+        startX: cad.x,
+        startY: cad.y,
+        endX: cad.x,
+        endY: cad.y,
+      });
+      return;
+    }
+
+    if (tool === "circle") {
+      setDraft({
+        type: "circle",
+        startX: cad.x,
+        startY: cad.y,
+        endX: cad.x,
+        endY: cad.y,
+      });
+      return;
+    }
+
+    if (tool === "polyline") {
+      setPolylineDraft((prev) => [...prev, { x: cad.x, y: cad.y }]);
+      return;
+    }
+
+    if (tool === "text") {
+      addText(cad.x, cad.y);
+    }
+  }
+
+  function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
+    if (!svgRef.current) {
+      return;
+    }
+
+    const rect = svgRef.current.getBoundingClientRect();
+    const cad = screenToCadPoint(
+      event.clientX,
+      event.clientY,
+      rect,
+      document.height,
+      view,
+    );
+
+    if (draft) {
+      setDraft((prev) =>
+        prev
+          ? {
+              ...prev,
+              endX: cad.x,
+              endY: cad.y,
+            }
+          : null,
+      );
+      return;
+    }
+
+    if (dragState) {
+      const dx = cad.x - dragState.startX;
+      const dy = cad.y - dragState.startY;
+
+      setDocument((prev) => ({
+        ...prev,
+        shapes: prev.shapes.map((shape) =>
+          shape.id === dragState.shapeId ? moveShape(shape, dx, dy) : shape,
+        ),
+      }));
+
+      setDragState({
+        shapeId: dragState.shapeId,
+        startX: cad.x,
+        startY: cad.y,
+      });
+    }
+  }
+
+  function handleCanvasPointerUp() {
+    if (draft?.type === "rectangle") {
+      const rect = getRectangleFromDraft(draft);
+      addRectangle(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    if (draft?.type === "circle") {
+      const radius = distance(
+        { x: draft.startX, y: draft.startY },
+        { x: draft.endX, y: draft.endY },
+      );
+      addCircle(draft.startX, draft.startY, radius);
+    }
+
+    setDraft(null);
+    setDragState(null);
+  }
+
+  function deleteSelected() {
+    if (!selectedId) {
+      return;
+    }
+
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.filter((shape) => shape.id !== selectedId),
+    }));
+    setSelectedId(null);
+  }
+
+  function updateSelected(patch: Record<string, number | string | boolean | null>) {
+    if (!selectedId) {
+      return;
+    }
+
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) => {
+        if (shape.id !== selectedId) {
+          return shape;
+        }
+
+        return { ...shape, ...patch } as SketchShape;
+      }),
+    }));
+  }
+
+  function bindSelectStart(
+    event: React.PointerEvent<SVGElement>,
+    shapeId: string,
+  ) {
+    event.stopPropagation();
+    if (!svgRef.current) return;
+
+    const rect = svgRef.current.getBoundingClientRect();
+    const cad = screenToCadPoint(
+      event.clientX,
+      event.clientY,
+      rect,
+      document.height,
+      view,
+    );
+
+    setSelectedId(shapeId);
+
+    if (tool === "select") {
+      setDragState({
+        shapeId,
+        startX: cad.x,
+        startY: cad.y,
+      });
+    }
+  }
+
+  function renderShape(shape: SketchShape) {
+    const isSelected = shape.id === selectedId;
+
+    switch (shape.type) {
+      case "rectangle": {
+        const p = cadToScreenPoint(
+          { x: shape.x, y: shape.y + shape.height },
+          document.height,
+          view,
+        );
+        return (
+          <rect
+            key={shape.id}
+            x={p.x}
+            y={p.y}
+            width={shape.width * view.scale}
+            height={shape.height * view.scale}
+            fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.06)"}
+            stroke={isSelected ? "#2563eb" : "#334155"}
+            strokeWidth={isSelected ? 2 : 1.5}
+            onPointerDown={(event) => bindSelectStart(event, shape.id)}
+          />
+        );
+      }
+
+      case "circle": {
+        const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, document.height, view);
+        return (
+          <circle
+            key={shape.id}
+            cx={p.x}
+            cy={p.y}
+            r={shape.radius * view.scale}
+            fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.06)"}
+            stroke={isSelected ? "#2563eb" : "#334155"}
+            strokeWidth={isSelected ? 2 : 1.5}
+            onPointerDown={(event) => bindSelectStart(event, shape.id)}
+          />
+        );
+      }
+
+      case "polyline": {
+        const points = shape.points
+          .map((point) => {
+            const p = cadToScreenPoint(point, document.height, view);
+            return `${p.x},${p.y}`;
+          })
+          .join(" ");
+
+        return (
+          <polyline
+            key={shape.id}
+            points={points}
+            fill="none"
+            stroke={isSelected ? "#2563eb" : "#334155"}
+            strokeWidth={isSelected ? 2 : 1.5}
+            onPointerDown={(event) => bindSelectStart(event, shape.id)}
+          />
+        );
+      }
+
+      case "text": {
+        const polylines = textToStrokePolylines(shape);
+
+        return (
+          <g key={shape.id} onPointerDown={(event) => bindSelectStart(event, shape.id)}>
+            {polylines.map((polyline, index) => (
+              <polyline
+                key={`${shape.id}-${index}`}
+                points={polyline
+                  .map((point) => {
+                    const p = cadToScreenPoint(point, document.height, view);
+                    return `${p.x},${p.y}`;
+                  })
+                  .join(" ")}
+                fill="none"
+                stroke={isSelected ? "#2563eb" : "#334155"}
+                strokeWidth={isSelected ? 2 : 1.5}
+              />
+            ))}
+          </g>
+        );
+      }
+    }
+  }
+
+  const generatedGCode = useMemo(() => generateSketchGCode(document), [document]);
+
+  const selectedText = selectedShape?.type === "text" ? (selectedShape as SketchText) : null;
+
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 320px",
+        gap: 16,
+        height: 860,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          borderRadius: 16,
+          padding: 16,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+        }}
+      >
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <button type="button" onClick={() => setTool("select")}>Select</button>
+          <button type="button" onClick={() => setTool("rectangle")}>Rectangle</button>
+          <button type="button" onClick={() => setTool("circle")}>Circle</button>
+          <button type="button" onClick={() => setTool("polyline")}>Polyline</button>
+          <button type="button" onClick={() => setTool("text")}>Text</button>
+          <button type="button" onClick={commitPolyline}>Finish polyline</button>
+          <button type="button" onClick={deleteSelected}>Delete</button>
+          <button type="button" onClick={resetView}>Reset view</button>
+          <button
+            type="button"
+            onClick={() => onGenerateGCode(generatedGCode)}
+            style={{ marginLeft: "auto" }}
+          >
+            Сгенерировать G-code
+          </button>
+        </div>
+
+        {tool === "text" && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 100px 100px",
+              gap: 8,
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 12,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <label style={{ fontSize: 12 }}>
+              Текст
+              <input
+                type="text"
+                value={textDraft}
+                onChange={(event) => setTextDraft(event.target.value.toUpperCase())}
+                style={{ width: "100%" }}
+              />
+            </label>
+
+            <label style={{ fontSize: 12 }}>
+              Высота
+              <input
+                type="number"
+                min="2"
+                value={textHeightDraft}
+                onChange={(event) => setTextHeightDraft(Math.max(2, Number(event.target.value) || 2))}
+                style={{ width: "100%" }}
+              />
+            </label>
+
+            <label style={{ fontSize: 12 }}>
+              Интервал
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={textLetterSpacingDraft}
+                onChange={(event) =>
+                  setTextLetterSpacingDraft(Math.max(0, Number(event.target.value) || 0))
+                }
+                style={{ width: "100%" }}
+              />
+            </label>
+          </div>
+        )}
+
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            overflow: "hidden",
+            background: "#f8fafc",
+          }}
+        >
+          <svg
+            ref={svgRef}
+            width="100%"
+            height="100%"
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerUp}
+            style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+          >
+            <defs>
+              <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
+                <path
+                  d="M 20 0 L 0 0 0 20"
+                  fill="none"
+                  stroke="#e2e8f0"
+                  strokeWidth="1"
+                />
+              </pattern>
+            </defs>
+
+            <rect width="100%" height="100%" fill="url(#grid)" />
+
+            <rect
+              x={view.offsetX}
+              y={view.offsetY}
+              width={document.width * view.scale}
+              height={document.height * view.scale}
+              fill="rgba(255,255,255,0.72)"
+              stroke="#cbd5e1"
+              strokeWidth={1.5}
+            />
+
+            {(() => {
+              const origin = cadToScreenPoint({ x: 0, y: 0 }, document.height, view);
+              return (
+                <g>
+                  <circle cx={origin.x} cy={origin.y} r={4} fill="#ef4444" />
+                  <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill="#0f172a">
+                    X0 Y0
+                  </text>
+                </g>
+              );
+            })()}
+
+            {document.shapes.map(renderShape)}
+
+            {polylineDraft.length > 1 && (
+              <polyline
+                points={polylineDraft
+                  .map((point) => {
+                    const p = cadToScreenPoint(point, document.height, view);
+                    return `${p.x},${p.y}`;
+                  })
+                  .join(" ")}
+                fill="none"
+                stroke="#ef4444"
+                strokeWidth={1.5}
+                strokeDasharray="6 4"
+              />
+            )}
+
+            {draft?.type === "rectangle" &&
+              (() => {
+                const rect = getRectangleFromDraft(draft);
+                const p = cadToScreenPoint(
+                  { x: rect.x, y: rect.y + rect.height },
+                  document.height,
+                  view,
+                );
+                return (
+                  <rect
+                    x={p.x}
+                    y={p.y}
+                    width={rect.width * view.scale}
+                    height={rect.height * view.scale}
+                    fill="rgba(37,99,235,0.12)"
+                    stroke="#2563eb"
+                    strokeDasharray="6 4"
+                  />
+                );
+              })()}
+
+            {draft?.type === "circle" &&
+              (() => {
+                const r = distance(
+                  { x: draft.startX, y: draft.startY },
+                  { x: draft.endX, y: draft.endY },
+                );
+                const center = cadToScreenPoint(
+                  { x: draft.startX, y: draft.startY },
+                  document.height,
+                  view,
+                );
+                return (
+                  <circle
+                    cx={center.x}
+                    cy={center.y}
+                    r={r * view.scale}
+                    fill="rgba(37,99,235,0.12)"
+                    stroke="#2563eb"
+                    strokeDasharray="6 4"
+                  />
+                );
+              })()}
+          </svg>
+        </div>
+      </div>
+
+      <div
+        style={{
+          background: "white",
+          borderRadius: 16,
+          padding: 16,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+          overflow: "auto",
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Параметры</h3>
+
+        <div style={{ display: "grid", gap: 10 }}>
+          <label style={{ fontSize: 12 }}>
+            Ширина листа
+            <input
+              type="number"
+              value={document.width}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  width: Math.max(1, Number(event.target.value) || 1),
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+
+          <label style={{ fontSize: 12 }}>
+            Высота листа
+            <input
+              type="number"
+              value={document.height}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  height: Math.max(1, Number(event.target.value) || 1),
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+
+          <label style={{ fontSize: 12 }}>
+            Safe Z
+            <input
+              type="number"
+              value={document.safeZ}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  safeZ: Number(event.target.value) || 0,
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+
+          <label style={{ fontSize: 12 }}>
+            Cut Z по умолчанию
+            <input
+              type="number"
+              value={document.cutZ}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  cutZ: Number(event.target.value) || 0,
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+
+          <label style={{ fontSize: 12 }}>
+            Feed cut
+            <input
+              type="number"
+              value={document.feedCut}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  feedCut: Math.max(1, Number(event.target.value) || 1),
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+
+          <label style={{ fontSize: 12 }}>
+            Feed rapid
+            <input
+              type="number"
+              value={document.feedRapid}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  feedRapid: Math.max(1, Number(event.target.value) || 1),
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+            <input
+              type="checkbox"
+              checked={document.spindleOn}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  spindleOn: event.target.checked,
+                }))
+              }
+            />
+            Лазер / spindle M3/M5
+          </label>
+
+          <label style={{ fontSize: 12 }}>
+            S power
+            <input
+              type="number"
+              value={document.laserPower}
+              onChange={(event) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  laserPower: Math.max(0, Number(event.target.value) || 0),
+                }))
+              }
+              style={{ width: "100%" }}
+            />
+          </label>
+        </div>
+
+        {selectedShape && (
+          <>
+            <h3 style={{ marginTop: 20 }}>Выбранный объект</h3>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ fontSize: 12 }}>
+                Name
+                <input
+                  type="text"
+                  value={selectedShape.name}
+                  onChange={(event) => updateSelected({ name: event.target.value })}
+                  style={{ width: "100%" }}
+                />
+              </label>
+
+              <label style={{ fontSize: 12 }}>
+                Индивидуальная глубина Z
+                <input
+                  type="number"
+                  value={selectedShape.cutZ ?? document.cutZ}
+                  onChange={(event) => updateSelected({ cutZ: Number(event.target.value) || 0 })}
+                  style={{ width: "100%" }}
+                />
+              </label>
+
+              {selectedShape.type === "rectangle" && (
+                <>
+                  <label style={{ fontSize: 12 }}>
+                    X
+                    <input
+                      type="number"
+                      value={selectedShape.x}
+                      onChange={(event) => updateSelected({ x: Number(event.target.value) || 0 })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12 }}>
+                    Y
+                    <input
+                      type="number"
+                      value={selectedShape.y}
+                      onChange={(event) => updateSelected({ y: Number(event.target.value) || 0 })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12 }}>
+                    Width
+                    <input
+                      type="number"
+                      value={selectedShape.width}
+                      onChange={(event) =>
+                        updateSelected({ width: clamp(Number(event.target.value) || 1, 1, 100000) })
+                      }
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12 }}>
+                    Height
+                    <input
+                      type="number"
+                      value={selectedShape.height}
+                      onChange={(event) =>
+                        updateSelected({ height: clamp(Number(event.target.value) || 1, 1, 100000) })
+                      }
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                </>
+              )}
+
+              {selectedShape.type === "circle" && (
+                <>
+                  <label style={{ fontSize: 12 }}>
+                    CX
+                    <input
+                      type="number"
+                      value={selectedShape.cx}
+                      onChange={(event) => updateSelected({ cx: Number(event.target.value) || 0 })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12 }}>
+                    CY
+                    <input
+                      type="number"
+                      value={selectedShape.cy}
+                      onChange={(event) => updateSelected({ cy: Number(event.target.value) || 0 })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12 }}>
+                    Radius
+                    <input
+                      type="number"
+                      value={selectedShape.radius}
+                      onChange={(event) =>
+                        updateSelected({
+                          radius: clamp(Number(event.target.value) || 1, 1, 100000),
+                        })
+                      }
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                </>
+              )}
+
+              {selectedShape.type === "polyline" && (
+                <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedShape.closed}
+                    onChange={(event) => updateSelected({ closed: event.target.checked })}
+                  />
+                  Closed
+                </label>
+              )}
+
+              {selectedText && (
+                <>
+                  <label style={{ fontSize: 12 }}>
+                    Text
+                    <input
+                      type="text"
+                      value={selectedText.text}
+                      onChange={(event) => updateSelected({ text: event.target.value.toUpperCase() })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+
+                  <label style={{ fontSize: 12 }}>
+                    X
+                    <input
+                      type="number"
+                      value={selectedText.x}
+                      onChange={(event) => updateSelected({ x: Number(event.target.value) || 0 })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+
+                  <label style={{ fontSize: 12 }}>
+                    Y
+                    <input
+                      type="number"
+                      value={selectedText.y}
+                      onChange={(event) => updateSelected({ y: Number(event.target.value) || 0 })}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+
+                  <label style={{ fontSize: 12 }}>
+                    Height
+                    <input
+                      type="number"
+                      value={selectedText.height}
+                      onChange={(event) =>
+                        updateSelected({ height: clamp(Number(event.target.value) || 2, 2, 100000) })
+                      }
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+
+                  <label style={{ fontSize: 12 }}>
+                    Letter spacing
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={selectedText.letterSpacing}
+                      onChange={(event) =>
+                        updateSelected({ letterSpacing: Math.max(0, Number(event.target.value) || 0) })
+                      }
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        <h3 style={{ marginTop: 20 }}>Результат</h3>
+        <p style={{ color: "#64748b", fontSize: 13, lineHeight: 1.5 }}>
+          Теперь у каждого примитива есть своя глубина Z. Текст добавляется кликом по холсту
+          и генерируется как векторный stroke-font без зеркалирования.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 
@@ -1168,7 +2203,7 @@ export function GCodeEditorPanel({
       source={source}
       setSource={setSource}
       fileName={fileName}
-      header={<h3 style={{ marginTop: 0 }}>Редактор G-code</h3>}
+      header={<h3 style={{ marginTop: 0, marginBottom: 12 }}>Редактор G-code</h3>}
     />
   );
 }
@@ -1216,12 +2251,65 @@ export function GCodeEditorTab({
 }
 
 
+path: /src/components/MainTabs.tsx
+----------------------------------------
+import type { MainTab } from "../types/ui";
+
+type MainTabsProps = {
+  activeTab: MainTab;
+  onChange: (tab: MainTab) => void;
+};
+
+const tabs: Array<{ id: MainTab; label: string }> = [
+  { id: "view", label: "View" },
+  { id: "gcode", label: "G-code Editor" },
+  { id: "edit", label: "Edit" },
+];
+
+export function MainTabs({ activeTab, onChange }: MainTabsProps) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 8,
+        marginBottom: 12,
+        borderBottom: "1px solid #e2e8f0",
+        paddingBottom: 12,
+      }}
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab;
+
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: isActive ? "1px solid #2563eb" : "1px solid #cbd5e1",
+              background: isActive ? "#dbeafe" : "white",
+              color: isActive ? "#1d4ed8" : "#0f172a",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+
 path: /src/components/MaterialRemovalMesh.tsx
 ----------------------------------------
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { ParsedGCode, PlacementMode, StockDimensions } from "../types/gcode";
-import { AXIS_MAP, clamp, getStockPlacement, toSceneCoords } from "../utils";
+import { clamp, getStockPlacement, toSceneCoords } from "../utils";
 
 type MaterialRemovalMeshProps = {
   parsed: ParsedGCode;
@@ -1242,7 +2330,10 @@ export function MaterialRemovalMesh({
 }: MaterialRemovalMeshProps) {
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
-  const invertX = AXIS_MAP.invertX;
+
+  // В preview сцена зеркалится по X, поэтому карту выборки
+  // нужно зеркалить так же, иначе съём материала уедет в другой угол.
+  const previewMirrorX = true;
 
   const level = clamp(detailLevel, 1, 10);
   const t = (level - 1) / 9;
@@ -1336,7 +2427,7 @@ export function MaterialRemovalMesh({
           continue;
         }
 
-        const mappedX = invertX ? width - localX : localX;
+        const mappedX = previewMirrorX ? width - localX : localX;
         const gx = clamp(Math.round((mappedX / width) * (gridX - 1)), 0, gridX - 1);
         const gy = clamp(Math.round((localY / depth) * (gridY - 1)), 0, gridY - 1);
         const index = gy * gridX + gx;
@@ -1370,9 +2461,9 @@ export function MaterialRemovalMesh({
     gridX,
     gridY,
     heights,
-    invertX,
     placement.bottom,
     placement.left,
+    previewMirrorX,
     progress,
     recomputeNormals,
     segments,
@@ -1971,8 +3062,6 @@ export function WorkArea({ bounds, stock, placementMode }: WorkAreaProps) {
         args={[Math.max(stock.width + 20, stock.height + 20), 20, 0x94a3b8, 0xcbd5e1]}
         position={[center.x, -stock.thickness, center.z]}
       />
-
-      <axesHelper args={[25]} />
     </group>
   );
 }
@@ -2191,6 +3280,50 @@ createRoot(document.getElementById("root")!).render(
 );
 
 
+path: /src/types/coordinates.ts
+----------------------------------------
+export type CadPoint2 = {
+  x: number;
+  y: number;
+};
+
+export type SvgPoint2 = {
+  x: number;
+  y: number;
+};
+
+/**
+ * Внутренняя плоская система CAD.
+ *
+ * - origin: левый нижний угол листа/заготовки
+ * - +X: вправо
+ * - +Y: вверх
+ *
+ * Для 2.5D-редактора это основная «истина» в плоскости.
+ * Она хорошо дружит и с математикой, и с G-code:
+ * machine.X = cad.X, machine.Y = cad.Y.
+ */
+export type CadSpace = "cad";
+
+/**
+ * Экранная / SVG система.
+ *
+ * - origin: левый верхний угол viewport
+ * - +X: вправо
+ * - +Y: вниз
+ */
+export type SvgSpace = "svg";
+
+/**
+ * Станочная плоскость XY.
+ *
+ * - origin: левый нижний угол рабочей области
+ * - +X: вправо
+ * - +Y: вперёд (от оператора внутрь станка)
+ */
+export type MachinePlanarSpace = "machine-xy";
+
+
 path: /src/types/gcode.ts
 ----------------------------------------
 import type * as THREE from "three";
@@ -2267,13 +3400,171 @@ export type CameraInfo = {
 };
 
 
+path: /src/types/sketch.ts
+----------------------------------------
+export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text";
+
+export type SketchBase = {
+  id: string;
+  name: string;
+  cutZ?: number | null;
+};
+
+export type SketchRectangle = SketchBase & {
+  type: "rectangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type SketchCircle = SketchBase & {
+  type: "circle";
+  cx: number;
+  cy: number;
+  radius: number;
+};
+
+export type SketchPolylinePoint = {
+  x: number;
+  y: number;
+};
+
+export type SketchPolyline = SketchBase & {
+  type: "polyline";
+  points: SketchPolylinePoint[];
+  closed: boolean;
+};
+
+export type SketchText = {
+  type: "text";
+  x: number;
+  y: number;
+  text: string;
+  height: number;
+  letterSpacing: number;
+  fontFile: string;
+  rotation?: number;
+  align?: "left" | "center" | "right";
+  cutMode?: "outline" | "pocket";
+  cutZ?: number | null;
+};
+
+export type SketchShape =
+  | SketchRectangle
+  | SketchCircle
+  | SketchPolyline
+  | SketchText;
+
+export type SketchDocument = {
+  width: number;
+  height: number;
+  safeZ: number;
+  cutZ: number;
+  feedCut: number;
+  feedRapid: number;
+  spindleOn: boolean;
+  laserPower: number;
+  shapes: SketchShape[];
+};
+
+export type SketchTool =
+  | "select"
+  | "rectangle"
+  | "circle"
+  | "polyline"
+  | "text"
+  | "pan";
+
+
+path: /src/types/ui.ts
+----------------------------------------
+export type MainTab = "view" | "gcode" | "edit";
+
+
+path: /src/utils/coordinates.ts
+----------------------------------------
+import * as THREE from "three";
+import type { Point3 } from "../types/gcode";
+import type { CadPoint2, SvgPoint2 } from "../types/coordinates";
+
+export type ViewTransform = {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+export function cadToSvgPoint(point: CadPoint2, documentHeight: number): SvgPoint2 {
+  return {
+    x: point.x,
+    y: documentHeight - point.y,
+  };
+}
+
+export function svgToCadPoint(point: SvgPoint2, documentHeight: number): CadPoint2 {
+  return {
+    x: point.x,
+    y: documentHeight - point.y,
+  };
+}
+
+export function cadToScreenPoint(
+  point: CadPoint2,
+  documentHeight: number,
+  view: ViewTransform,
+): SvgPoint2 {
+  const svg = cadToSvgPoint(point, documentHeight);
+  return {
+    x: svg.x * view.scale + view.offsetX,
+    y: svg.y * view.scale + view.offsetY,
+  };
+}
+
+export function screenToCadPoint(
+  clientX: number,
+  clientY: number,
+  rect: DOMRect,
+  documentHeight: number,
+  view: ViewTransform,
+): CadPoint2 {
+  const svgX = (clientX - rect.left - view.offsetX) / view.scale;
+  const svgY = (clientY - rect.top - view.offsetY) / view.scale;
+  return svgToCadPoint({ x: svgX, y: svgY }, documentHeight);
+}
+
+/**
+ * machine -> scene (только для preview)
+ *
+ * X инвертируем специально для корректного вида камеры,
+ * чтобы на экране +X был вправо без переворота сцены снизу.
+ */
+export function machineToSceneCoords(p: Point3): Point3 {
+  return {
+    x: -p.x,
+    y: p.z,
+    z: p.y,
+  };
+}
+
+export function machineToScenePoint(p: Point3): THREE.Vector3 {
+  const s = machineToSceneCoords(p);
+  return new THREE.Vector3(s.x, s.y, s.z);
+}
+
+
+path: /src/utils/fontGeometry.ts
+----------------------------------------
+
+
+
 path: /src/utils/index.ts
 ----------------------------------------
 import * as THREE from "three";
 import type { Bounds, PlacementMode, Point3, Segment, StockDimensions } from "../types/gcode";
+import { machineToSceneCoords, machineToScenePoint } from "./coordinates";
 
 export const AXIS_MAP = {
-  invertX: true,
+  invertX: false,
   invertY: false,
   invertZ: false,
 } as const;
@@ -2283,16 +3574,19 @@ export function mapAxis(value: number, invert = false): number {
 }
 
 export function toSceneCoords(p: Point3): Point3 {
-  return {
+  return machineToSceneCoords({
     x: mapAxis(p.x, AXIS_MAP.invertX),
-    y: mapAxis(p.z, AXIS_MAP.invertZ),
-    z: mapAxis(p.y, AXIS_MAP.invertY),
-  };
+    y: mapAxis(p.y, AXIS_MAP.invertY),
+    z: mapAxis(p.z, AXIS_MAP.invertZ),
+  });
 }
 
 export function toScenePoint(p: Point3): THREE.Vector3 {
-  const s = toSceneCoords(p);
-  return new THREE.Vector3(s.x, s.y, s.z);
+  return machineToScenePoint({
+    x: mapAxis(p.x, AXIS_MAP.invertX),
+    y: mapAxis(p.y, AXIS_MAP.invertY),
+    z: mapAxis(p.z, AXIS_MAP.invertZ),
+  });
 }
 
 export function fmt(v: number): string {
@@ -2321,12 +3615,12 @@ export function getStockPlacement(
   const centerX =
     mode === "center"
       ? (bounds.minX + bounds.maxX) / 2
-      : bounds.minX + stock.width / 2;
+      : stock.width / 2;
 
   const centerY =
     mode === "center"
       ? (bounds.minY + bounds.maxY) / 2
-      : bounds.minY + stock.height / 2;
+      : stock.height / 2;
 
   const left = centerX - stock.width / 2;
   const bottom = centerY - stock.height / 2;
@@ -2351,6 +3645,410 @@ export function downloadTextFile(content: string, fileName: string): void {
 
   URL.revokeObjectURL(url);
 }
+
+
+path: /src/utils/sketch.ts
+----------------------------------------
+import type {
+  SketchCircle,
+  SketchDocument,
+  SketchPolyline,
+  SketchRectangle,
+  SketchShape,
+  SketchText,
+} from "../types/sketch";
+
+import { loadFont, pathToPolylines } from "./ttfText";
+
+export async function textToTtfPolylines(shape: SketchText) {
+  const font = await loadFont(shape.fontFile || "/fonts/NotoSans-Regular.ttf");
+  const path = font.getPath(shape.text, shape.x, shape.y, shape.height);
+  return pathToPolylines(path.commands, 10);
+}
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function fmt(value: number): string {
+  return round(value).toFixed(3).replace(/\.?0+$/, "");
+}
+
+function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
+  return shape.cutZ ?? doc.cutZ;
+}
+
+export function createId(prefix = "shape"): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function createEmptySketchDocument(): SketchDocument {
+  return {
+    width: 300,
+    height: 180,
+    safeZ: 5,
+    cutZ: -1,
+    feedCut: 500,
+    feedRapid: 1200,
+    spindleOn: false,
+    laserPower: 800,
+    shapes: [],
+  };
+}
+
+export function textToStrokePolylines(shape: SketchText): StrokePoint[][] {
+  const text = shape.text.toUpperCase();
+  const result: StrokePoint[][] = [];
+  const sx = shape.height * 0.7;
+  const sy = shape.height;
+  let cursorX = shape.x;
+
+  for (const ch of text) {
+    const glyph = getGlyph(ch);
+
+    for (const stroke of glyph.strokes) {
+      result.push(
+        stroke.map((p) => ({
+          x: round(cursorX + p.x * sx),
+          y: round(shape.y + p.y * sy),
+        })),
+      );
+    }
+
+    cursorX += glyph.width * sx + shape.letterSpacing;
+  }
+
+  return result;
+}
+
+export function shapeBounds(shape: SketchShape) {
+  switch (shape.type) {
+    case "rectangle":
+      return {
+        minX: shape.x,
+        minY: shape.y,
+        maxX: shape.x + shape.width,
+        maxY: shape.y + shape.height,
+      };
+    case "circle":
+      return {
+        minX: shape.cx - shape.radius,
+        minY: shape.cy - shape.radius,
+        maxX: shape.cx + shape.radius,
+        maxY: shape.cy + shape.radius,
+      };
+    case "polyline": {
+      const xs = shape.points.map((p) => p.x);
+      const ys = shape.points.map((p) => p.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+    case "text": {
+      const polylines = textToStrokePolylines(shape);
+      if (polylines.length === 0) {
+        return {
+          minX: shape.x,
+          minY: shape.y,
+          maxX: shape.x,
+          maxY: shape.y + shape.height,
+        };
+      }
+      const points = polylines.flat();
+      const xs = points.map((p) => p.x);
+      const ys = points.map((p) => p.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+  }
+}
+
+export function moveShape(shape: SketchShape, dx: number, dy: number): SketchShape {
+  switch (shape.type) {
+    case "rectangle":
+      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+    case "circle":
+      return { ...shape, cx: round(shape.cx + dx), cy: round(shape.cy + dy) };
+    case "polyline":
+      return {
+        ...shape,
+        points: shape.points.map((p) => ({
+          x: round(p.x + dx),
+          y: round(p.y + dy),
+        })),
+      };
+    case "text":
+      return {
+        ...shape,
+        x: round(shape.x + dx),
+        y: round(shape.y + dy),
+      };
+  }
+}
+
+export function updateRectangle(
+  shape: SketchRectangle,
+  patch: Partial<SketchRectangle>,
+): SketchRectangle {
+  return { ...shape, ...patch };
+}
+
+export function updateCircle(
+  shape: SketchCircle,
+  patch: Partial<SketchCircle>,
+): SketchCircle {
+  return { ...shape, ...patch };
+}
+
+export function updatePolyline(
+  shape: SketchPolyline,
+  patch: Partial<SketchPolyline>,
+): SketchPolyline {
+  return { ...shape, ...patch };
+}
+
+function emitCutStart(doc: SketchDocument, cutZ = doc.cutZ): string[] {
+  if (doc.spindleOn) {
+    return [`M3 S${Math.max(0, Math.round(doc.laserPower))}`];
+  }
+
+  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedCut)}`];
+}
+
+function emitCutEnd(doc: SketchDocument): string[] {
+  if (doc.spindleOn) {
+    return ["M5"];
+  }
+
+  return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
+}
+
+function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
+  return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
+}
+
+function rectangleToGCode(shape: SketchRectangle, doc: SketchDocument): string[] {
+  const x1 = shape.x;
+  const y1 = shape.y;
+  const x2 = shape.x + shape.width;
+  const y2 = shape.y + shape.height;
+  const cutZ = resolveCutZ(shape, doc);
+
+  return [
+    `; RECTANGLE ${shape.name}`,
+    ...emitMoveTo(x1, y1, doc.feedRapid),
+    ...emitCutStart(doc, cutZ),
+    `G1 X${fmt(x2)} Y${fmt(y1)} F${fmt(doc.feedCut)}`,
+    `G1 X${fmt(x2)} Y${fmt(y2)} F${fmt(doc.feedCut)}`,
+    `G1 X${fmt(x1)} Y${fmt(y2)} F${fmt(doc.feedCut)}`,
+    `G1 X${fmt(x1)} Y${fmt(y1)} F${fmt(doc.feedCut)}`,
+    ...emitCutEnd(doc),
+  ];
+}
+
+function circleToPolylinePoints(shape: SketchCircle, segments = 64) {
+  const points: Array<{ x: number; y: number }> = [];
+
+  for (let i = 0; i <= segments; i += 1) {
+    const t = (i / segments) * Math.PI * 2;
+    points.push({
+      x: round(shape.cx + Math.cos(t) * shape.radius),
+      y: round(shape.cy + Math.sin(t) * shape.radius),
+    });
+  }
+
+  return points;
+}
+
+function polylinePointsToGCode(
+  name: string,
+  points: Array<{ x: number; y: number }>,
+  closed: boolean,
+  doc: SketchDocument,
+  cutZ = doc.cutZ,
+): string[] {
+  if (points.length < 2) {
+    return [];
+  }
+
+  const lines: string[] = [
+    `; POLYLINE ${name}`,
+    ...emitMoveTo(points[0].x, points[0].y, doc.feedRapid),
+    ...emitCutStart(doc, cutZ),
+  ];
+
+  for (let i = 1; i < points.length; i += 1) {
+    lines.push(`G1 X${fmt(points[i].x)} Y${fmt(points[i].y)} F${fmt(doc.feedCut)}`);
+  }
+
+  if (closed) {
+    lines.push(`G1 X${fmt(points[0].x)} Y${fmt(points[0].y)} F${fmt(doc.feedCut)}`);
+  }
+
+  lines.push(...emitCutEnd(doc));
+
+  return lines;
+}
+
+function circleToGCode(shape: SketchCircle, doc: SketchDocument): string[] {
+  const points = circleToPolylinePoints(shape, 72);
+  return polylinePointsToGCode(shape.name, points, true, doc, resolveCutZ(shape, doc));
+}
+
+function polylineToGCode(shape: SketchPolyline, doc: SketchDocument): string[] {
+  return polylinePointsToGCode(
+    shape.name,
+    shape.points,
+    shape.closed,
+    doc,
+    resolveCutZ(shape, doc),
+  );
+}
+
+function textToGCode(shape: SketchText, doc: SketchDocument): string[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const polylines = textToStrokePolylines(shape);
+  const lines: string[] = [`; TEXT ${shape.name}: ${shape.text}`];
+
+  for (const polyline of polylines) {
+    if (polyline.length < 2) {
+      continue;
+    }
+
+    lines.push(...emitMoveTo(polyline[0].x, polyline[0].y, doc.feedRapid));
+    lines.push(...emitCutStart(doc, cutZ));
+
+    for (let i = 1; i < polyline.length; i += 1) {
+      lines.push(`G1 X${fmt(polyline[i].x)} Y${fmt(polyline[i].y)} F${fmt(doc.feedCut)}`);
+    }
+
+    lines.push(...emitCutEnd(doc));
+  }
+
+  return lines;
+}
+
+export function generateSketchGCode(doc: SketchDocument): string {
+  const lines: string[] = [
+    "; Generated by GCode Studio / EditTab",
+    "G21",
+    "G90",
+    `G0 Z${fmt(doc.safeZ)}`,
+  ];
+
+  for (const shape of doc.shapes) {
+    switch (shape.type) {
+      case "rectangle":
+        lines.push(...rectangleToGCode(shape, doc));
+        break;
+      case "circle":
+        lines.push(...circleToGCode(shape, doc));
+        break;
+      case "polyline":
+        lines.push(...polylineToGCode(shape, doc));
+        break;
+      case "text":
+        lines.push(...textToGCode(shape, doc));
+        break;
+    }
+  }
+
+  lines.push(`G0 Z${fmt(doc.safeZ)}`);
+  lines.push("G0 X0 Y0");
+
+  return lines.join("\n") + "\n";
+}
+
+
+path: /src/utils/ttfText.ts
+----------------------------------------
+import opentype from "opentype.js";
+
+export type CadPoint = { x: number; y: number };
+
+export async function loadFont(fontUrl: string) {
+  return await opentype.load(fontUrl);
+}
+
+export function pathToPolylines(
+  commands: Array<any>,
+  curveSteps = 12,
+): CadPoint[][] {
+  const result: CadPoint[][] = [];
+  let current: CadPoint[] = [];
+  let pen = { x: 0, y: 0 };
+
+  function pushPoint(x: number, y: number) {
+    current.push({ x, y });
+    pen = { x, y };
+  }
+
+  function quad(p0: CadPoint, p1: CadPoint, p2: CadPoint, t: number) {
+    const mt = 1 - t;
+    return {
+      x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+      y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
+    };
+  }
+
+  function cubic(p0: CadPoint, p1: CadPoint, p2: CadPoint, p3: CadPoint, t: number) {
+    const mt = 1 - t;
+    return {
+      x:
+        mt * mt * mt * p0.x +
+        3 * mt * mt * t * p1.x +
+        3 * mt * t * t * p2.x +
+        t * t * t * p3.x,
+      y:
+        mt * mt * mt * p0.y +
+        3 * mt * mt * t * p1.y +
+        3 * mt * t * t * p2.y +
+        t * t * t * p3.y,
+    };
+  }
+
+  for (const cmd of commands) {
+    if (cmd.type === "M") {
+      if (current.length > 1) result.push(current);
+      current = [];
+      pushPoint(cmd.x, cmd.y);
+    } else if (cmd.type === "L") {
+      pushPoint(cmd.x, cmd.y);
+    } else if (cmd.type === "Q") {
+      const p0 = pen;
+      for (let i = 1; i <= curveSteps; i++) {
+        const p = quad(p0, { x: cmd.x1, y: cmd.y1 }, { x: cmd.x, y: cmd.y }, i / curveSteps);
+        pushPoint(p.x, p.y);
+      }
+    } else if (cmd.type === "C") {
+      const p0 = pen;
+      for (let i = 1; i <= curveSteps; i++) {
+        const p = cubic(
+          p0,
+          { x: cmd.x1, y: cmd.y1 },
+          { x: cmd.x2, y: cmd.y2 },
+          { x: cmd.x, y: cmd.y },
+          i / curveSteps,
+        );
+        pushPoint(p.x, p.y);
+      }
+    } else if (cmd.type === "Z") {
+      if (current.length > 1) result.push(current);
+      current = [];
+    }
+  }
+
+  if (current.length > 1) result.push(current);
+
+  return result;
+}r
 
 
 path: /src/workers/gcodeParser.worker.ts
@@ -2645,8 +4343,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 35
+included: 44
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 71032
+totalBytes(approx): 117751

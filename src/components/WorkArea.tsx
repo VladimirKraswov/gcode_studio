@@ -22,8 +22,6 @@ export function WorkArea({ bounds, stock, placementMode }: WorkAreaProps) {
         args={[Math.max(stock.width + 20, stock.height + 20), 20, 0x94a3b8, 0xcbd5e1]}
         position={[center.x, -stock.thickness, center.z]}
       />
-
-      <axesHelper args={[25]} />
     </group>
   );
 }

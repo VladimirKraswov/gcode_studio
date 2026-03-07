@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { Bounds, PlacementMode, Point3, Segment, StockDimensions } from "../types/gcode";
+import { machineToSceneCoords, machineToScenePoint } from "./coordinates";
 
 export const AXIS_MAP = {
-  invertX: true,
+  invertX: false,
   invertY: false,
   invertZ: false,
 } as const;
@@ -12,16 +13,19 @@ export function mapAxis(value: number, invert = false): number {
 }
 
 export function toSceneCoords(p: Point3): Point3 {
-  return {
+  return machineToSceneCoords({
     x: mapAxis(p.x, AXIS_MAP.invertX),
-    y: mapAxis(p.z, AXIS_MAP.invertZ),
-    z: mapAxis(p.y, AXIS_MAP.invertY),
-  };
+    y: mapAxis(p.y, AXIS_MAP.invertY),
+    z: mapAxis(p.z, AXIS_MAP.invertZ),
+  });
 }
 
 export function toScenePoint(p: Point3): THREE.Vector3 {
-  const s = toSceneCoords(p);
-  return new THREE.Vector3(s.x, s.y, s.z);
+  return machineToScenePoint({
+    x: mapAxis(p.x, AXIS_MAP.invertX),
+    y: mapAxis(p.y, AXIS_MAP.invertY),
+    z: mapAxis(p.z, AXIS_MAP.invertZ),
+  });
 }
 
 export function fmt(v: number): string {
@@ -50,12 +54,12 @@ export function getStockPlacement(
   const centerX =
     mode === "center"
       ? (bounds.minX + bounds.maxX) / 2
-      : bounds.minX + stock.width / 2;
+      : stock.width / 2;
 
   const centerY =
     mode === "center"
       ? (bounds.minY + bounds.maxY) / 2
-      : bounds.minY + stock.height / 2;
+      : stock.height / 2;
 
   const left = centerX - stock.width / 2;
   const bottom = centerY - stock.height / 2;

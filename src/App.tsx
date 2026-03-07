@@ -1,13 +1,18 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import type { CameraInfo, PlacementMode, StockDimensions } from "./types/gcode";
+import type { MainTab } from "./types/ui";
 import { DEMO_GCODE } from "./constants/demo";
-import { GCodeEditorTab } from "./components/GCodeEditorTab";
+import { EditTab } from "./components/EditTab";
+import { GCodeEditorPanel } from "./components/GCodeEditorPanel";
+import { MainTabs } from "./components/MainTabs";
 import { PathScene } from "./components/PathScene";
 import { RightInfoPanel } from "./components/RightInfoPanel";
 import { useCurrentState } from "./hooks/useCurrentState";
 import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
+import type { SketchDocument } from "./types/sketch";
+import { createEmptySketchDocument } from "./utils/sketch";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -15,8 +20,12 @@ const DEFAULT_STOCK: StockDimensions = {
   thickness: 3,
 };
 
+
 export default function App() {
   const [source, setSource] = useState(DEMO_GCODE);
+const [editDocument, setEditDocument] = useState<SketchDocument>(
+  createEmptySketchDocument(),
+);
   const [fileName, setFileName] = useState("demo.gcode");
   const [cameraResetKey, setCameraResetKey] = useState(0);
   const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
@@ -24,7 +33,7 @@ export default function App() {
   const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
   const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
-  const [showEditor, setShowEditor] = useState(false);
+  const [activeTab, setActiveTab] = useState<MainTab>("view");
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -38,6 +47,13 @@ export default function App() {
   } = usePlayback();
 
   const currentState = useCurrentState(parsed, progress);
+
+  function applyGeneratedGCodeFromEdit(gcode: string) {
+  setSource(gcode);
+  setFileName("edit-generated.gcode");
+  resetPlayback();
+  setCameraResetKey((value) => value + 1);
+}
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -333,71 +349,124 @@ export default function App() {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "white",
-            borderRadius: 16,
-            padding: 16,
-            boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
+        <div style={{ minWidth: 0 }}>
+          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
 
-          <div
-            style={{
-              height: 760,
-              borderRadius: 16,
-              overflow: "hidden",
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <PathScene
-              parsed={parsed}
-              currentState={currentState}
-              progress={progress}
-              cameraResetKey={cameraResetKey}
-              stock={stock}
-              showMaterialRemoval={showMaterialRemoval}
-              totalLength={parsed.totalLength}
-              placementMode={placementMode}
-              detailLevel={detailLevel}
-              onCameraUpdate={setCameraInfo}
-            />
-          </div>
+          {activeTab === "view" && (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>3D-превью траектории</h3>
 
-          <div
-            style={{
-              marginTop: 12,
-              fontSize: 14,
-              color: "#64748b",
-              display: "flex",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>ЛКМ — вращение, ПКМ — панорама, колесо мыши — масштаб.</span>
-            <button type="button" onClick={() => setShowEditor((value) => !value)}>
-              {showEditor ? "Показать информацию" : "Редактор G-code"}
-            </button>
-          </div>
+              <div
+                style={{
+                  height: 760,
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <PathScene
+                  parsed={parsed}
+                  currentState={currentState}
+                  progress={progress}
+                  cameraResetKey={cameraResetKey}
+                  stock={stock}
+                  showMaterialRemoval={showMaterialRemoval}
+                  totalLength={parsed.totalLength}
+                  placementMode={placementMode}
+                  detailLevel={detailLevel}
+                  onCameraUpdate={setCameraInfo}
+                />
+              </div>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  fontSize: 14,
+                  color: "#64748b",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>ЛКМ/ПКМ — панорама, колесо мыши — масштаб.</span>
+                <span>Machine zero: X0 Y0 Z0</span>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "gcode" && (
+            <div style={{ height: 860 }}>
+              <GCodeEditorPanel
+                source={source}
+                setSource={setSource}
+                fileName={fileName}
+              />
+            </div>
+          )}
+
+          {activeTab === "edit" && (
+  <EditTab
+    document={editDocument}
+    setDocument={setEditDocument}
+    onGenerateGCode={applyGeneratedGCodeFromEdit}
+  />
+)}
         </div>
 
-        {showEditor ? (
-          <GCodeEditorTab
-            source={source}
-            setSource={setSource}
-            fileName={fileName}
-            onClose={() => setShowEditor(false)}
-          />
-        ) : (
-          <RightInfoPanel
-            bounds={parsed.bounds}
-            stock={stock}
-            parsedStats={parsed.stats}
-            currentState={currentState}
-            cameraInfo={cameraInfo}
-            totalLength={parsed.totalLength}
-          />
-        )}
+        <div>
+          {activeTab === "view" ? (
+            <RightInfoPanel
+              bounds={parsed.bounds}
+              stock={stock}
+              parsedStats={parsed.stats}
+              currentState={currentState}
+              cameraInfo={cameraInfo}
+              totalLength={parsed.totalLength}
+            />
+          ) : activeTab === "gcode" ? (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                height: "fit-content",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Подсказка</h3>
+              <p style={{ marginTop: 0, color: "#475569", lineHeight: 1.5 }}>
+                Здесь можно редактировать исходный G-code, применять изменения и
+                сохранять файл как новую версию.
+              </p>
+              <p style={{ marginBottom: 0, color: "#64748b", lineHeight: 1.5 }}>
+                После нажатия «Применить» траектория будет перепарсена и обновится
+                во вкладке View.
+              </p>
+            </div>
+          ) : (
+            <div
+              style={{
+                background: "white",
+                borderRadius: 16,
+                padding: 16,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                height: "fit-content",
+              }}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Edit</h3>
+              <p style={{ margin: 0, color: "#64748b" }}>
+                Пока пусто. Здесь можно будет разместить инструменты геометрического
+                редактирования, трансформации траектории или постпроцессинг.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

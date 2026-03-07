@@ -37,12 +37,10 @@ export function AutoFitCamera({
     const targetScene = toScenePoint({ x: 0, y: 0, z: 0 });
     const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
 
-    // Небольшой фиксированный наклон:
-    // +Y = сверху, +Z = лёгкий наклон "спереди"
     const cameraPosition = new THREE.Vector3(
       targetScene.x,
       targetScene.y + distance,
-      targetScene.z + distance * -0.22,
+      targetScene.z - distance * 0.22,
     );
 
     camera.position.copy(cameraPosition);

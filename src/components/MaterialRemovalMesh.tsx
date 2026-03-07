@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { ParsedGCode, PlacementMode, StockDimensions } from "../types/gcode";
-import { AXIS_MAP, clamp, getStockPlacement, toSceneCoords } from "../utils";
+import { clamp, getStockPlacement, toSceneCoords } from "../utils";
 
 type MaterialRemovalMeshProps = {
   parsed: ParsedGCode;
@@ -22,7 +22,10 @@ export function MaterialRemovalMesh({
 }: MaterialRemovalMeshProps) {
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
-  const invertX = AXIS_MAP.invertX;
+
+  // В preview сцена зеркалится по X, поэтому карту выборки
+  // нужно зеркалить так же, иначе съём материала уедет в другой угол.
+  const previewMirrorX = true;
 
   const level = clamp(detailLevel, 1, 10);
   const t = (level - 1) / 9;
@@ -116,7 +119,7 @@ export function MaterialRemovalMesh({
           continue;
         }
 
-        const mappedX = invertX ? width - localX : localX;
+        const mappedX = previewMirrorX ? width - localX : localX;
         const gx = clamp(Math.round((mappedX / width) * (gridX - 1)), 0, gridX - 1);
         const gy = clamp(Math.round((localY / depth) * (gridY - 1)), 0, gridY - 1);
         const index = gy * gridX + gx;
@@ -150,9 +153,9 @@ export function MaterialRemovalMesh({
     gridX,
     gridY,
     heights,
-    invertX,
     placement.bottom,
     placement.left,
+    previewMirrorX,
     progress,
     recomputeNormals,
     segments,
