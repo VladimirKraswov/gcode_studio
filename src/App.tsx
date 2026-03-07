@@ -1,6 +1,14 @@
-import { useState } from "react";
-import type { ChangeEvent } from "react";
-import { FiBox, FiEye, FiLoader, FiTool, FiCode } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent, Dispatch, SetStateAction } from "react";
+import {
+  FiBox,
+  FiCode,
+  FiCornerUpLeft,
+  FiCornerUpRight,
+  FiEye,
+  FiLoader,
+  FiTool,
+} from "react-icons/fi";
 import type { CameraInfo, PlacementMode, StockDimensions } from "./types/gcode";
 import type { MainTab } from "./types/ui";
 import { DEMO_GCODE } from "./constants/demo";
@@ -24,6 +32,24 @@ import { downloadTextFile } from "./utils";
 import { parseProjectFile, createProjectFile } from "./utils/projectFile";
 import type { ViewTransform } from "./modules/cad/model/view";
 import { createDefaultView } from "./modules/cad/model/view";
+import { useUndoRedo } from "./hooks/useUndoRedo";
+import type { GCodeStudioProject } from "./types/project";
+
+const UNDO_HISTORY_LIMIT = 10;
+
+type HistoryProjectState = Pick<
+  GCodeStudioProject,
+  | "fileName"
+  | "source"
+  | "stock"
+  | "showMaterialRemoval"
+  | "placementMode"
+  | "detailLevel"
+  | "activeTab"
+  | "editDocument"
+  | "selection"
+  | "cadView"
+>;
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -53,20 +79,106 @@ const TAB_META: Record<
 };
 
 export default function App() {
-  const [source, setSource] = useState(DEMO_GCODE);
-  const [editDocument, setEditDocument] = useState<SketchDocument>(
-    createEmptySketchDocument(),
-  );
-  const [fileName, setFileName] = useState("demo.gcode");
   const [cameraResetKey, setCameraResetKey] = useState(0);
-  const [stock, setStock] = useState<StockDimensions>(DEFAULT_STOCK);
-  const [showMaterialRemoval, setShowMaterialRemoval] = useState(true);
-  const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
-  const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
-  const [activeTab, setActiveTab] = useState<MainTab>("view");
-  const [selection, setSelection] = useState<SelectionState>(createSelection());
-  const [cadView, setCadView] = useState<ViewTransform>(createDefaultView());
+
+  const initialProjectState = useMemo<HistoryProjectState>(
+    () => ({
+      source: DEMO_GCODE,
+      editDocument: createEmptySketchDocument(),
+      fileName: "demo.gcode",
+      stock: DEFAULT_STOCK,
+      showMaterialRemoval: true,
+      placementMode: "origin",
+      detailLevel: 5,
+      activeTab: "view",
+      selection: createSelection(),
+      cadView: createDefaultView(),
+    }),
+    [],
+  );
+
+  const {
+    state: historyState,
+    setState: setHistoryState,
+    checkpoint: checkpointHistory,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+  } = useUndoRedo<HistoryProjectState>(initialProjectState, UNDO_HISTORY_LIMIT);
+
+  const {
+    source,
+    editDocument,
+    fileName,
+    stock,
+    showMaterialRemoval,
+    placementMode,
+    detailLevel,
+    activeTab,
+    selection,
+    cadView,
+  } = historyState;
+
+  function resolveUpdate<T>(update: SetStateAction<T>, prev: T): T {
+    return typeof update === "function"
+      ? (update as (value: T) => T)(prev)
+      : update;
+  }
+
+  function updateField<K extends keyof HistoryProjectState>(
+    key: K,
+    update: SetStateAction<HistoryProjectState[K]>,
+    options?: { record?: boolean },
+  ) {
+    setHistoryState(
+      (prev) => ({
+        ...prev,
+        [key]: resolveUpdate(update, prev[key]),
+      }),
+      options,
+    );
+  }
+
+  const setSource: Dispatch<SetStateAction<string>> = (update) =>
+    updateField("source", update);
+
+  const setEditDocument: Dispatch<SetStateAction<SketchDocument>> = (update) =>
+    updateField("editDocument", update);
+
+  const setEditDocumentSilently: Dispatch<SetStateAction<SketchDocument>> = (
+    update,
+  ) => updateField("editDocument", update, { record: false });
+
+  const setFileName: Dispatch<SetStateAction<string>> = (update) =>
+    updateField("fileName", update);
+
+  const setStock: Dispatch<SetStateAction<StockDimensions>> = (update) =>
+    updateField("stock", update);
+
+  const setShowMaterialRemoval: Dispatch<SetStateAction<boolean>> = (update) =>
+    updateField("showMaterialRemoval", update);
+
+  const setPlacementMode: Dispatch<SetStateAction<PlacementMode>> = (update) =>
+    updateField("placementMode", update);
+
+  const setDetailLevel: Dispatch<SetStateAction<number>> = (update) =>
+    updateField("detailLevel", update);
+
+  const setActiveTab: Dispatch<SetStateAction<MainTab>> = (update) =>
+    updateField("activeTab", update);
+
+  const setSelection = (next: SelectionState) => updateField("selection", next);
+
+  const setSelectionSilently = (next: SelectionState) =>
+    updateField("selection", next, { record: false });
+
+  const setCadView: Dispatch<SetStateAction<ViewTransform>> = (update) =>
+    updateField("cadView", update);
+
+  const setCadViewSilently: Dispatch<SetStateAction<ViewTransform>> = (update) =>
+    updateField("cadView", update, { record: false });
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -82,12 +194,42 @@ export default function App() {
   const currentState = useCurrentState(parsed, progress);
   const tabMeta = TAB_META[activeTab];
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const mod = event.metaKey || event.ctrlKey;
+      if (!mod || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+        return;
+      }
+
+      if (key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
+
   function applyGeneratedGCodeFromEdit(gcode: string) {
-    setSource(gcode);
-    setFileName("edit-generated.gcode");
+    setHistoryState((prev) => ({
+      ...prev,
+      source: gcode,
+      fileName: "edit-generated.gcode",
+      activeTab: "gcode",
+    }));
     resetPlayback();
     setCameraResetKey((value) => value + 1);
-    setActiveTab("gcode");
   }
 
   function saveProject() {
@@ -106,9 +248,9 @@ export default function App() {
       cadView,
     };
 
-  const outputName = fileName.replace(/\.(gcode|nc|tap|txt|gs)$/i, "") + ".gs";
-  downloadTextFile(createProjectFile(project), outputName);
-}
+    const outputName = fileName.replace(/\.(gcode|nc|tap|txt|gs)$/i, "") + ".gs";
+    downloadTextFile(createProjectFile(project), outputName);
+  }
 
   async function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -118,16 +260,18 @@ export default function App() {
       const text = await file.text();
       const project = parseProjectFile(text);
 
-      setFileName(project.fileName || "project.gcode");
-      setSource(project.source || "");
-      setStock(project.stock);
-      setShowMaterialRemoval(project.showMaterialRemoval);
-      setPlacementMode(project.placementMode);
-      setDetailLevel(project.detailLevel);
-      setActiveTab(project.activeTab);
-      setEditDocument(project.editDocument);
-      setSelection(project.selection);
-      setCadView(project.cadView);
+      setHistoryState({
+        fileName: project.fileName || "project.gcode",
+        source: project.source || "",
+        stock: project.stock,
+        showMaterialRemoval: project.showMaterialRemoval,
+        placementMode: project.placementMode,
+        detailLevel: project.detailLevel,
+        activeTab: project.activeTab,
+        editDocument: project.editDocument,
+        selection: project.selection,
+        cadView: project.cadView,
+      });
 
       resetPlayback();
       setCameraResetKey((value) => value + 1);
@@ -144,15 +288,21 @@ export default function App() {
     if (!file) return;
 
     const text = await file.text();
-    setSource(text || "");
-    setFileName(file.name || "loaded.gcode");
+    setHistoryState((prev) => ({
+      ...prev,
+      source: text || "",
+      fileName: file.name || "loaded.gcode",
+    }));
     resetPlayback();
     setCameraResetKey((value) => value + 1);
   }
 
   function loadDemo() {
-    setSource(DEMO_GCODE);
-    setFileName("demo.gcode");
+    setHistoryState((prev) => ({
+      ...prev,
+      source: DEMO_GCODE,
+      fileName: "demo.gcode",
+    }));
     resetPlayback();
     setCameraResetKey((value) => value + 1);
   }
@@ -299,31 +449,67 @@ export default function App() {
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "8px 12px",
-                    borderRadius: 999,
-                    background: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    color: "#1d4ed8",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    maxWidth: "100%",
-                  }}
-                >
-                  <FiBox size={14} />
-                  <span
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={undo}
+                    disabled={!canUndo}
+                    title="Отменить (Ctrl/Cmd+Z)"
                     style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      ...ui.buttonGhost,
+                      width: 38,
+                      height: 38,
+                      padding: 0,
+                      opacity: canUndo ? 1 : 0.45,
+                      cursor: canUndo ? "pointer" : "not-allowed",
                     }}
                   >
-                    {fileName}
-                  </span>
+                    <FiCornerUpLeft size={16} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={redo}
+                    disabled={!canRedo}
+                    title="Повторить (Ctrl/Cmd+Shift+Z / Ctrl+Y)"
+                    style={{
+                      ...ui.buttonGhost,
+                      width: 38,
+                      height: 38,
+                      padding: 0,
+                      opacity: canRedo ? 1 : 0.45,
+                      cursor: canRedo ? "pointer" : "not-allowed",
+                    }}
+                  >
+                    <FiCornerUpRight size={16} />
+                  </button>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 12px",
+                      borderRadius: 999,
+                      background: "#eff6ff",
+                      border: "1px solid #bfdbfe",
+                      color: "#1d4ed8",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      maxWidth: "100%",
+                    }}
+                  >
+                    <FiBox size={14} />
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {fileName}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -429,11 +615,19 @@ export default function App() {
                   <EditTab
                     document={editDocument}
                     setDocument={setEditDocument}
+                    setDocumentSilently={setEditDocumentSilently}
                     onGenerateGCode={applyGeneratedGCodeFromEdit}
                     selection={selection}
                     onSelectionChange={setSelection}
+                    onSelectionChangeSilently={setSelectionSilently}
                     view={cadView}
                     onViewChange={setCadView}
+                    onViewChangeSilently={setCadViewSilently}
+                    checkpointHistory={checkpointHistory}
+                    onUndo={undo}
+                    onRedo={redo}
+                    canUndo={canUndo}
+                    canRedo={canRedo}
                   />
                 </div>
               )}

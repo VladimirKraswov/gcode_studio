@@ -11,30 +11,50 @@ import { ui } from "../styles/ui";
 type EditTabProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  setDocumentSilently: React.Dispatch<React.SetStateAction<SketchDocument>>;
   onGenerateGCode: (gcode: string) => void;
   selection: SelectionState;
   onSelectionChange: (selection: SelectionState) => void;
+  onSelectionChangeSilently: (selection: SelectionState) => void;
   view: ViewTransform;
   onViewChange: React.Dispatch<React.SetStateAction<ViewTransform>>;
+  onViewChangeSilently: React.Dispatch<React.SetStateAction<ViewTransform>>;
+  checkpointHistory: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 export function EditTab({
   document,
   setDocument,
+  setDocumentSilently,
   onGenerateGCode,
   selection,
   onSelectionChange,
+  onSelectionChangeSilently,
   view,
   onViewChange,
+  onViewChangeSilently,
+  checkpointHistory,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: EditTabProps) {
   const editor = useCadEditor({
     document,
     setDocument,
+    setDocumentSilently,
     onGenerateGCode,
     selection,
     onSelectionChange,
+    onSelectionChangeSilently,
     view,
     onViewChange,
+    onViewChangeSilently,
+    checkpointHistory,
   });
 
   return (
@@ -59,6 +79,10 @@ export function EditTab({
         onResetView={editor.resetView}
         onGenerate={editor.handleGenerateClick}
         isGenerating={editor.isGenerating}
+        onUndo={onUndo}
+        onRedo={onRedo}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
 
       {editor.tool === "text" && (

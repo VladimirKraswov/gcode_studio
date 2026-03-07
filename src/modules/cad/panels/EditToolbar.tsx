@@ -1,6 +1,8 @@
 import {
   FiCheck,
   FiCircle,
+  FiCornerUpLeft,
+  FiCornerUpRight,
   FiMaximize,
   FiMousePointer,
   FiPenTool,
@@ -20,6 +22,10 @@ type EditToolbarProps = {
   onResetView: () => void;
   onGenerate: () => void;
   isGenerating: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
@@ -38,6 +44,10 @@ export function EditToolbar({
   onResetView,
   onGenerate,
   isGenerating,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: EditToolbarProps) {
   return (
     <div
@@ -101,6 +111,40 @@ export function EditToolbar({
           style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
         >
           <FiMaximize size={16} />
+        </button>
+
+        <button
+          type="button"
+          title="Отменить последнее действие"
+          onClick={onUndo}
+          disabled={!canUndo}
+          style={{
+            ...ui.buttonGhost,
+            width: 38,
+            height: 38,
+            padding: 0,
+            opacity: canUndo ? 1 : 0.45,
+            cursor: canUndo ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiCornerUpLeft size={16} />
+        </button>
+
+        <button
+          type="button"
+          title="Повторить действие"
+          onClick={onRedo}
+          disabled={!canRedo}
+          style={{
+            ...ui.buttonGhost,
+            width: 38,
+            height: 38,
+            padding: 0,
+            opacity: canRedo ? 1 : 0.45,
+            cursor: canRedo ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiCornerUpRight size={16} />
         </button>
       </div>
 

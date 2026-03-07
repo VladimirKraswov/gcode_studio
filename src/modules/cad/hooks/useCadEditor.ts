@@ -49,11 +49,15 @@ import type { ViewTransform } from "../model/view";
 type UseCadEditorParams = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  setDocumentSilently: React.Dispatch<React.SetStateAction<SketchDocument>>;
   onGenerateGCode: (gcode: string) => void;
   selection: SelectionState;
   onSelectionChange: (selection: SelectionState) => void;
+  onSelectionChangeSilently: (selection: SelectionState) => void;
   view: ViewTransform;
   onViewChange: React.Dispatch<React.SetStateAction<ViewTransform>>;
+  onViewChangeSilently: React.Dispatch<React.SetStateAction<ViewTransform>>;
+  checkpointHistory: () => void;
 };
 
 type PanState = {
@@ -64,15 +68,18 @@ type PanState = {
   startOffsetY: number;
 } | null;
 
-
 export function useCadEditor({
   document,
   setDocument,
+  setDocumentSilently,
   onGenerateGCode,
   selection,
   onSelectionChange,
+  onSelectionChangeSilently,
   view,
   onViewChange,
+  onViewChangeSilently,
+  checkpointHistory,
 }: UseCadEditorParams) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -181,6 +188,7 @@ export function useCadEditor({
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
     if (event.button === 1) {
       event.preventDefault();
+      checkpointHistory();
       setPanState({
         pointerId: event.pointerId,
         startClientX: event.clientX,
@@ -196,7 +204,6 @@ export function useCadEditor({
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
     const cad = normalizePoint(rawCad);
-    
 
     if (tool === "rectangle") {
       setDraft(startRectangleDraft(cad.x, cad.y));
@@ -219,13 +226,13 @@ export function useCadEditor({
     }
 
     if (tool === "select") {
-      onSelectionChange(clearSelection());
+      onSelectionChangeSilently(clearSelection());
     }
   }
 
   function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (panState && panState.pointerId === event.pointerId) {
-      onViewChange((prev) => ({
+      onViewChangeSilently((prev) => ({
         ...prev,
         offsetX: panState.startOffsetX + (event.clientX - panState.startClientX),
         offsetY: panState.startOffsetY + (event.clientY - panState.startClientY),
@@ -251,7 +258,7 @@ export function useCadEditor({
           ? dragState.selectionIds
           : [dragState.shapeId];
 
-      setDocument((prev) => ({
+      setDocumentSilently((prev) => ({
         ...prev,
         shapes: prev.shapes.map((shape) =>
           selectedIds.includes(shape.id) ? moveShape(shape, next.dx, next.dy) : shape,
@@ -334,7 +341,7 @@ export function useCadEditor({
     }
 
     if (nextSelection !== selection) {
-      onSelectionChange(nextSelection);
+      onSelectionChangeSilently(nextSelection);
     }
 
     if (tool !== "select" || event.button !== 0) {
@@ -344,6 +351,8 @@ export function useCadEditor({
     if (event.shiftKey) {
       return;
     }
+
+    checkpointHistory();
 
     setDragState(
       startDrag(

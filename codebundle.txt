@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T17:11:49.265Z
+generated: 2026-03-07T17:54:20.026Z
 
 
 
@@ -449,6 +449,10 @@ import type { SelectionState } from "./modules/cad/model/selection";
 import { createSelection } from "./modules/cad/model/selection";
 import { createEmptySketchDocument } from "./modules/cad/model/document";
 import { theme, ui } from "./styles/ui";
+import { downloadTextFile } from "./utils";
+import { parseProjectFile, createProjectFile } from "./utils/projectFile";
+import type { ViewTransform } from "./modules/cad/model/view";
+import { createDefaultView } from "./modules/cad/model/view";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -491,6 +495,7 @@ export default function App() {
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [selection, setSelection] = useState<SelectionState>(createSelection());
+  const [cadView, setCadView] = useState<ViewTransform>(createDefaultView());
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -512,6 +517,55 @@ export default function App() {
     resetPlayback();
     setCameraResetKey((value) => value + 1);
     setActiveTab("gcode");
+  }
+
+  function saveProject() {
+    const project = {
+      version: 2 as const,
+      kind: "gcode-studio-project" as const,
+      fileName,
+      source,
+      stock,
+      showMaterialRemoval,
+      placementMode,
+      detailLevel,
+      activeTab,
+      editDocument,
+      selection,
+      cadView,
+    };
+
+  const outputName = fileName.replace(/\.(gcode|nc|tap|txt|gs)$/i, "") + ".gs";
+  downloadTextFile(createProjectFile(project), outputName);
+}
+
+  async function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const project = parseProjectFile(text);
+
+      setFileName(project.fileName || "project.gcode");
+      setSource(project.source || "");
+      setStock(project.stock);
+      setShowMaterialRemoval(project.showMaterialRemoval);
+      setPlacementMode(project.placementMode);
+      setDetailLevel(project.detailLevel);
+      setActiveTab(project.activeTab);
+      setEditDocument(project.editDocument);
+      setSelection(project.selection);
+      setCadView(project.cadView);
+
+      resetPlayback();
+      setCameraResetKey((value) => value + 1);
+    } catch (error) {
+      console.error(error);
+      alert("Не удалось загрузить файл проекта .gs");
+    } finally {
+      event.target.value = "";
+    }
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -618,6 +672,8 @@ export default function App() {
               <LeftPanel
                 fileName={fileName}
                 onFileChange={handleFileChange}
+                onProjectFileChange={handleProjectFileChange}
+                onSaveProject={saveProject}
                 onLoadDemo={loadDemo}
                 onResetCamera={() => setCameraResetKey((v) => v + 1)}
                 playing={playing}
@@ -805,6 +861,8 @@ export default function App() {
                     onGenerateGCode={applyGeneratedGCodeFromEdit}
                     selection={selection}
                     onSelectionChange={setSelection}
+                    view={cadView}
+                    onViewChange={setCadView}
                   />
                 </div>
               )}
@@ -1048,6 +1106,7 @@ import { EditToolbar } from "../modules/cad/panels/EditToolbar";
 import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
+import type { ViewTransform } from "../modules/cad/model/view";
 import { ui } from "../styles/ui";
 
 type EditTabProps = {
@@ -1056,6 +1115,8 @@ type EditTabProps = {
   onGenerateGCode: (gcode: string) => void;
   selection: SelectionState;
   onSelectionChange: (selection: SelectionState) => void;
+  view: ViewTransform;
+  onViewChange: React.Dispatch<React.SetStateAction<ViewTransform>>;
 };
 
 export function EditTab({
@@ -1064,6 +1125,8 @@ export function EditTab({
   onGenerateGCode,
   selection,
   onSelectionChange,
+  view,
+  onViewChange,
 }: EditTabProps) {
   const editor = useCadEditor({
     document,
@@ -1071,6 +1134,8 @@ export function EditTab({
     onGenerateGCode,
     selection,
     onSelectionChange,
+    view,
+    onViewChange,
   });
 
   return (
@@ -1963,6 +2028,7 @@ import {
   FiFolder,
   FiPause,
   FiPlay,
+  FiSave,
   FiSliders,
   FiSkipBack,
   FiUpload,
@@ -1973,6 +2039,8 @@ import { theme, ui } from "../styles/ui";
 type LeftPanelProps = {
   fileName: string;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onProjectFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSaveProject: () => void;
   onLoadDemo: () => void;
   onResetCamera: () => void;
   playing: boolean;
@@ -1995,6 +2063,8 @@ type LeftPanelProps = {
 export function LeftPanel({
   fileName,
   onFileChange,
+  onProjectFileChange,
+  onSaveProject,
   onLoadDemo,
   onResetCamera,
   playing,
@@ -2051,6 +2121,37 @@ export function LeftPanel({
             }}
           />
         </label>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+          <label
+            style={{
+              ...ui.buttonGhost,
+              width: "100%",
+              justifyContent: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <FiFolder size={15} />
+            <span>Открыть .gs</span>
+            <input
+              type="file"
+              accept=".gs,application/json"
+              onChange={onProjectFileChange}
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0,
+                cursor: "pointer",
+              }}
+            />
+          </label>
+
+          <button type="button" onClick={onSaveProject} style={ui.buttonGhost}>
+            <FiSave size={15} />
+            Сохранить .gs
+          </button>
+        </div>
 
         <div
           style={{
@@ -3672,7 +3773,6 @@ export function CadGrid({ document, view }: CadGridProps) {
         width={width}
         height={height}
         fill="url(#cad-grid-major)"
-        rx={12}
       />
     </>
   );
@@ -3723,7 +3823,6 @@ export function CadSheet({ document, view }: CadSheetProps) {
       fill="rgba(255,255,255,0.86)"
       stroke="#cbd5e1"
       strokeWidth={1.5}
-      rx={12}
     />
   );
 }
@@ -3819,14 +3918,15 @@ export function DraftOverlay({ draft, polylineDraft, documentHeight, view }: Dra
         );
       })()}
 
-      {draft?.type === "circle" && (() => {
-        const circle = getCircleFromDraft(draft);
-        const center = cadToScreenPoint({ x: circle.cx, y: circle.cy }, documentHeight, view);
+      {draft?.type === "rectangle" && (() => {
+        const rect = getRectangleFromDraft(draft);
+        const p = cadToScreenPoint({ x: rect.x, y: rect.y + rect.height }, documentHeight, view);
         return (
-          <circle
-            cx={center.x}
-            cy={center.y}
-            r={circle.radius * view.scale}
+          <rect
+            x={p.x}
+            y={p.y}
+            width={rect.width * view.scale}
+            height={rect.height * view.scale}
             fill="rgba(37,99,235,0.12)"
             stroke="#2563eb"
             strokeDasharray="6 4"
@@ -3890,7 +3990,13 @@ type RectangleShapeViewProps = {
   onPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
 };
 
-export function RectangleShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: RectangleShapeViewProps) {
+export function RectangleShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: RectangleShapeViewProps) {
   const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, documentHeight, view);
 
   return (
@@ -3902,7 +4008,6 @@ export function RectangleShapeView({ shape, documentHeight, view, isSelected, on
       fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
       stroke={isSelected ? "#2563eb" : "#475569"}
       strokeWidth={isSelected ? 2 : 1.5}
-      rx={8}
       onPointerDown={onPointerDown}
     />
   );
@@ -4444,6 +4549,7 @@ import { screenToCadPoint } from "../../../utils/coordinates";
 import { clamp } from "../../../utils";
 import { useTextPreviewMap } from "./useTextPreviewMap";
 import { applyDefaultSnap } from "../geometry/snap";
+import type { ViewTransform } from "../model/view";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -4451,6 +4557,8 @@ type UseCadEditorParams = {
   onGenerateGCode: (gcode: string) => void;
   selection: SelectionState;
   onSelectionChange: (selection: SelectionState) => void;
+  view: ViewTransform;
+  onViewChange: React.Dispatch<React.SetStateAction<ViewTransform>>;
 };
 
 type PanState = {
@@ -4468,6 +4576,8 @@ export function useCadEditor({
   onGenerateGCode,
   selection,
   onSelectionChange,
+  view,
+  onViewChange,
 }: UseCadEditorParams) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
@@ -4478,7 +4588,6 @@ export function useCadEditor({
   const [isGenerating, setIsGenerating] = useState(false);
   const [dragState, setDragState] = useState<DragState>(null);
   const [panState, setPanState] = useState<PanState>(null);
-  const [view, setView] = useState(createDefaultView());
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
 
@@ -4494,7 +4603,7 @@ export function useCadEditor({
   }
 
   function resetView() {
-    setView(createDefaultView());
+    onViewChange(createDefaultView());
   }
 
   function addRectangle(x: number, y: number, width: number, height: number) {
@@ -4621,7 +4730,7 @@ export function useCadEditor({
 
   function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (panState && panState.pointerId === event.pointerId) {
-      setView((prev) => ({
+      onViewChange((prev) => ({
         ...prev,
         offsetX: panState.startOffsetX + (event.clientX - panState.startClientX),
         offsetY: panState.startOffsetY + (event.clientY - panState.startClientY),
@@ -4681,9 +4790,11 @@ export function useCadEditor({
     const anchorX = event.clientX - rect.left;
     const anchorY = event.clientY - rect.top;
 
-    const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const zoomStep = 0.06;
+    const zoomFactor = 1 + direction * zoomStep;
 
-    setView((prev) => {
+    onViewChange((prev) => {
       const nextScale = clamp(prev.scale * zoomFactor, 0.25, 20);
       const ratio = nextScale / prev.scale;
 
@@ -5484,7 +5595,17 @@ export function EditStatusBar({ objectCount }: { objectCount: number }) {
 
 path: /src/modules/cad/panels/EditToolbar.tsx
 ----------------------------------------
-import { FiCheck, FiCircle, FiMaximize, FiMousePointer, FiPenTool, FiPlay, FiSquare, FiTrash2, FiType } from "react-icons/fi";
+import {
+  FiCheck,
+  FiCircle,
+  FiMaximize,
+  FiMousePointer,
+  FiPenTool,
+  FiPlay,
+  FiSquare,
+  FiTrash2,
+  FiType,
+} from "react-icons/fi";
 import { ui } from "../../../styles/ui";
 import type { SketchTool } from "../model/types";
 
@@ -5506,7 +5627,15 @@ const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.Re
   { id: "text", label: "Text", hint: "Вставка текстового объекта", icon: <FiType size={16} /> },
 ];
 
-export function EditToolbar({ tool, onToolChange, onCommitPolyline, onDeleteSelected, onResetView, onGenerate, isGenerating }: EditToolbarProps) {
+export function EditToolbar({
+  tool,
+  onToolChange,
+  onCommitPolyline,
+  onDeleteSelected,
+  onResetView,
+  onGenerate,
+  isGenerating,
+}: EditToolbarProps) {
   return (
     <div
       style={{
@@ -5530,34 +5659,61 @@ export function EditToolbar({ tool, onToolChange, onCommitPolyline, onDeleteSele
               type="button"
               title={`${item.label} — ${item.hint}`}
               onClick={() => onToolChange(item.id)}
-              style={{ ...(active ? ui.buttonPrimary : ui.buttonGhost), width: 38, height: 38, padding: 0 }}
+              style={{
+                ...(active ? ui.buttonPrimary : ui.buttonGhost),
+                width: 38,
+                height: 38,
+                padding: 0,
+              }}
             >
               {item.icon}
             </button>
           );
         })}
 
-        <button type="button" title="Завершить текущую полилинию" onClick={onCommitPolyline} style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}>
-          <FiCheck size={16} />
-        </button>
+        {tool === "polyline" && (
+          <button
+            type="button"
+            title="Завершить текущую полилинию"
+            onClick={onCommitPolyline}
+            style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+          >
+            <FiCheck size={16} />
+          </button>
+        )}
 
-        <button type="button" title="Удалить выбранный объект" onClick={onDeleteSelected} style={{ ...ui.buttonDanger, width: 38, height: 38, padding: 0 }}>
+        <button
+          type="button"
+          title="Удалить выбранный объект"
+          onClick={onDeleteSelected}
+          style={{ ...ui.buttonDanger, width: 38, height: 38, padding: 0 }}
+        >
           <FiTrash2 size={16} />
         </button>
 
-        <button type="button" title="Сбросить масштаб и позицию холста" onClick={onResetView} style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}>
+        <button
+          type="button"
+          title="Сбросить масштаб и позицию холста"
+          onClick={onResetView}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
           <FiMaximize size={16} />
         </button>
       </div>
 
-      <button type="button" onClick={onGenerate} disabled={isGenerating} title="Сгенерировать G-code из текущего документа" style={{ ...ui.buttonPrimary, flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={onGenerate}
+        disabled={isGenerating}
+        title="Сгенерировать G-code из текущего документа"
+        style={{ ...ui.buttonPrimary, flexShrink: 0 }}
+      >
         <FiPlay size={16} />
         {isGenerating ? "Генерация..." : "Сгенерировать G-code"}
       </button>
     </div>
   );
 }
-
 
 
 path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
@@ -6261,6 +6417,30 @@ export type CameraInfo = {
 };
 
 
+path: /src/types/project.ts
+----------------------------------------
+import type { PlacementMode, StockDimensions } from "./gcode";
+import type { MainTab } from "./ui";
+import type { SketchDocument } from "../modules/cad/model/types";
+import type { SelectionState } from "../modules/cad/model/selection";
+import type { ViewTransform } from "../modules/cad/model/view";
+
+export type GCodeStudioProject = {
+  version: 2;
+  kind: "gcode-studio-project";
+  fileName: string;
+  source: string;
+  stock: StockDimensions;
+  showMaterialRemoval: boolean;
+  placementMode: PlacementMode;
+  detailLevel: number;
+  activeTab: MainTab;
+  editDocument: SketchDocument;
+  selection: SelectionState;
+  cadView: ViewTransform;
+};
+
+
 path: /src/types/ui.ts
 ----------------------------------------
 export type MainTab = "view" | "gcode" | "edit";
@@ -6659,6 +6839,37 @@ export function downloadTextFile(content: string, fileName: string): void {
 }
 
 
+path: /src/utils/projectFile.ts
+----------------------------------------
+import type { GCodeStudioProject } from "../types/project";
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function createProjectFile(data: GCodeStudioProject): string {
+  return JSON.stringify(data, null, 2);
+}
+
+export function parseProjectFile(text: string): GCodeStudioProject {
+  const raw: unknown = JSON.parse(text);
+
+  if (!isObject(raw)) {
+    throw new Error("Некорректный формат проекта");
+  }
+
+  if (raw.kind !== "gcode-studio-project") {
+    throw new Error("Это не файл проекта GCode Studio");
+  }
+
+  if (raw.version !== 2) {
+    throw new Error("Поддерживается только формат проекта version 2");
+  }
+
+  return raw as GCodeStudioProject;
+}
+
+
 path: /src/utils/sketch.ts
 ----------------------------------------
 import type {
@@ -6995,8 +7206,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 91
+included: 93
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 185649
+totalBytes(approx): 190877
