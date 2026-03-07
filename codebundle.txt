@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T20:17:27.631Z
+generated: 2026-03-07T21:09:24.492Z
 
 
 
@@ -454,7 +454,7 @@ import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
 import type { SketchDocument } from "./modules/cad/model/types";
 import type { SelectionState } from "./modules/cad/model/selection";
-import { createSelection } from "./modules/cad/model/selection";
+import { createSelection, selectOnly } from "./modules/cad/model/selection";
 import { createEmptySketchDocument } from "./modules/cad/model/document";
 import { theme, ui } from "./styles/ui";
 import { downloadTextFile } from "./utils";
@@ -463,6 +463,13 @@ import type { ViewTransform } from "./modules/cad/model/view";
 import { createDefaultView } from "./modules/cad/model/view";
 import { useUndoRedo } from "./hooks/useUndoRedo";
 import type { GCodeStudioProject } from "./types/project";
+import { ObjectListPanel } from "./modules/cad/panels/ObjectListPanel";
+import {
+  normalizeSelectionAfterDelete,
+  renameGroup,
+  reorderShapes,
+  toggleGroupCollapsed,
+} from "./modules/cad/model/grouping";
 
 const UNDO_HISTORY_LIMIT = 10;
 
@@ -620,7 +627,7 @@ export default function App() {
 
   function saveProject() {
     const project = {
-      version: 2 as const,
+      version: 3 as const,
       kind: "gcode-studio-project" as const,
       fileName,
       source,
@@ -686,6 +693,50 @@ export default function App() {
     setFileName("demo.gcode");
     resetPlayback();
     setCameraResetKey((value) => value + 1);
+  }
+
+  function renameShape(shapeId: string, name: string) {
+    setEditDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, name } : shape,
+      ),
+    }));
+  }
+
+  function renameGroupById(groupId: string, name: string) {
+    setEditDocument((prev) => renameGroup(prev, groupId, name));
+  }
+
+  function toggleGroupCollapsedById(groupId: string) {
+    setEditDocument((prev) => toggleGroupCollapsed(prev, groupId));
+  }
+
+  function toggleShapeVisibility(shapeId: string) {
+    checkpointHistory();
+    setEditDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, visible: !(shape.visible !== false) } : shape,
+      ),
+    }));
+  }
+
+  function deleteShape(shapeId: string) {
+    checkpointHistory();
+
+    const nextDocument = {
+      ...editDocument,
+      shapes: editDocument.shapes.filter((shape) => shape.id !== shapeId),
+    };
+
+    setEditDocument(nextDocument);
+    setSelection(normalizeSelectionAfterDelete(nextDocument, selection));
+  }
+
+  function reorderDocumentShapes(orderedIds: string[]) {
+    checkpointHistory();
+    setEditDocument((prev) => reorderShapes(prev, orderedIds));
   }
 
   if (!parsed || isParsing) {
@@ -771,29 +822,44 @@ export default function App() {
                 paddingRight: 4,
               }}
             >
-              <LeftPanel
-                fileName={fileName}
-                onFileChange={handleFileChange}
-                onProjectFileChange={handleProjectFileChange}
-                onSaveProject={saveProject}
-                onLoadDemo={loadDemo}
-                onResetCamera={() => setCameraResetKey((v) => v + 1)}
-                playing={playing}
-                onPlayPause={() => setPlaying((v) => !v)}
-                onResetPlayback={resetPlayback}
-                progress={progress}
-                onProgressChange={setProgress}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                placementMode={placementMode}
-                onPlacementModeChange={setPlacementMode}
-                stock={stock}
-                onStockChange={setStock}
-                showMaterialRemoval={showMaterialRemoval}
-                onShowMaterialRemovalChange={setShowMaterialRemoval}
-                detailLevel={detailLevel}
-                onDetailLevelChange={setDetailLevel}
-              />
+              {activeTab === "edit" ? (
+                <ObjectListPanel
+                  document={editDocument}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  onRenameShape={renameShape}
+                  onRenameGroup={renameGroupById}
+                  onToggleGroupCollapsed={toggleGroupCollapsedById}
+                  onToggleVisibility={toggleShapeVisibility}
+                  onDeleteShape={deleteShape}
+                  onReorderShapes={reorderDocumentShapes}
+                />
+              ) : (
+                <LeftPanel
+                  mode="default"
+                  fileName={fileName}
+                  onFileChange={handleFileChange}
+                  onProjectFileChange={handleProjectFileChange}
+                  onSaveProject={saveProject}
+                  onLoadDemo={loadDemo}
+                  onResetCamera={() => setCameraResetKey((v) => v + 1)}
+                  playing={playing}
+                  onPlayPause={() => setPlaying((v) => !v)}
+                  onResetPlayback={resetPlayback}
+                  progress={progress}
+                  onProgressChange={setProgress}
+                  speed={speed}
+                  onSpeedChange={setSpeed}
+                  placementMode={placementMode}
+                  onPlacementModeChange={setPlacementMode}
+                  stock={stock}
+                  onStockChange={setStock}
+                  showMaterialRemoval={showMaterialRemoval}
+                  onShowMaterialRemovalChange={setShowMaterialRemoval}
+                  detailLevel={detailLevel}
+                  onDetailLevelChange={setDetailLevel}
+                />
+              )}
             </div>
           </div>
 
@@ -1246,7 +1312,6 @@ export function EditRightPanel({
 
 path: /src/components/EditTab.tsx
 ----------------------------------------
-// path: /src/components/EditTab.tsx
 import { SvgImportModal } from "./SvgImportModal";
 import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
 import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
@@ -1335,6 +1400,8 @@ export function EditTab({
           canUndo={canUndo}
           canRedo={canRedo}
           onImportSvg={editor.startSvgImport}
+          onGroupSelected={editor.groupSelected}
+          onUngroupSelected={editor.ungroupSelected}
         />
 
         {editor.tool === "text" && (
@@ -1352,39 +1419,51 @@ export function EditTab({
 
         <div
           style={{
-            ...ui.panelInset,
             flex: 1,
             minHeight: 0,
             minWidth: 0,
-            overflow: "hidden",
-            background: "#f8fafc",
             display: "flex",
+            gap: 12,
+            overflow: "hidden",
           }}
         >
           <div
             style={{
+              ...ui.panelInset,
               flex: 1,
               minHeight: 0,
               minWidth: 0,
               overflow: "hidden",
+              background: "#f8fafc",
+              display: "flex",
             }}
           >
-            <CadCanvas
-              svgRef={editor.svgRef}
-              document={document}
-              selection={selection}
-              view={editor.view}
-              draft={editor.draft}
-              polylineDraft={editor.polylineDraft}
-              textPreviewMap={editor.textPreviewMap}
-              tool={editor.tool}
-              onPointerDown={editor.handleCanvasPointerDown}
-              onPointerMove={editor.handleCanvasPointerMove}
-              onPointerUp={editor.handleCanvasPointerUp}
-              onPointerLeave={editor.handleCanvasPointerUp}
-              onWheel={editor.handleCanvasWheel}
-              onShapePointerDown={editor.bindSelectStart}
-            />
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                minWidth: 0,
+                overflow: "hidden",
+              }}
+            >
+              <CadCanvas
+                svgRef={editor.svgRef}
+                document={document}
+                selection={selection}
+                view={editor.view}
+                draft={editor.draft}
+                polylineDraft={editor.polylineDraft}
+                textPreviewMap={editor.textPreviewMap}
+                tool={editor.tool}
+                onPointerDown={editor.handleCanvasPointerDown}
+                onPointerMove={editor.handleCanvasPointerMove}
+                onPointerUp={editor.handleCanvasPointerUp}
+                onPointerLeave={editor.handleCanvasPointerUp}
+                onWheel={editor.handleCanvasWheel}
+                onShapePointerDown={editor.bindSelectStart}
+                onSelectionPointerDown={editor.bindSelectionDragStart}
+              />
+            </div>
           </div>
         </div>
 
@@ -2216,6 +2295,7 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiFolder,
+  FiLayers,
   FiPause,
   FiPlay,
   FiSave,
@@ -2226,13 +2306,18 @@ import {
 import type { PlacementMode, StockDimensions } from "../types/gcode";
 import { theme, ui } from "../styles/ui";
 
+type LeftPanelMode = "default" | "cad";
+
 type LeftPanelProps = {
+  mode?: LeftPanelMode;
+
   fileName: string;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onProjectFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onSaveProject: () => void;
   onLoadDemo: () => void;
   onResetCamera: () => void;
+
   playing: boolean;
   onPlayPause: () => void;
   onResetPlayback: () => void;
@@ -2240,6 +2325,7 @@ type LeftPanelProps = {
   onProgressChange: (value: number) => void;
   speed: number;
   onSpeedChange: (value: number) => void;
+
   placementMode: PlacementMode;
   onPlacementModeChange: (mode: PlacementMode) => void;
   stock: StockDimensions;
@@ -2251,12 +2337,15 @@ type LeftPanelProps = {
 };
 
 export function LeftPanel({
+  mode = "default",
+
   fileName,
   onFileChange,
   onProjectFileChange,
   onSaveProject,
   onLoadDemo,
   onResetCamera,
+
   playing,
   onPlayPause,
   onResetPlayback,
@@ -2264,6 +2353,7 @@ export function LeftPanel({
   onProgressChange,
   speed,
   onSpeedChange,
+
   placementMode,
   onPlacementModeChange,
   stock,
@@ -2274,6 +2364,35 @@ export function LeftPanel({
   onDetailLevelChange,
 }: LeftPanelProps) {
   const [stockCollapsed, setStockCollapsed] = useState(false);
+
+  if (mode === "cad") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <section style={{ ...ui.panel, padding: 16 }}>
+          <div style={ui.panelHeader}>
+            <h3 style={ui.sectionTitle}>
+              <div style={ui.iconBadge}>
+                <FiLayers size={18} />
+              </div>
+              <span>Объекты CAD</span>
+            </h3>
+          </div>
+
+          <div
+            style={{
+              ...ui.panelInset,
+              padding: 14,
+              color: theme.textMuted,
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            В режиме CAD в левой колонке должен отображаться список объектов и групп.
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2312,7 +2431,14 @@ export function LeftPanel({
           />
         </label>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
           <label
             style={{
               ...ui.buttonGhost,
@@ -2386,21 +2512,20 @@ export function LeftPanel({
           </h3>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          <button
-            type="button"
-            onClick={onPlayPause}
-            style={ui.buttonPrimary}
-          >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginBottom: 14,
+          }}
+        >
+          <button type="button" onClick={onPlayPause} style={ui.buttonPrimary}>
             {playing ? <FiPause size={15} /> : <FiPlay size={15} />}
             {playing ? "Пауза" : "Старт"}
           </button>
 
-          <button
-            type="button"
-            onClick={onResetPlayback}
-            style={ui.buttonGhost}
-          >
+          <button type="button" onClick={onResetPlayback} style={ui.buttonGhost}>
             <FiSkipBack size={15} />
             С начала
           </button>
@@ -4428,11 +4553,17 @@ createRoot(document.getElementById("root")!).render(
 
 path: /src/modules/cad/canvas/CadCanvas.tsx
 ----------------------------------------
+
+// =============================
+// FILE: src/modules/cad/canvas/CadCanvas.tsx
+// =============================
+
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
 import { DraftOverlay } from "./DraftOverlay";
 import { ShapeRenderer } from "./ShapeRenderer";
+import { SelectionOverlay } from "./SelectionOverlay";
 import type { DraftShape } from "../geometry/draftGeometry";
 import type {
   SketchDocument,
@@ -4442,6 +4573,7 @@ import type {
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
 import { isSelected } from "../model/selection";
+import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
 type CadCanvasProps = {
@@ -4459,6 +4591,7 @@ type CadCanvasProps = {
   onPointerLeave: () => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+  onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
 };
 
 export function CadCanvas({
@@ -4476,7 +4609,15 @@ export function CadCanvas({
   onPointerLeave,
   onWheel,
   onShapePointerDown,
+  onSelectionPointerDown,
 }: CadCanvasProps) {
+  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+  const selectedIds = new Set(
+    primary?.groupId
+      ? document.shapes.filter((shape) => shape.groupId === primary.groupId).map((shape) => shape.id)
+      : selection.ids,
+  );
+
   return (
     <svg
       ref={svgRef}
@@ -4505,17 +4646,25 @@ export function CadCanvas({
       <CadSheet document={document} view={view} />
       <CadOriginMarker documentHeight={document.height} view={view} />
 
-      {document.shapes.map((shape) => (
+      {collectVisibleShapes(document).map((shape) => (
         <ShapeRenderer
           key={shape.id}
           shape={shape}
           documentHeight={document.height}
           view={view}
-          isSelected={isSelected(selection, shape.id)}
+          isSelected={selectedIds.has(shape.id)}
           textPreviewMap={textPreviewMap}
           onPointerDown={onShapePointerDown}
         />
       ))}
+
+      <SelectionOverlay
+        document={document}
+        selection={selection}
+        documentHeight={document.height}
+        view={view}
+        onPointerDown={onSelectionPointerDown}
+      />
 
       <DraftOverlay
         draft={draft}
@@ -4866,8 +5015,77 @@ export function RectangleShapeView({
 
 path: /src/modules/cad/canvas/SelectionOverlay.tsx
 ----------------------------------------
-export function SelectionOverlay() {
-  return null;
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import { groupBounds, selectionBounds } from "../model/shapeBounds";
+import type { SketchDocument } from "../model/types";
+import type { SelectionState } from "../model/selection";
+import type { ViewTransform } from "../model/view";
+
+type SelectionOverlayProps = {
+  document: SketchDocument;
+  selection: SelectionState;
+  documentHeight: number;
+  view: ViewTransform;
+  onPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
+};
+
+export function SelectionOverlay({
+  document,
+  selection,
+  documentHeight,
+  view,
+  onPointerDown,
+}: SelectionOverlayProps) {
+  if (selection.ids.length === 0) return null;
+
+  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
+  const bounds = primary?.groupId
+    ? groupBounds(document, primary.groupId)
+    : selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)));
+
+  const topLeft = cadToScreenPoint(
+    { x: bounds.minX, y: bounds.maxY },
+    documentHeight,
+    view,
+  );
+
+  const x = topLeft.x - 6;
+  const y = topLeft.y - 6;
+  const width = (bounds.maxX - bounds.minX) * view.scale + 12;
+  const height = (bounds.maxY - bounds.minY) * view.scale + 12;
+
+  return (
+    <g>
+      {onPointerDown && (
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          fill="transparent"
+          stroke="transparent"
+          strokeWidth={12}
+          rx={10}
+          style={{ cursor: "move" }}
+          onPointerDown={onPointerDown}
+        />
+      )}
+
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill="rgba(37,99,235,0.08)"
+        stroke="#2563eb"
+        strokeWidth={1.5}
+        strokeDasharray="8 4"
+        rx={10}
+        pointerEvents="none"
+      />
+    </g>
+  );
 }
 
 
@@ -5858,6 +6076,12 @@ import {
   selectOnly,
   toggleSelection,
 } from "../model/selection";
+import {
+  getDragShapeIds,
+  groupSelectedShapes,
+  normalizeSelectionAfterDelete,
+  ungroupSelectedShapes,
+} from "../model/grouping";
 import { generateSketchGCode } from "../../cam/gcode/generator";
 import { screenToCadPoint } from "../../../utils/coordinates";
 import { clamp } from "../../../utils";
@@ -5865,6 +6089,7 @@ import { useTextPreviewMap } from "./useTextPreviewMap";
 import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
+import { renameGroup, reorderShapes, toggleGroupCollapsed } from "../model/grouping";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -5912,6 +6137,19 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  function renameGroupById(groupId: string, name: string) {
+    setDocument((prev) => renameGroup(prev, groupId, name));
+  }
+
+  function toggleGroupCollapsedById(groupId: string) {
+    setDocument((prev) => toggleGroupCollapsed(prev, groupId));
+  }
+
+  function reorderDocumentShapes(orderedIds: string[]) {
+    checkpointHistory();
+    setDocument((prev) => reorderShapes(prev, orderedIds));
+  }
 
   const {
     svgImport,
@@ -6158,12 +6396,54 @@ export function useCadEditor({
   function deleteSelected() {
     if (selection.ids.length === 0) return;
 
+    const nextDocument = {
+      ...document,
+      shapes: document.shapes.filter((shape) => !selection.ids.includes(shape.id)),
+    };
+
+    setDocument(nextDocument);
+    onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
+  }
+
+  function deleteShape(shapeId: string) {
+    checkpointHistory();
+
+    const nextDocument = {
+      ...document,
+      shapes: document.shapes.filter((shape) => shape.id !== shapeId),
+    };
+
+    setDocument(nextDocument);
+    onSelectionChange(normalizeSelectionAfterDelete(nextDocument, selection));
+  }
+
+  function renameShape(shapeId: string, name: string) {
     setDocument((prev) => ({
       ...prev,
-      shapes: prev.shapes.filter((shape) => !selection.ids.includes(shape.id)),
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, name } : shape,
+      ),
     }));
+  }
 
-    onSelectionChange(clearSelection());
+  function toggleShapeVisibility(shapeId: string) {
+    checkpointHistory();
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, visible: !(shape.visible !== false) } : shape,
+      ),
+    }));
+  }
+
+  function groupSelected() {
+    checkpointHistory();
+    setDocument((prev) => groupSelectedShapes(prev, selection));
+  }
+
+  function ungroupSelected() {
+    checkpointHistory();
+    setDocument((prev) => ungroupSelectedShapes(prev, selection));
   }
 
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
@@ -6206,7 +6486,34 @@ export function useCadEditor({
         shapeId,
         cad.x,
         cad.y,
-        nextSelection.ids.length > 0 ? nextSelection.ids : [shapeId],
+        getDragShapeIds(document, shapeId, nextSelection),
+      ),
+    );
+  }
+
+  function bindSelectionDragStart(event: React.PointerEvent<SVGRectElement>) {
+    event.stopPropagation();
+
+    if (tool !== "select" || event.button !== 0) {
+      return;
+    }
+
+    if (!selection.primaryId) {
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+    const cad = normalizePoint(rawCad);
+
+    checkpointHistory();
+
+    setDragState(
+      startDrag(
+        selection.primaryId,
+        cad.x,
+        cad.y,
+        getDragShapeIds(document, selection.primaryId, selection),
       ),
     );
   }
@@ -6236,12 +6543,18 @@ export function useCadEditor({
     resetView,
     commitPolyline,
     deleteSelected,
+    deleteShape,
+    renameShape,
+    toggleShapeVisibility,
+    groupSelected,
+    ungroupSelected,
     handleGenerateClick,
     handleCanvasPointerDown,
     handleCanvasPointerMove,
     handleCanvasPointerUp,
     handleCanvasWheel,
     bindSelectStart,
+    bindSelectionDragStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
 
     svgImport,
@@ -6250,6 +6563,10 @@ export function useCadEditor({
     abortSvgImport,
     updateSvgImportDraft,
     confirmSvgImport,
+
+    renameGroup: renameGroupById,
+    toggleGroupCollapsed: toggleGroupCollapsedById,
+    reorderDocumentShapes,
   };
 }
 
@@ -6486,25 +6803,24 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
   }, []);
 
   const confirm = useCallback(() => {
-    setState((prev) => {
-      if (!prev.draft || prev.stage !== "ready") {
-        return prev;
-      }
+    if (!state.draft || state.stage !== "ready") {
+      return;
+    }
 
-      onConfirm({
-        name: prev.draft.name.trim() || "SVG",
-        width: prev.draft.width,
-        height: prev.draft.height,
-        x: prev.draft.x,
-        y: prev.draft.y,
-        sourceWidth: prev.draft.sourceWidth,
-        sourceHeight: prev.draft.sourceHeight,
-        contours: prev.contours,
-      });
+    const payload = {
+      name: state.draft.name.trim() || "SVG",
+      width: state.draft.width,
+      height: state.draft.height,
+      x: state.draft.x,
+      y: state.draft.y,
+      sourceWidth: state.draft.sourceWidth,
+      sourceHeight: state.draft.sourceHeight,
+      contours: state.contours,
+    };
 
-      return createIdleState();
-    });
-  }, [onConfirm]);
+    setState(createIdleState());
+    onConfirm(payload);
+  }, [onConfirm, state]);
 
   return {
     svgImport: state,
@@ -6562,7 +6878,21 @@ export function useTextPreviewMap(shapes: SketchShape[]) {
 
 path: /src/modules/cad/model/document.ts
 ----------------------------------------
+
+
+// =============================
+// FILE: src/modules/cad/model/document.ts
+// =============================
+
 import type { SketchDocument, SketchShape } from "./types";
+
+function normalizeShape(shape: SketchShape): SketchShape {
+  return {
+    ...shape,
+    visible: shape.visible ?? true,
+    groupId: shape.groupId ?? null,
+  };
+}
 
 export function createEmptySketchDocument(): SketchDocument {
   return {
@@ -6597,11 +6927,12 @@ export function createEmptySketchDocument(): SketchDocument {
     snapEnabled: true,
     snapStep: 5,
     shapes: [],
+    groups: [],
   };
 }
 
 export function addShape(document: SketchDocument, shape: SketchShape): SketchDocument {
-  return { ...document, shapes: [...document.shapes, shape] };
+  return { ...document, shapes: [...document.shapes, normalizeShape(shape)] };
 }
 
 export function removeShape(document: SketchDocument, shapeId: string): SketchDocument {
@@ -6619,7 +6950,7 @@ export function updateShape(
   return {
     ...document,
     shapes: document.shapes.map((shape) =>
-      shape.id === shapeId ? ({ ...shape, ...patch } as SketchShape) : shape,
+      shape.id === shapeId ? normalizeShape({ ...shape, ...patch } as SketchShape) : shape,
     ),
   };
 }
@@ -6632,8 +6963,146 @@ export function replaceShape(
   return {
     ...document,
     shapes: document.shapes.map((shape) =>
-      shape.id === shapeId ? nextShape : shape,
+      shape.id === shapeId ? normalizeShape(nextShape) : shape,
     ),
+  };
+}
+
+
+path: /src/modules/cad/model/grouping.ts
+----------------------------------------
+
+// =============================
+// FILE: src/modules/cad/model/grouping.ts
+// =============================
+
+import type { SketchDocument, SketchGroup, SketchShape } from "./types";
+import type { SelectionState } from "./selection";
+import { createId } from "./ids";
+
+function uniqueIds(ids: string[]): string[] {
+  return Array.from(new Set(ids));
+}
+
+export function getShapesByGroupId(
+  document: SketchDocument,
+  groupId: string | null,
+): SketchShape[] {
+  if (!groupId) return [];
+  return document.shapes.filter((shape) => shape.groupId === groupId);
+}
+
+export function getGroupById(document: SketchDocument, groupId: string | null): SketchGroup | null {
+  if (!groupId) return null;
+  return document.groups.find((group) => group.id === groupId) ?? null;
+}
+
+export function getDragShapeIds(
+  document: SketchDocument,
+  shapeId: string,
+  selection: SelectionState,
+): string[] {
+  const shape = document.shapes.find((item) => item.id === shapeId);
+  if (!shape) return selection.ids.length > 0 ? selection.ids : [shapeId];
+
+  if (shape.groupId) {
+    return document.shapes
+      .filter((item) => item.groupId === shape.groupId)
+      .map((item) => item.id);
+  }
+
+  return selection.ids.length > 0 ? selection.ids : [shapeId];
+}
+
+export function getGroupSelectionIds(document: SketchDocument, groupId: string): string[] {
+  return document.shapes.filter((shape) => shape.groupId === groupId).map((shape) => shape.id);
+}
+
+export function groupSelectedShapes(
+  document: SketchDocument,
+  selection: SelectionState,
+): SketchDocument {
+  if (selection.ids.length < 2) {
+    return document;
+  }
+
+  const groupId = createId("group");
+  const ids = new Set(selection.ids);
+
+  return {
+    ...document,
+    groups: [...document.groups, { id: groupId, name: `Группа ${document.groups.length + 1}`, collapsed: false }],
+    shapes: document.shapes.map((shape) =>
+      ids.has(shape.id) ? { ...shape, groupId } : shape,
+    ),
+  };
+}
+
+export function ungroupSelectedShapes(
+  document: SketchDocument,
+  selection: SelectionState,
+): SketchDocument {
+  if (selection.ids.length === 0) {
+    return document;
+  }
+
+  const selected = document.shapes.filter((shape) => selection.ids.includes(shape.id));
+  const groupIds = new Set(selected.map((shape) => shape.groupId).filter(Boolean));
+
+  if (groupIds.size === 0) {
+    return document;
+  }
+
+  return {
+    ...document,
+    groups: document.groups.filter((group) => !groupIds.has(group.id)),
+    shapes: document.shapes.map((shape) =>
+      groupIds.has(shape.groupId ?? "") ? { ...shape, groupId: null } : shape,
+    ),
+  };
+}
+
+export function renameGroup(document: SketchDocument, groupId: string, name: string): SketchDocument {
+  return {
+    ...document,
+    groups: document.groups.map((group) =>
+      group.id === groupId ? { ...group, name } : group,
+    ),
+  };
+}
+
+export function toggleGroupCollapsed(document: SketchDocument, groupId: string): SketchDocument {
+  return {
+    ...document,
+    groups: document.groups.map((group) =>
+      group.id === groupId ? { ...group, collapsed: !group.collapsed } : group,
+    ),
+  };
+}
+
+export function reorderShapes(document: SketchDocument, orderedIds: string[]): SketchDocument {
+  const order = new Map(orderedIds.map((id, index) => [id, index]));
+  const shapes = [...document.shapes].sort((a, b) => {
+    const ai = order.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+    const bi = order.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+    return ai - bi;
+  });
+  return { ...document, shapes };
+}
+
+export function collectVisibleShapes(document: SketchDocument): SketchShape[] {
+  return document.shapes.filter((shape) => shape.visible !== false);
+}
+
+export function normalizeSelectionAfterDelete(
+  document: SketchDocument,
+  selection: SelectionState,
+): SelectionState {
+  const existing = new Set(document.shapes.map((shape) => shape.id));
+  const ids = uniqueIds(selection.ids.filter((id) => existing.has(id)));
+  return {
+    ids,
+    primaryId: ids.includes(selection.primaryId ?? "") ? selection.primaryId : (ids[0] ?? null),
   };
 }
 
@@ -6796,10 +7265,13 @@ export function selectionBounds(shapes: SketchShape[]): Bounds2D {
   };
 }
 
+export function groupBounds(document: SketchDocument, groupId: string): Bounds2D {
+  return selectionBounds(document.shapes.filter((shape) => shape.groupId === groupId));
+}
+
 
 path: /src/modules/cad/model/shapeFactory.ts
 ----------------------------------------
-// path: /src/modules/cad/model/shapeFactory.ts
 import type {
   SketchCircle,
   SketchPolyline,
@@ -6809,6 +7281,11 @@ import type {
   SketchText,
 } from "./types";
 import { createId } from "./ids";
+
+const baseShapeFields = {
+  visible: true,
+  groupId: null,
+} as const;
 
 export function createRectangleShape(
   name: string,
@@ -6827,6 +7304,7 @@ export function createRectangleShape(
     height,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -6845,6 +7323,7 @@ export function createCircleShape(
     radius,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -6861,6 +7340,7 @@ export function createPolylineShape(
     closed,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -6888,6 +7368,7 @@ export function createTextShape(
     cutMode: "outline",
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -6916,6 +7397,7 @@ export function createSvgShape(params: {
     contours: params.contours,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -7059,14 +7541,26 @@ export function scaleShape(
 
 path: /src/modules/cad/model/types.ts
 ----------------------------------------
-// path: /src/modules/cad/model/types.ts
+
+// =============================
+// FILE: src/modules/cad/model/types.ts
+// =============================
+
 export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text" | "svg";
+
+export type SketchGroup = {
+  id: string;
+  name: string;
+  collapsed?: boolean;
+};
 
 export type SketchBase = {
   id: string;
   name: string;
   cutZ?: number | null;
   strokeWidth?: number;
+  visible: boolean;
+  groupId: string | null;
 };
 
 export type SketchRectangle = SketchBase & {
@@ -7163,6 +7657,7 @@ export type SketchDocument = {
   snapEnabled: boolean;
   snapStep: number;
   shapes: SketchShape[];
+  groups: SketchGroup[];
 };
 
 export type SketchTool =
@@ -7723,7 +8218,6 @@ export function EditStatusBar({ objectCount }: { objectCount: number }) {
 
 path: /src/modules/cad/panels/EditToolbar.tsx
 ----------------------------------------
-// path: /src/modules/cad/panels/EditToolbar.tsx
 import { useRef } from "react";
 import {
   FiCheck,
@@ -7731,6 +8225,7 @@ import {
   FiCornerUpLeft,
   FiCornerUpRight,
   FiImage,
+  FiLayers,
   FiMaximize,
   FiMousePointer,
   FiPenTool,
@@ -7738,6 +8233,7 @@ import {
   FiSquare,
   FiTrash2,
   FiType,
+  FiX,
 } from "react-icons/fi";
 import { ui } from "../../../styles/ui";
 import type { SketchTool } from "../model/types";
@@ -7755,6 +8251,8 @@ type EditToolbarProps = {
   canUndo: boolean;
   canRedo: boolean;
   onImportSvg: (file: File) => void;
+  onGroupSelected: () => void;
+  onUngroupSelected: () => void;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
@@ -7778,6 +8276,8 @@ export function EditToolbar({
   canUndo,
   canRedo,
   onImportSvg,
+  onGroupSelected,
+  onUngroupSelected,
 }: EditToolbarProps) {
   const svgInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -7852,6 +8352,24 @@ export function EditToolbar({
 
         <button
           type="button"
+          title="Сгруппировать выбранные объекты"
+          onClick={onGroupSelected}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
+          <FiLayers size={16} />
+        </button>
+
+        <button
+          type="button"
+          title="Разгруппировать выбранные объекты"
+          onClick={onUngroupSelected}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
+          <FiX size={16} />
+        </button>
+
+        <button
+          type="button"
           title="Удалить выбранный объект"
           onClick={onDeleteSelected}
           style={{ ...ui.buttonDanger, width: 38, height: 38, padding: 0 }}
@@ -7916,6 +8434,375 @@ export function EditToolbar({
     </div>
   );
 }
+
+
+path: /src/modules/cad/panels/ObjectListPanel.tsx
+----------------------------------------
+
+// =============================
+// FILE: src/modules/cad/panels/ObjectListPanel.tsx
+// =============================
+
+import { useMemo, useState } from "react";
+import {
+  FiBox,
+  FiChevronDown,
+  FiChevronRight,
+  FiCircle,
+  FiEye,
+  FiEyeOff,
+  FiImage,
+  FiLayers,
+  FiMove,
+  FiTrash2,
+  FiType,
+} from "react-icons/fi";
+import { theme, ui } from "../../../styles/ui";
+import type { SelectionState } from "../model/selection";
+import { selectOnly } from "../model/selection";
+import type { SketchDocument, SketchShape } from "../model/types";
+import { getGroupById } from "../model/grouping";
+
+type ObjectListPanelProps = {
+  document: SketchDocument;
+  selection: SelectionState;
+  onSelectionChange: (selection: SelectionState) => void;
+  onRenameShape: (shapeId: string, name: string) => void;
+  onRenameGroup: (groupId: string, name: string) => void;
+  onToggleGroupCollapsed: (groupId: string) => void;
+  onToggleVisibility: (shapeId: string) => void;
+  onDeleteShape: (shapeId: string) => void;
+  onReorderShapes: (orderedIds: string[]) => void;
+};
+
+type ListItem =
+  | { kind: "group"; groupId: string; shapes: SketchShape[] }
+  | { kind: "shape"; shape: SketchShape };
+
+function getShapeIcon(shape: SketchShape) {
+  switch (shape.type) {
+    case "rectangle":
+      return <FiBox size={14} />;
+    case "circle":
+      return <FiCircle size={14} />;
+    case "polyline":
+      return <FiMove size={14} />;
+    case "text":
+      return <FiType size={14} />;
+    case "svg":
+      return <FiImage size={14} />;
+  }
+}
+
+export function ObjectListPanel({
+  document,
+  selection,
+  onSelectionChange,
+  onRenameShape,
+  onRenameGroup,
+  onToggleGroupCollapsed,
+  onToggleVisibility,
+  onDeleteShape,
+  onReorderShapes,
+}: ObjectListPanelProps) {
+  const [draggedShapeId, setDraggedShapeId] = useState<string | null>(null);
+
+  const items = useMemo<ListItem[]>(() => {
+    const groupMap = new Map<string, SketchShape[]>();
+    const ungrouped: SketchShape[] = [];
+
+    for (const shape of document.shapes) {
+      if (shape.groupId) {
+        const bucket = groupMap.get(shape.groupId) ?? [];
+        bucket.push(shape);
+        groupMap.set(shape.groupId, bucket);
+      } else {
+        ungrouped.push(shape);
+      }
+    }
+
+    const result: ListItem[] = [];
+
+    for (const group of document.groups) {
+      const shapes = groupMap.get(group.id) ?? [];
+      if (shapes.length > 0) {
+        result.push({ kind: "group", groupId: group.id, shapes });
+      }
+    }
+
+    for (const shape of ungrouped) {
+      result.push({ kind: "shape", shape });
+    }
+
+    return result;
+  }, [document.groups, document.shapes]);
+
+  function moveShapeBefore(targetShapeId: string) {
+    if (!draggedShapeId || draggedShapeId === targetShapeId) return;
+
+    const ids = document.shapes.map((shape) => shape.id);
+    const from = ids.indexOf(draggedShapeId);
+    const to = ids.indexOf(targetShapeId);
+    if (from < 0 || to < 0) return;
+
+    const next = [...ids];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onReorderShapes(next);
+  }
+
+  return (
+    <div
+      style={{
+        ...ui.panel,
+        padding: 12,
+        width: 320,
+        minWidth: 280,
+        maxWidth: 360,
+        height: "100%",
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        borderRadius: 18,
+      }}
+      className="scrollbar-thin"
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div style={ui.iconBadge}>
+          <FiLayers size={16} />
+        </div>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: theme.text }}>
+            Объекты CAD
+          </div>
+          <div style={{ fontSize: 12, color: theme.textMuted }}>
+            Группы, сортировка, видимость и переименование
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {items.length === 0 && (
+          <div style={{ ...ui.panelInset, padding: 12, color: theme.textMuted, fontSize: 13 }}>
+            Пока нет объектов.
+          </div>
+        )}
+
+        {items.map((item) => {
+          if (item.kind === "group") {
+            const group = getGroupById(document, item.groupId);
+            const collapsed = group?.collapsed ?? false;
+            const allVisible = item.shapes.every((shape) => shape.visible !== false);
+            const selected = item.shapes.every((shape) => selection.ids.includes(shape.id));
+
+            return (
+              <div
+                key={item.groupId}
+                style={{
+                  border: `1px solid ${selected ? "#93c5fd" : theme.border}`,
+                  borderRadius: 14,
+                  background: selected ? "#eff6ff" : "#fff",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    padding: "10px 12px",
+                    background: theme.panelMuted,
+                    borderBottom: collapsed ? "none" : `1px solid ${theme.border}`,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+                    <button
+                      type="button"
+                      onClick={() => onToggleGroupCollapsed(item.groupId)}
+                      style={{ ...iconButtonStyle, width: 26, height: 26, borderRadius: 8 }}
+                    >
+                      {collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onSelectionChange({
+                          ids: item.shapes.map((shape) => shape.id),
+                          primaryId: item.shapes[0]?.id ?? null,
+                        })
+                      }
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        padding: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        cursor: "pointer",
+                        fontWeight: 800,
+                        color: theme.text,
+                        minWidth: 0,
+                      }}
+                    >
+                      <FiLayers size={14} />
+                      <span>{group?.name ?? `Группа (${item.shapes.length})`}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => item.shapes.forEach((shape) => onToggleVisibility(shape.id))}
+                    title={allVisible ? "Скрыть группу" : "Показать группу"}
+                    style={iconButtonStyle}
+                  >
+                    {allVisible ? <FiEye size={14} /> : <FiEyeOff size={14} />}
+                  </button>
+                </div>
+
+                <div style={{ padding: 8, display: "grid", gap: 8 }}>
+                  <input
+                    type="text"
+                    value={group?.name ?? ""}
+                    onChange={(e) => onRenameGroup(item.groupId, e.target.value)}
+                    style={ui.input}
+                  />
+
+                  {!collapsed && item.shapes.map((shape) => {
+                    const active = selection.ids.includes(shape.id);
+                    return (
+                      <ShapeRow
+                        key={shape.id}
+                        shape={shape}
+                        active={active}
+                        onSelect={() => onSelectionChange(selectOnly(shape.id))}
+                        onRename={(name) => onRenameShape(shape.id, name)}
+                        onToggleVisibility={() => onToggleVisibility(shape.id)}
+                        onDelete={() => onDeleteShape(shape.id)}
+                        onDragStart={() => setDraggedShapeId(shape.id)}
+                        onDragOver={() => moveShapeBefore(shape.id)}
+                        onDragEnd={() => setDraggedShapeId(null)}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+
+          const active = selection.ids.includes(item.shape.id);
+          return (
+            <ShapeRow
+              key={item.shape.id}
+              shape={item.shape}
+              active={active}
+              onSelect={() => onSelectionChange(selectOnly(item.shape.id))}
+              onRename={(name) => onRenameShape(item.shape.id, name)}
+              onToggleVisibility={() => onToggleVisibility(item.shape.id)}
+              onDelete={() => onDeleteShape(item.shape.id)}
+              onDragStart={() => setDraggedShapeId(item.shape.id)}
+              onDragOver={() => moveShapeBefore(item.shape.id)}
+              onDragEnd={() => setDraggedShapeId(null)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ShapeRow({
+  shape,
+  active,
+  onSelect,
+  onRename,
+  onToggleVisibility,
+  onDelete,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+}: {
+  shape: SketchShape;
+  active: boolean;
+  onSelect: () => void;
+  onRename: (name: string) => void;
+  onToggleVisibility: () => void;
+  onDelete: () => void;
+  onDragStart: () => void;
+  onDragOver: () => void;
+  onDragEnd: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={(e) => {
+        e.preventDefault();
+        onDragOver();
+      }}
+      onDragEnd={onDragEnd}
+      style={{
+        border: `1px solid ${active ? "#93c5fd" : theme.border}`,
+        borderRadius: 12,
+        background: active ? "#eff6ff" : "#fff",
+        padding: 10,
+        display: "grid",
+        gap: 8,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <button
+          type="button"
+          onClick={onSelect}
+          style={{
+            border: "none",
+            background: "transparent",
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            cursor: "pointer",
+            color: theme.text,
+            fontWeight: 700,
+            minWidth: 0,
+          }}
+        >
+          <span style={{ display: "grid", placeItems: "center", width: 20, height: 20 }}>
+            {getShapeIcon(shape)}
+          </span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {shape.name}
+          </span>
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button type="button" onClick={onToggleVisibility} style={iconButtonStyle}>
+            {shape.visible !== false ? <FiEye size={14} /> : <FiEyeOff size={14} />}
+          </button>
+          <button type="button" onClick={onDelete} style={iconButtonStyle}>
+            <FiTrash2 size={14} />
+          </button>
+        </div>
+      </div>
+
+      <input type="text" value={shape.name} onChange={(e) => onRename(e.target.value)} style={ui.input} />
+    </div>
+  );
+}
+
+const iconButtonStyle: React.CSSProperties = {
+  width: 30,
+  height: 30,
+  borderRadius: 10,
+  border: `1px solid ${theme.border}`,
+  background: "#fff",
+  color: theme.text,
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+  padding: 0,
+};
 
 
 path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
@@ -8388,6 +9275,7 @@ export function fmt(value: number): string {
 path: /src/modules/cam/gcode/generator.ts
 ----------------------------------------
 import type { SketchDocument } from "../../cad/model/types";
+import { collectVisibleShapes } from "../../cad/model/grouping";
 import {
   emitCutEnd,
   emitCutStart,
@@ -8426,7 +9314,7 @@ function buildPassLevels(targetCutZ: number, passDepth: number): number[] {
 export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
   const lines: string[] = [...emitProgramPreamble(doc)];
 
-  for (const shape of doc.shapes) {
+  for (const shape of collectVisibleShapes(doc)) {
     const toolpaths = await shapeToToolpaths(shape, doc);
 
     for (const toolpath of toolpaths) {
@@ -9167,6 +10055,11 @@ export type CameraInfo = {
 
 path: /src/types/project.ts
 ----------------------------------------
+
+// =============================
+// FILE: src/types/project.ts
+// =============================
+
 import type { PlacementMode, StockDimensions } from "./gcode";
 import type { MainTab } from "./ui";
 import type { SketchDocument } from "../modules/cad/model/types";
@@ -9174,7 +10067,7 @@ import type { SelectionState } from "../modules/cad/model/selection";
 import type { ViewTransform } from "../modules/cad/model/view";
 
 export type GCodeStudioProject = {
-  version: 2;
+  version: 3;
   kind: "gcode-studio-project";
   fileName: string;
   source: string;
@@ -9589,6 +10482,12 @@ export function downloadTextFile(content: string, fileName: string): void {
 
 path: /src/utils/projectFile.ts
 ----------------------------------------
+
+
+// =============================
+// FILE: src/utils/projectFile.ts
+// =============================
+
 import type { GCodeStudioProject } from "../types/project";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -9610,8 +10509,8 @@ export function parseProjectFile(text: string): GCodeStudioProject {
     throw new Error("Это не файл проекта GCode Studio");
   }
 
-  if (raw.version !== 2) {
-    throw new Error("Поддерживается только формат проекта version 2");
+  if (raw.version !== 3) {
+    throw new Error("Поддерживается только формат проекта version 3");
   }
 
   return raw as GCodeStudioProject;
@@ -9954,8 +10853,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 98
+included: 100
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 260071
+totalBytes(approx): 286338

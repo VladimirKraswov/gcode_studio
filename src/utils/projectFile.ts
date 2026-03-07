@@ -1,3 +1,9 @@
+
+
+// =============================
+// FILE: src/utils/projectFile.ts
+// =============================
+
 import type { GCodeStudioProject } from "../types/project";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -19,8 +25,8 @@ export function parseProjectFile(text: string): GCodeStudioProject {
     throw new Error("Это не файл проекта GCode Studio");
   }
 
-  if (raw.version !== 2) {
-    throw new Error("Поддерживается только формат проекта version 2");
+  if (raw.version !== 3) {
+    throw new Error("Поддерживается только формат проекта version 3");
   }
 
   return raw as GCodeStudioProject;

@@ -40,6 +40,12 @@ import {
   selectOnly,
   toggleSelection,
 } from "../model/selection";
+import {
+  getDragShapeIds,
+  groupSelectedShapes,
+  normalizeSelectionAfterDelete,
+  ungroupSelectedShapes,
+} from "../model/grouping";
 import { generateSketchGCode } from "../../cam/gcode/generator";
 import { screenToCadPoint } from "../../../utils/coordinates";
 import { clamp } from "../../../utils";
@@ -47,6 +53,7 @@ import { useTextPreviewMap } from "./useTextPreviewMap";
 import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
+import { renameGroup, reorderShapes, toggleGroupCollapsed } from "../model/grouping";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -94,6 +101,19 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  function renameGroupById(groupId: string, name: string) {
+    setDocument((prev) => renameGroup(prev, groupId, name));
+  }
+
+  function toggleGroupCollapsedById(groupId: string) {
+    setDocument((prev) => toggleGroupCollapsed(prev, groupId));
+  }
+
+  function reorderDocumentShapes(orderedIds: string[]) {
+    checkpointHistory();
+    setDocument((prev) => reorderShapes(prev, orderedIds));
+  }
 
   const {
     svgImport,
@@ -340,12 +360,54 @@ export function useCadEditor({
   function deleteSelected() {
     if (selection.ids.length === 0) return;
 
+    const nextDocument = {
+      ...document,
+      shapes: document.shapes.filter((shape) => !selection.ids.includes(shape.id)),
+    };
+
+    setDocument(nextDocument);
+    onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
+  }
+
+  function deleteShape(shapeId: string) {
+    checkpointHistory();
+
+    const nextDocument = {
+      ...document,
+      shapes: document.shapes.filter((shape) => shape.id !== shapeId),
+    };
+
+    setDocument(nextDocument);
+    onSelectionChange(normalizeSelectionAfterDelete(nextDocument, selection));
+  }
+
+  function renameShape(shapeId: string, name: string) {
     setDocument((prev) => ({
       ...prev,
-      shapes: prev.shapes.filter((shape) => !selection.ids.includes(shape.id)),
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, name } : shape,
+      ),
     }));
+  }
 
-    onSelectionChange(clearSelection());
+  function toggleShapeVisibility(shapeId: string) {
+    checkpointHistory();
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, visible: !(shape.visible !== false) } : shape,
+      ),
+    }));
+  }
+
+  function groupSelected() {
+    checkpointHistory();
+    setDocument((prev) => groupSelectedShapes(prev, selection));
+  }
+
+  function ungroupSelected() {
+    checkpointHistory();
+    setDocument((prev) => ungroupSelectedShapes(prev, selection));
   }
 
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
@@ -388,7 +450,34 @@ export function useCadEditor({
         shapeId,
         cad.x,
         cad.y,
-        nextSelection.ids.length > 0 ? nextSelection.ids : [shapeId],
+        getDragShapeIds(document, shapeId, nextSelection),
+      ),
+    );
+  }
+
+  function bindSelectionDragStart(event: React.PointerEvent<SVGRectElement>) {
+    event.stopPropagation();
+
+    if (tool !== "select" || event.button !== 0) {
+      return;
+    }
+
+    if (!selection.primaryId) {
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+    const cad = normalizePoint(rawCad);
+
+    checkpointHistory();
+
+    setDragState(
+      startDrag(
+        selection.primaryId,
+        cad.x,
+        cad.y,
+        getDragShapeIds(document, selection.primaryId, selection),
       ),
     );
   }
@@ -418,12 +507,18 @@ export function useCadEditor({
     resetView,
     commitPolyline,
     deleteSelected,
+    deleteShape,
+    renameShape,
+    toggleShapeVisibility,
+    groupSelected,
+    ungroupSelected,
     handleGenerateClick,
     handleCanvasPointerDown,
     handleCanvasPointerMove,
     handleCanvasPointerUp,
     handleCanvasWheel,
     bindSelectStart,
+    bindSelectionDragStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
 
     svgImport,
@@ -432,5 +527,9 @@ export function useCadEditor({
     abortSvgImport,
     updateSvgImportDraft,
     confirmSvgImport,
+
+    renameGroup: renameGroupById,
+    toggleGroupCollapsed: toggleGroupCollapsedById,
+    reorderDocumentShapes,
   };
 }

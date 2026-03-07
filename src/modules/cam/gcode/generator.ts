@@ -1,4 +1,5 @@
 import type { SketchDocument } from "../../cad/model/types";
+import { collectVisibleShapes } from "../../cad/model/grouping";
 import {
   emitCutEnd,
   emitCutStart,
@@ -37,7 +38,7 @@ function buildPassLevels(targetCutZ: number, passDepth: number): number[] {
 export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
   const lines: string[] = [...emitProgramPreamble(doc)];
 
-  for (const shape of doc.shapes) {
+  for (const shape of collectVisibleShapes(doc)) {
     const toolpaths = await shapeToToolpaths(shape, doc);
 
     for (const toolpath of toolpaths) {

@@ -1,4 +1,18 @@
+
+
+// =============================
+// FILE: src/modules/cad/model/document.ts
+// =============================
+
 import type { SketchDocument, SketchShape } from "./types";
+
+function normalizeShape(shape: SketchShape): SketchShape {
+  return {
+    ...shape,
+    visible: shape.visible ?? true,
+    groupId: shape.groupId ?? null,
+  };
+}
 
 export function createEmptySketchDocument(): SketchDocument {
   return {
@@ -33,11 +47,12 @@ export function createEmptySketchDocument(): SketchDocument {
     snapEnabled: true,
     snapStep: 5,
     shapes: [],
+    groups: [],
   };
 }
 
 export function addShape(document: SketchDocument, shape: SketchShape): SketchDocument {
-  return { ...document, shapes: [...document.shapes, shape] };
+  return { ...document, shapes: [...document.shapes, normalizeShape(shape)] };
 }
 
 export function removeShape(document: SketchDocument, shapeId: string): SketchDocument {
@@ -55,7 +70,7 @@ export function updateShape(
   return {
     ...document,
     shapes: document.shapes.map((shape) =>
-      shape.id === shapeId ? ({ ...shape, ...patch } as SketchShape) : shape,
+      shape.id === shapeId ? normalizeShape({ ...shape, ...patch } as SketchShape) : shape,
     ),
   };
 }
@@ -68,7 +83,7 @@ export function replaceShape(
   return {
     ...document,
     shapes: document.shapes.map((shape) =>
-      shape.id === shapeId ? nextShape : shape,
+      shape.id === shapeId ? normalizeShape(nextShape) : shape,
     ),
   };
 }

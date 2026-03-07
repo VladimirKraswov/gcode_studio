@@ -1,11 +1,23 @@
-// path: /src/modules/cad/model/types.ts
+
+// =============================
+// FILE: src/modules/cad/model/types.ts
+// =============================
+
 export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text" | "svg";
+
+export type SketchGroup = {
+  id: string;
+  name: string;
+  collapsed?: boolean;
+};
 
 export type SketchBase = {
   id: string;
   name: string;
   cutZ?: number | null;
   strokeWidth?: number;
+  visible: boolean;
+  groupId: string | null;
 };
 
 export type SketchRectangle = SketchBase & {
@@ -102,6 +114,7 @@ export type SketchDocument = {
   snapEnabled: boolean;
   snapStep: number;
   shapes: SketchShape[];
+  groups: SketchGroup[];
 };
 
 export type SketchTool =

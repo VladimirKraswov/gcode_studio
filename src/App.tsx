@@ -25,7 +25,7 @@ import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
 import type { SketchDocument } from "./modules/cad/model/types";
 import type { SelectionState } from "./modules/cad/model/selection";
-import { createSelection } from "./modules/cad/model/selection";
+import { createSelection, selectOnly } from "./modules/cad/model/selection";
 import { createEmptySketchDocument } from "./modules/cad/model/document";
 import { theme, ui } from "./styles/ui";
 import { downloadTextFile } from "./utils";
@@ -34,6 +34,13 @@ import type { ViewTransform } from "./modules/cad/model/view";
 import { createDefaultView } from "./modules/cad/model/view";
 import { useUndoRedo } from "./hooks/useUndoRedo";
 import type { GCodeStudioProject } from "./types/project";
+import { ObjectListPanel } from "./modules/cad/panels/ObjectListPanel";
+import {
+  normalizeSelectionAfterDelete,
+  renameGroup,
+  reorderShapes,
+  toggleGroupCollapsed,
+} from "./modules/cad/model/grouping";
 
 const UNDO_HISTORY_LIMIT = 10;
 
@@ -191,7 +198,7 @@ export default function App() {
 
   function saveProject() {
     const project = {
-      version: 2 as const,
+      version: 3 as const,
       kind: "gcode-studio-project" as const,
       fileName,
       source,
@@ -257,6 +264,50 @@ export default function App() {
     setFileName("demo.gcode");
     resetPlayback();
     setCameraResetKey((value) => value + 1);
+  }
+
+  function renameShape(shapeId: string, name: string) {
+    setEditDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, name } : shape,
+      ),
+    }));
+  }
+
+  function renameGroupById(groupId: string, name: string) {
+    setEditDocument((prev) => renameGroup(prev, groupId, name));
+  }
+
+  function toggleGroupCollapsedById(groupId: string) {
+    setEditDocument((prev) => toggleGroupCollapsed(prev, groupId));
+  }
+
+  function toggleShapeVisibility(shapeId: string) {
+    checkpointHistory();
+    setEditDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === shapeId ? { ...shape, visible: !(shape.visible !== false) } : shape,
+      ),
+    }));
+  }
+
+  function deleteShape(shapeId: string) {
+    checkpointHistory();
+
+    const nextDocument = {
+      ...editDocument,
+      shapes: editDocument.shapes.filter((shape) => shape.id !== shapeId),
+    };
+
+    setEditDocument(nextDocument);
+    setSelection(normalizeSelectionAfterDelete(nextDocument, selection));
+  }
+
+  function reorderDocumentShapes(orderedIds: string[]) {
+    checkpointHistory();
+    setEditDocument((prev) => reorderShapes(prev, orderedIds));
   }
 
   if (!parsed || isParsing) {
@@ -342,29 +393,44 @@ export default function App() {
                 paddingRight: 4,
               }}
             >
-              <LeftPanel
-                fileName={fileName}
-                onFileChange={handleFileChange}
-                onProjectFileChange={handleProjectFileChange}
-                onSaveProject={saveProject}
-                onLoadDemo={loadDemo}
-                onResetCamera={() => setCameraResetKey((v) => v + 1)}
-                playing={playing}
-                onPlayPause={() => setPlaying((v) => !v)}
-                onResetPlayback={resetPlayback}
-                progress={progress}
-                onProgressChange={setProgress}
-                speed={speed}
-                onSpeedChange={setSpeed}
-                placementMode={placementMode}
-                onPlacementModeChange={setPlacementMode}
-                stock={stock}
-                onStockChange={setStock}
-                showMaterialRemoval={showMaterialRemoval}
-                onShowMaterialRemovalChange={setShowMaterialRemoval}
-                detailLevel={detailLevel}
-                onDetailLevelChange={setDetailLevel}
-              />
+              {activeTab === "edit" ? (
+                <ObjectListPanel
+                  document={editDocument}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  onRenameShape={renameShape}
+                  onRenameGroup={renameGroupById}
+                  onToggleGroupCollapsed={toggleGroupCollapsedById}
+                  onToggleVisibility={toggleShapeVisibility}
+                  onDeleteShape={deleteShape}
+                  onReorderShapes={reorderDocumentShapes}
+                />
+              ) : (
+                <LeftPanel
+                  mode="default"
+                  fileName={fileName}
+                  onFileChange={handleFileChange}
+                  onProjectFileChange={handleProjectFileChange}
+                  onSaveProject={saveProject}
+                  onLoadDemo={loadDemo}
+                  onResetCamera={() => setCameraResetKey((v) => v + 1)}
+                  playing={playing}
+                  onPlayPause={() => setPlaying((v) => !v)}
+                  onResetPlayback={resetPlayback}
+                  progress={progress}
+                  onProgressChange={setProgress}
+                  speed={speed}
+                  onSpeedChange={setSpeed}
+                  placementMode={placementMode}
+                  onPlacementModeChange={setPlacementMode}
+                  stock={stock}
+                  onStockChange={setStock}
+                  showMaterialRemoval={showMaterialRemoval}
+                  onShowMaterialRemovalChange={setShowMaterialRemoval}
+                  detailLevel={detailLevel}
+                  onDetailLevelChange={setDetailLevel}
+                />
+              )}
             </div>
           </div>
 

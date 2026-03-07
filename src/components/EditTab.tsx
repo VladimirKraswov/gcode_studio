@@ -1,4 +1,3 @@
-// path: /src/components/EditTab.tsx
 import { SvgImportModal } from "./SvgImportModal";
 import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
 import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
@@ -87,6 +86,8 @@ export function EditTab({
           canUndo={canUndo}
           canRedo={canRedo}
           onImportSvg={editor.startSvgImport}
+          onGroupSelected={editor.groupSelected}
+          onUngroupSelected={editor.ungroupSelected}
         />
 
         {editor.tool === "text" && (
@@ -104,39 +105,51 @@ export function EditTab({
 
         <div
           style={{
-            ...ui.panelInset,
             flex: 1,
             minHeight: 0,
             minWidth: 0,
-            overflow: "hidden",
-            background: "#f8fafc",
             display: "flex",
+            gap: 12,
+            overflow: "hidden",
           }}
         >
           <div
             style={{
+              ...ui.panelInset,
               flex: 1,
               minHeight: 0,
               minWidth: 0,
               overflow: "hidden",
+              background: "#f8fafc",
+              display: "flex",
             }}
           >
-            <CadCanvas
-              svgRef={editor.svgRef}
-              document={document}
-              selection={selection}
-              view={editor.view}
-              draft={editor.draft}
-              polylineDraft={editor.polylineDraft}
-              textPreviewMap={editor.textPreviewMap}
-              tool={editor.tool}
-              onPointerDown={editor.handleCanvasPointerDown}
-              onPointerMove={editor.handleCanvasPointerMove}
-              onPointerUp={editor.handleCanvasPointerUp}
-              onPointerLeave={editor.handleCanvasPointerUp}
-              onWheel={editor.handleCanvasWheel}
-              onShapePointerDown={editor.bindSelectStart}
-            />
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                minWidth: 0,
+                overflow: "hidden",
+              }}
+            >
+              <CadCanvas
+                svgRef={editor.svgRef}
+                document={document}
+                selection={selection}
+                view={editor.view}
+                draft={editor.draft}
+                polylineDraft={editor.polylineDraft}
+                textPreviewMap={editor.textPreviewMap}
+                tool={editor.tool}
+                onPointerDown={editor.handleCanvasPointerDown}
+                onPointerMove={editor.handleCanvasPointerMove}
+                onPointerUp={editor.handleCanvasPointerUp}
+                onPointerLeave={editor.handleCanvasPointerUp}
+                onWheel={editor.handleCanvasWheel}
+                onShapePointerDown={editor.bindSelectStart}
+                onSelectionPointerDown={editor.bindSelectionDragStart}
+              />
+            </div>
           </div>
         </div>
 

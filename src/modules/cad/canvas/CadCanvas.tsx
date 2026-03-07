@@ -1,8 +1,14 @@
+
+// =============================
+// FILE: src/modules/cad/canvas/CadCanvas.tsx
+// =============================
+
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
 import { DraftOverlay } from "./DraftOverlay";
 import { ShapeRenderer } from "./ShapeRenderer";
+import { SelectionOverlay } from "./SelectionOverlay";
 import type { DraftShape } from "../geometry/draftGeometry";
 import type {
   SketchDocument,
@@ -12,6 +18,7 @@ import type {
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
 import { isSelected } from "../model/selection";
+import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
 type CadCanvasProps = {
@@ -29,6 +36,7 @@ type CadCanvasProps = {
   onPointerLeave: () => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+  onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
 };
 
 export function CadCanvas({
@@ -46,7 +54,15 @@ export function CadCanvas({
   onPointerLeave,
   onWheel,
   onShapePointerDown,
+  onSelectionPointerDown,
 }: CadCanvasProps) {
+  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+  const selectedIds = new Set(
+    primary?.groupId
+      ? document.shapes.filter((shape) => shape.groupId === primary.groupId).map((shape) => shape.id)
+      : selection.ids,
+  );
+
   return (
     <svg
       ref={svgRef}
@@ -75,17 +91,25 @@ export function CadCanvas({
       <CadSheet document={document} view={view} />
       <CadOriginMarker documentHeight={document.height} view={view} />
 
-      {document.shapes.map((shape) => (
+      {collectVisibleShapes(document).map((shape) => (
         <ShapeRenderer
           key={shape.id}
           shape={shape}
           documentHeight={document.height}
           view={view}
-          isSelected={isSelected(selection, shape.id)}
+          isSelected={selectedIds.has(shape.id)}
           textPreviewMap={textPreviewMap}
           onPointerDown={onShapePointerDown}
         />
       ))}
+
+      <SelectionOverlay
+        document={document}
+        selection={selection}
+        documentHeight={document.height}
+        view={view}
+        onPointerDown={onSelectionPointerDown}
+      />
 
       <DraftOverlay
         draft={draft}

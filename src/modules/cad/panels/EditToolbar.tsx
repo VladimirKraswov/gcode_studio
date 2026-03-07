@@ -1,4 +1,3 @@
-// path: /src/modules/cad/panels/EditToolbar.tsx
 import { useRef } from "react";
 import {
   FiCheck,
@@ -6,6 +5,7 @@ import {
   FiCornerUpLeft,
   FiCornerUpRight,
   FiImage,
+  FiLayers,
   FiMaximize,
   FiMousePointer,
   FiPenTool,
@@ -13,6 +13,7 @@ import {
   FiSquare,
   FiTrash2,
   FiType,
+  FiX,
 } from "react-icons/fi";
 import { ui } from "../../../styles/ui";
 import type { SketchTool } from "../model/types";
@@ -30,6 +31,8 @@ type EditToolbarProps = {
   canUndo: boolean;
   canRedo: boolean;
   onImportSvg: (file: File) => void;
+  onGroupSelected: () => void;
+  onUngroupSelected: () => void;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
@@ -53,6 +56,8 @@ export function EditToolbar({
   canUndo,
   canRedo,
   onImportSvg,
+  onGroupSelected,
+  onUngroupSelected,
 }: EditToolbarProps) {
   const svgInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -124,6 +129,24 @@ export function EditToolbar({
             event.currentTarget.value = "";
           }}
         />
+
+        <button
+          type="button"
+          title="Сгруппировать выбранные объекты"
+          onClick={onGroupSelected}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
+          <FiLayers size={16} />
+        </button>
+
+        <button
+          type="button"
+          title="Разгруппировать выбранные объекты"
+          onClick={onUngroupSelected}
+          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+        >
+          <FiX size={16} />
+        </button>
 
         <button
           type="button"

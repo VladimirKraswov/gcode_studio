@@ -1,4 +1,3 @@
-// path: /src/modules/cad/model/shapeFactory.ts
 import type {
   SketchCircle,
   SketchPolyline,
@@ -8,6 +7,11 @@ import type {
   SketchText,
 } from "./types";
 import { createId } from "./ids";
+
+const baseShapeFields = {
+  visible: true,
+  groupId: null,
+} as const;
 
 export function createRectangleShape(
   name: string,
@@ -26,6 +30,7 @@ export function createRectangleShape(
     height,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -44,6 +49,7 @@ export function createCircleShape(
     radius,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -60,6 +66,7 @@ export function createPolylineShape(
     closed,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -87,6 +94,7 @@ export function createTextShape(
     cutMode: "outline",
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }
 
@@ -115,5 +123,6 @@ export function createSvgShape(params: {
     contours: params.contours,
     cutZ: null,
     strokeWidth: 1,
+    ...baseShapeFields,
   };
 }

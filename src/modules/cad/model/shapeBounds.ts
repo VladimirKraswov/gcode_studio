@@ -85,3 +85,7 @@ export function selectionBounds(shapes: SketchShape[]): Bounds2D {
     maxY: Math.max(...bounds.map((b) => b.maxY)),
   };
 }
+
+export function groupBounds(document: SketchDocument, groupId: string): Bounds2D {
+  return selectionBounds(document.shapes.filter((shape) => shape.groupId === groupId));
+}

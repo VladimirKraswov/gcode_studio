@@ -6,6 +6,7 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiFolder,
+  FiLayers,
   FiPause,
   FiPlay,
   FiSave,
@@ -16,13 +17,18 @@ import {
 import type { PlacementMode, StockDimensions } from "../types/gcode";
 import { theme, ui } from "../styles/ui";
 
+type LeftPanelMode = "default" | "cad";
+
 type LeftPanelProps = {
+  mode?: LeftPanelMode;
+
   fileName: string;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onProjectFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onSaveProject: () => void;
   onLoadDemo: () => void;
   onResetCamera: () => void;
+
   playing: boolean;
   onPlayPause: () => void;
   onResetPlayback: () => void;
@@ -30,6 +36,7 @@ type LeftPanelProps = {
   onProgressChange: (value: number) => void;
   speed: number;
   onSpeedChange: (value: number) => void;
+
   placementMode: PlacementMode;
   onPlacementModeChange: (mode: PlacementMode) => void;
   stock: StockDimensions;
@@ -41,12 +48,15 @@ type LeftPanelProps = {
 };
 
 export function LeftPanel({
+  mode = "default",
+
   fileName,
   onFileChange,
   onProjectFileChange,
   onSaveProject,
   onLoadDemo,
   onResetCamera,
+
   playing,
   onPlayPause,
   onResetPlayback,
@@ -54,6 +64,7 @@ export function LeftPanel({
   onProgressChange,
   speed,
   onSpeedChange,
+
   placementMode,
   onPlacementModeChange,
   stock,
@@ -64,6 +75,35 @@ export function LeftPanel({
   onDetailLevelChange,
 }: LeftPanelProps) {
   const [stockCollapsed, setStockCollapsed] = useState(false);
+
+  if (mode === "cad") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <section style={{ ...ui.panel, padding: 16 }}>
+          <div style={ui.panelHeader}>
+            <h3 style={ui.sectionTitle}>
+              <div style={ui.iconBadge}>
+                <FiLayers size={18} />
+              </div>
+              <span>Объекты CAD</span>
+            </h3>
+          </div>
+
+          <div
+            style={{
+              ...ui.panelInset,
+              padding: 14,
+              color: theme.textMuted,
+              fontSize: 13,
+              lineHeight: 1.6,
+            }}
+          >
+            В режиме CAD в левой колонке должен отображаться список объектов и групп.
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -102,7 +142,14 @@ export function LeftPanel({
           />
         </label>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
           <label
             style={{
               ...ui.buttonGhost,
@@ -176,21 +223,20 @@ export function LeftPanel({
           </h3>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-          <button
-            type="button"
-            onClick={onPlayPause}
-            style={ui.buttonPrimary}
-          >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 8,
+            marginBottom: 14,
+          }}
+        >
+          <button type="button" onClick={onPlayPause} style={ui.buttonPrimary}>
             {playing ? <FiPause size={15} /> : <FiPlay size={15} />}
             {playing ? "Пауза" : "Старт"}
           </button>
 
-          <button
-            type="button"
-            onClick={onResetPlayback}
-            style={ui.buttonGhost}
-          >
+          <button type="button" onClick={onResetPlayback} style={ui.buttonGhost}>
             <FiSkipBack size={15} />
             С начала
           </button>
