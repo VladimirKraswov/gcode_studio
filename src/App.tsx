@@ -15,9 +15,15 @@ import { EditRightPanel } from "./components/EditRightPanel";
 import { useCurrentState } from "./hooks/useCurrentState";
 import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
-import type { SketchDocument } from "./types/sketch";
-import { createEmptySketchDocument } from "./utils/sketch";
+import type { SketchDocument } from "./modules/cad/model/types";
+import type { SelectionState } from "./modules/cad/model/selection";
+import { createSelection } from "./modules/cad/model/selection";
+import { createEmptySketchDocument } from "./modules/cad/model/document";
 import { theme, ui } from "./styles/ui";
+import { downloadTextFile } from "./utils";
+import { parseProjectFile, createProjectFile } from "./utils/projectFile";
+import type { ViewTransform } from "./modules/cad/model/view";
+import { createDefaultView } from "./modules/cad/model/view";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
@@ -59,7 +65,8 @@ export default function App() {
   const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
-  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<SelectionState>(createSelection());
+  const [cadView, setCadView] = useState<ViewTransform>(createDefaultView());
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -83,9 +90,59 @@ export default function App() {
     setActiveTab("gcode");
   }
 
+  function saveProject() {
+    const project = {
+      version: 2 as const,
+      kind: "gcode-studio-project" as const,
+      fileName,
+      source,
+      stock,
+      showMaterialRemoval,
+      placementMode,
+      detailLevel,
+      activeTab,
+      editDocument,
+      selection,
+      cadView,
+    };
+
+  const outputName = fileName.replace(/\.(gcode|nc|tap|txt|gs)$/i, "") + ".gs";
+  downloadTextFile(createProjectFile(project), outputName);
+}
+
+  async function handleProjectFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const project = parseProjectFile(text);
+
+      setFileName(project.fileName || "project.gcode");
+      setSource(project.source || "");
+      setStock(project.stock);
+      setShowMaterialRemoval(project.showMaterialRemoval);
+      setPlacementMode(project.placementMode);
+      setDetailLevel(project.detailLevel);
+      setActiveTab(project.activeTab);
+      setEditDocument(project.editDocument);
+      setSelection(project.selection);
+      setCadView(project.cadView);
+
+      resetPlayback();
+      setCameraResetKey((value) => value + 1);
+    } catch (error) {
+      console.error(error);
+      alert("Не удалось загрузить файл проекта .gs");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+
     const text = await file.text();
     setSource(text || "");
     setFileName(file.name || "loaded.gcode");
@@ -186,6 +243,8 @@ export default function App() {
               <LeftPanel
                 fileName={fileName}
                 onFileChange={handleFileChange}
+                onProjectFileChange={handleProjectFileChange}
+                onSaveProject={saveProject}
                 onLoadDemo={loadDemo}
                 onResetCamera={() => setCameraResetKey((v) => v + 1)}
                 playing={playing}
@@ -371,8 +430,10 @@ export default function App() {
                     document={editDocument}
                     setDocument={setEditDocument}
                     onGenerateGCode={applyGeneratedGCodeFromEdit}
-                    selectedId={selectedShapeId}
-                    onSelect={setSelectedShapeId}
+                    selection={selection}
+                    onSelectionChange={setSelection}
+                    view={cadView}
+                    onViewChange={setCadView}
                   />
                 </div>
               )}
@@ -418,7 +479,7 @@ export default function App() {
                 <EditRightPanel
                   document={editDocument}
                   setDocument={setEditDocument}
-                  selectedId={selectedShapeId}
+                  selection={selection}
                 />
               )}
             </div>

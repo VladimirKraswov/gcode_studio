@@ -8,6 +8,7 @@ import {
   FiFolder,
   FiPause,
   FiPlay,
+  FiSave,
   FiSliders,
   FiSkipBack,
   FiUpload,
@@ -18,6 +19,8 @@ import { theme, ui } from "../styles/ui";
 type LeftPanelProps = {
   fileName: string;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onProjectFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
+  onSaveProject: () => void;
   onLoadDemo: () => void;
   onResetCamera: () => void;
   playing: boolean;
@@ -40,6 +43,8 @@ type LeftPanelProps = {
 export function LeftPanel({
   fileName,
   onFileChange,
+  onProjectFileChange,
+  onSaveProject,
   onLoadDemo,
   onResetCamera,
   playing,
@@ -96,6 +101,37 @@ export function LeftPanel({
             }}
           />
         </label>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+          <label
+            style={{
+              ...ui.buttonGhost,
+              width: "100%",
+              justifyContent: "center",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            <FiFolder size={15} />
+            <span>Открыть .gs</span>
+            <input
+              type="file"
+              accept=".gs,application/json"
+              onChange={onProjectFileChange}
+              style={{
+                position: "absolute",
+                inset: 0,
+                opacity: 0,
+                cursor: "pointer",
+              }}
+            />
+          </label>
+
+          <button type="button" onClick={onSaveProject} style={ui.buttonGhost}>
+            <FiSave size={15} />
+            Сохранить .gs
+          </button>
+        </div>
 
         <div
           style={{

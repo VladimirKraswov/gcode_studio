@@ -1,5 +1,5 @@
 import opentype from "opentype.js";
-import type { SketchText } from "../types/sketch";
+import type { SketchText } from "../modules/cad/model/types";
 
 export type CadPoint = {
   x: number;

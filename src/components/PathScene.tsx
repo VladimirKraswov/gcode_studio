@@ -68,9 +68,7 @@ export function PathScene({
 
   const axesHelper = useMemo(() => {
     const length = Math.max(stock.width, stock.height, stock.thickness) * 1.2;
-    if (length <= 0) {
-      return null;
-    }
+    if (length <= 0) return null;
 
     const origin = toScenePoint({ x: 0, y: 0, z: 0 });
     const xEnd = toScenePoint({ x: length, y: 0, z: 0 });
@@ -161,6 +159,7 @@ export function PathScene({
 
   const renderSegments = parsed.renderSegments;
   const renderedDoneCount = Math.floor((progress / 100) * renderSegments.length);
+  const doneSegments = renderSegments.slice(0, Math.max(renderedDoneCount, 0));
 
   return (
     <Canvas
@@ -226,7 +225,7 @@ export function PathScene({
             />
           ))}
 
-          {renderSegments.slice(0, Math.max(renderedDoneCount, 0)).map((seg) => (
+          {doneSegments.map((seg) => (
             <SimpleLine
               key={`done-${seg.id}`}
               start={seg.start}
@@ -255,23 +254,24 @@ export function PathScene({
         cutting={currentState.position.z <= 0}
         toScenePoint={toScenePoint}
       />
-<OrbitControls
-  ref={controlsRef}
-  key={cameraResetKey}
-  makeDefault
-  target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
-  enableDamping
-  dampingFactor={0.08}
-  screenSpacePanning
-  minDistance={10}
-  maxDistance={3000}
-  enableRotate
-  mouseButtons={{
-    LEFT: THREE.MOUSE.PAN,
-    MIDDLE: THREE.MOUSE.DOLLY,
-    RIGHT: THREE.MOUSE.PAN,
-  }}
-/>
+
+      <OrbitControls
+        ref={controlsRef}
+        key={cameraResetKey}
+        makeDefault
+        target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
+        enableDamping
+        dampingFactor={0.08}
+        screenSpacePanning
+        minDistance={10}
+        maxDistance={3000}
+        enableRotate
+        mouseButtons={{
+          LEFT: THREE.MOUSE.PAN,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN,
+        }}
+      />
 
       <CameraDebug controlsRef={controlsRef} onUpdate={onCameraUpdate} />
     </Canvas>

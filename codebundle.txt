@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T14:38:04.947Z
+generated: 2026-03-07T17:11:49.265Z
 
 
 
@@ -390,8 +390,11 @@ path: /package.json
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codemirror/language": "^6.12.2",
+    "@codemirror/legacy-modes": "^6.5.2",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.16",
+    "@lezer/highlight": "^1.2.3",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@uiw/react-codemirror": "^4.25.7",
@@ -426,6 +429,7 @@ path: /src/App.tsx
 ----------------------------------------
 import { useState } from "react";
 import type { ChangeEvent } from "react";
+import { FiBox, FiEye, FiLoader, FiTool, FiCode } from "react-icons/fi";
 import type { CameraInfo, PlacementMode, StockDimensions } from "./types/gcode";
 import type { MainTab } from "./types/ui";
 import { DEMO_GCODE } from "./constants/demo";
@@ -440,14 +444,37 @@ import { EditRightPanel } from "./components/EditRightPanel";
 import { useCurrentState } from "./hooks/useCurrentState";
 import { useGCodeWorker } from "./hooks/useGCodeWorker";
 import { usePlayback } from "./hooks/usePlayback";
-import type { SketchDocument } from "./types/sketch";
-import { createEmptySketchDocument } from "./utils/sketch";
-import { FiEye, FiLoader } from "react-icons/fi";
+import type { SketchDocument } from "./modules/cad/model/types";
+import type { SelectionState } from "./modules/cad/model/selection";
+import { createSelection } from "./modules/cad/model/selection";
+import { createEmptySketchDocument } from "./modules/cad/model/document";
+import { theme, ui } from "./styles/ui";
 
 const DEFAULT_STOCK: StockDimensions = {
   width: 300,
   height: 180,
   thickness: 3,
+};
+
+const TAB_META: Record<
+  MainTab,
+  { title: string; icon: React.ReactNode; subtitle: string }
+> = {
+  view: {
+    title: "3D-превью",
+    subtitle: "Просмотр траектории, заготовки и хода инструмента",
+    icon: <FiEye size={18} />,
+  },
+  gcode: {
+    title: "G-code",
+    subtitle: "Редактирование, вставка команд и быстрый экспорт",
+    icon: <FiCode size={18} />,
+  },
+  edit: {
+    title: "Конструктор",
+    subtitle: "Создание геометрии и генерация G-code",
+    icon: <FiTool size={18} />,
+  },
 };
 
 export default function App() {
@@ -463,7 +490,7 @@ export default function App() {
   const [detailLevel, setDetailLevel] = useState(5);
   const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
-  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<SelectionState>(createSelection());
 
   const { parsed, isParsing } = useGCodeWorker(source);
   const {
@@ -477,17 +504,20 @@ export default function App() {
   } = usePlayback();
 
   const currentState = useCurrentState(parsed, progress);
+  const tabMeta = TAB_META[activeTab];
 
   function applyGeneratedGCodeFromEdit(gcode: string) {
     setSource(gcode);
     setFileName("edit-generated.gcode");
     resetPlayback();
     setCameraResetKey((value) => value + 1);
+    setActiveTab("gcode");
   }
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+
     const text = await file.text();
     setSource(text || "");
     setFileName(file.name || "loaded.gcode");
@@ -504,225 +534,332 @@ export default function App() {
 
   if (!parsed || isParsing) {
     return (
-      <div style={loadingContainer}>
-        <div style={loadingContent}>
-          <FiLoader size={48} style={{ animation: "spin 1s linear infinite", marginBottom: 16 }} />
-          <h2>GCode Studio</h2>
-          <p>
-            {isParsing
-              ? "Парсинг G-code... Это может занять несколько секунд."
-              : "Загрузите G-code"}
-          </p>
-          {!isParsing && (
-            <input
-              type="file"
-              accept=".gcode,.nc,.tap,.txt"
-              onChange={handleFileChange}
-              style={fileInput}
-            />
-          )}
+      <div style={ui.appShell}>
+        <div
+          style={{
+            height: "100vh",
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+          }}
+        >
+          <div
+            style={{
+              ...ui.panel,
+              width: "min(520px, 100%)",
+              padding: 28,
+              textAlign: "center",
+              background: theme.panelSolid,
+            }}
+          >
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                margin: "0 auto 18px",
+                borderRadius: 24,
+                display: "grid",
+                placeItems: "center",
+                background: theme.primarySoft,
+                color: theme.primary,
+              }}
+            >
+              <FiLoader size={34} style={{ animation: "spin 1s linear infinite" }} />
+            </div>
+
+            <h1 style={{ margin: 0, fontSize: 28 }}>GCode Studio</h1>
+            <p style={{ color: theme.textMuted, margin: "10px 0 18px" }}>
+              {isParsing
+                ? "Парсинг G-code... Это может занять несколько секунд."
+                : "Загрузите файл, чтобы начать работу."}
+            </p>
+
+            {!isParsing && (
+              <input
+                type="file"
+                accept=".gcode,.nc,.tap,.txt"
+                onChange={handleFileChange}
+                style={ui.input}
+              />
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={appContainer}>
-      <div style={gridLayout}>
-        {/* Левая панель */}
-        <LeftPanel
-          fileName={fileName}
-          onFileChange={handleFileChange}
-          onLoadDemo={loadDemo}
-          onResetCamera={() => setCameraResetKey((v) => v + 1)}
-          playing={playing}
-          onPlayPause={() => setPlaying((v) => !v)}
-          onResetPlayback={resetPlayback}
-          progress={progress}
-          onProgressChange={setProgress}
-          speed={speed}
-          onSpeedChange={setSpeed}
-          placementMode={placementMode}
-          onPlacementModeChange={setPlacementMode}
-          stock={stock}
-          onStockChange={setStock}
-          showMaterialRemoval={showMaterialRemoval}
-          onShowMaterialRemovalChange={setShowMaterialRemoval}
-          detailLevel={detailLevel}
-          onDetailLevelChange={setDetailLevel}
-        />
+    <div style={ui.appShell}>
+      <div style={ui.page}>
+        <div
+          style={{
+            ...ui.pageGrid,
+            height: "100%",
+            minHeight: 0,
+          }}
+        >
+          <div
+            style={{
+              ...ui.column,
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="scrollbar-thin"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: 4,
+              }}
+            >
+              <LeftPanel
+                fileName={fileName}
+                onFileChange={handleFileChange}
+                onLoadDemo={loadDemo}
+                onResetCamera={() => setCameraResetKey((v) => v + 1)}
+                playing={playing}
+                onPlayPause={() => setPlaying((v) => !v)}
+                onResetPlayback={resetPlayback}
+                progress={progress}
+                onProgressChange={setProgress}
+                speed={speed}
+                onSpeedChange={setSpeed}
+                placementMode={placementMode}
+                onPlacementModeChange={setPlacementMode}
+                stock={stock}
+                onStockChange={setStock}
+                showMaterialRemoval={showMaterialRemoval}
+                onShowMaterialRemovalChange={setShowMaterialRemoval}
+                detailLevel={detailLevel}
+                onDetailLevelChange={setDetailLevel}
+              />
+            </div>
+          </div>
 
-        {/* Центральная область */}
-        <div style={centerArea}>
-          <MainTabs activeTab={activeTab} onChange={setActiveTab} />
+          <div
+            style={{
+              ...ui.column,
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                ...ui.panel,
+                padding: 18,
+                background: theme.panelSolid,
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={ui.iconBadge}>{tabMeta.icon}</div>
+                  <div>
+                    <div style={{ fontSize: 20, fontWeight: 800 }}>{tabMeta.title}</div>
+                    <div style={ui.sectionSubtle}>{tabMeta.subtitle}</div>
+                  </div>
+                </div>
 
-          <div className="tab-content" style={tabContent}>
-            {activeTab === "view" && (
-              <div style={viewCard} className="fade-in">
-                <h3 style={{ marginTop: 0, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                  <FiEye /> 3D‑превью траектории
-                </h3>
-                <div style={sceneContainer}>
-                  <PathScene
-                    parsed={parsed}
-                    currentState={currentState}
-                    progress={progress}
-                    cameraResetKey={cameraResetKey}
-                    stock={stock}
-                    showMaterialRemoval={showMaterialRemoval}
-                    totalLength={parsed.totalLength}
-                    placementMode={placementMode}
-                    detailLevel={detailLevel}
-                    onCameraUpdate={setCameraInfo}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 12px",
+                    borderRadius: 999,
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    color: "#1d4ed8",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    maxWidth: "100%",
+                  }}
+                >
+                  <FiBox size={14} />
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {fileName}
+                  </span>
+                </div>
+              </div>
+
+              <MainTabs activeTab={activeTab} onChange={setActiveTab} />
+            </div>
+
+            <div
+              className="fade-in"
+              style={{
+                ...ui.panel,
+                flex: 1,
+                minHeight: 0,
+                padding: 16,
+                background: theme.panelSolid,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+              }}
+            >
+              {activeTab === "view" && (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <div
+                    style={{
+                      marginBottom: 12,
+                      padding: "10px 12px",
+                      borderRadius: 14,
+                      background: theme.panelMuted,
+                      border: `1px solid ${theme.border}`,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                      fontSize: 12,
+                      color: theme.textMuted,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span>ЛКМ/ПКМ — панорама, колесо — масштаб</span>
+                    <span>Machine zero: X0 Y0 Z0</span>
+                  </div>
+
+                  <div
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      overflow: "hidden",
+                      borderRadius: 18,
+                      border: `1px solid ${theme.border}`,
+                      background: "#f8fafc",
+                    }}
+                  >
+                    <PathScene
+                      parsed={parsed}
+                      currentState={currentState}
+                      progress={progress}
+                      cameraResetKey={cameraResetKey}
+                      stock={stock}
+                      showMaterialRemoval={showMaterialRemoval}
+                      totalLength={parsed.totalLength}
+                      placementMode={placementMode}
+                      detailLevel={detailLevel}
+                      onCameraUpdate={setCameraInfo}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "gcode" && (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    minWidth: 0,
+                    display: "flex",
+                    overflow: "hidden",
+                  }}
+                >
+                  <GCodeEditorPanel
+                    source={source}
+                    setSource={setSource}
+                    fileName={fileName}
                   />
                 </div>
-                <div style={sceneHint}>
-                  <span>ЛКМ/ПКМ — панорама, колесо мыши — масштаб.</span>
-                  <span>Machine zero: X0 Y0 Z0</span>
+              )}
+
+              {activeTab === "edit" && (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    minWidth: 0,
+                    display: "flex",
+                    overflow: "hidden",
+                  }}
+                >
+                  <EditTab
+                    document={editDocument}
+                    setDocument={setEditDocument}
+                    onGenerateGCode={applyGeneratedGCodeFromEdit}
+                    selection={selection}
+                    onSelectionChange={setSelection}
+                  />
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
 
-            {activeTab === "gcode" && (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column" }} className="fade-in">
-                <GCodeEditorPanel
-                  source={source}
-                  setSource={setSource}
-                  fileName={fileName}
+          <div
+            style={{
+              ...ui.column,
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="scrollbar-thin fade-in"
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "hidden",
+                paddingRight: 4,
+              }}
+            >
+              {activeTab === "view" && (
+                <RightInfoPanel
+                  bounds={parsed.bounds}
+                  stock={stock}
+                  parsedStats={parsed.stats}
+                  currentState={currentState}
+                  cameraInfo={cameraInfo}
+                  totalLength={parsed.totalLength}
                 />
-              </div>
-            )}
+              )}
 
-            {activeTab === "edit" && (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column" }} className="fade-in">
-                <EditTab
+              {activeTab === "gcode" && (
+                <GCodeRightPanel
+                  stats={parsed.stats}
+                  totalLength={parsed.totalLength}
+                />
+              )}
+
+              {activeTab === "edit" && (
+                <EditRightPanel
                   document={editDocument}
                   setDocument={setEditDocument}
-                  onGenerateGCode={applyGeneratedGCodeFromEdit}
-                  selectedId={selectedShapeId}
-                  onSelect={setSelectedShapeId}
+                  selection={selection}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-
-        {/* Правая панель */}
-        <div className="fade-in">
-          {activeTab === "view" && (
-            <RightInfoPanel
-              bounds={parsed.bounds}
-              stock={stock}
-              parsedStats={parsed.stats}
-              currentState={currentState}
-              cameraInfo={cameraInfo}
-              totalLength={parsed.totalLength}
-            />
-          )}
-          {activeTab === "gcode" && (
-            <GCodeRightPanel
-              stats={parsed.stats}
-              totalLength={parsed.totalLength}
-            />
-          )}
-          {activeTab === "edit" && (
-            <EditRightPanel
-              document={editDocument}
-              setDocument={setEditDocument}
-              selectedId={selectedShapeId}
-            />
-          )}
         </div>
       </div>
     </div>
   );
 }
-
-// --- Исправленные стили ---
-const appContainer: React.CSSProperties = {
-  height: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  background: "#f9fafb",
-  padding: 24,
-  color: "#0f172a",
-  fontFamily: "Inter, system-ui, -apple-system, sans-serif",
-  transition: "background 0.2s",
-  boxSizing: "border-box",
-};
-
-const gridLayout: React.CSSProperties = {
-  flex: 1,
-  display: "grid",
-  gridTemplateColumns: "340px 1fr 340px",
-  gap: 24,
-  maxWidth: 1920,
-  margin: "0 auto",
-  minHeight: 0, // необходимо для дочерних flex-элементов
-};
-
-const centerArea: React.CSSProperties = {
-  minWidth: 0,
-  height: "100%",
-  display: "flex",
-  flexDirection: "column",
-};
-
-const tabContent: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  transition: "opacity 0.25s ease-in-out",
-};
-
-const viewCard: React.CSSProperties = {
-  background: "white",
-  borderRadius: 20,
-  padding: 20,
-  boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-  transition: "box-shadow 0.2s, transform 0.2s",
-  cursor: "default",
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-};
-
-const sceneContainer: React.CSSProperties = {
-  flex: 1,
-  borderRadius: 16,
-  overflow: "hidden",
-  border: "1px solid #e2e8f0",
-  minHeight: 0, // важно для корректной работы flex
-};
-
-const sceneHint: React.CSSProperties = {
-  marginTop: 12,
-  fontSize: 13,
-  color: "#64748b",
-  display: "flex",
-  justifyContent: "space-between",
-};
-
-const loadingContainer: React.CSSProperties = {
-  height: "100vh",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "#f9fafb",
-};
-
-const loadingContent: React.CSSProperties = {
-  textAlign: "center",
-  animation: "fadeIn 0.5s ease-out",
-};
-
-const fileInput: React.CSSProperties = {
-  marginTop: 16,
-  padding: "8px 12px",
-  border: "1px solid #cbd5e1",
-  borderRadius: 8,
-  background: "white",
-};
 
 
 path: /src/assets/react.svg
@@ -733,11 +870,11 @@ path: /src/assets/react.svg
 path: /src/components/AutoFitCamera.tsx
 ----------------------------------------
 import { useThree } from "@react-three/fiber";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
-import { toScenePoint } from "../utils";
+import { getStockPlacement, toScenePoint } from "../utils";
 
 type AutoFitCameraProps = {
   bounds: Bounds;
@@ -756,6 +893,11 @@ export function AutoFitCamera({
 }: AutoFitCameraProps) {
   const { camera } = useThree();
 
+  const placement = useMemo(
+    () => getStockPlacement(bounds, stock, placementMode),
+    [bounds, stock, placementMode],
+  );
+
   useEffect(() => {
     const sizeX = Math.max(stock.width, bounds.maxX - bounds.minX, 1);
     const sizeY = Math.max(stock.height, bounds.maxY - bounds.minY, 1);
@@ -768,7 +910,7 @@ export function AutoFitCamera({
     const maxHorizontalSize = Math.max(sizeX, sizeY);
     const maxSize = Math.max(sizeX, sizeY, sizeZ);
 
-    const targetScene = toScenePoint({ x: 0, y: 0, z: 0 });
+    const targetScene = toScenePoint(placement.centerGcode);
     const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
 
     const cameraPosition = new THREE.Vector3(
@@ -788,7 +930,7 @@ export function AutoFitCamera({
       controlsRef.current.target.copy(targetScene);
       controlsRef.current.update();
     }
-  }, [bounds, camera, cameraResetKey, controlsRef, placementMode, stock]);
+  }, [bounds, camera, cameraResetKey, controlsRef, placement, stock]);
 
   return null;
 }
@@ -836,837 +978,177 @@ export function CameraDebug({ controlsRef, onUpdate }: CameraDebugProps) {
 
 path: /src/components/EditRightPanel.tsx
 ----------------------------------------
-import { clamp } from "../utils";
-import type { SketchDocument, SketchShape, SketchText } from "../types/sketch";
+import { FiSliders } from "react-icons/fi";
+import { DocumentSettingsPanel } from "../modules/cad/panels/DocumentSettingsPanel";
+import { ShapePropertiesPanel } from "../modules/cad/panels/ShapePropertiesPanel";
+import type { SketchDocument } from "../modules/cad/model/types";
+import type { SelectionState } from "../modules/cad/model/selection";
+import { theme, ui } from "../styles/ui";
 
 type EditRightPanelProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
-  selectedId: string | null;
+  selection: SelectionState;
 };
-
-const FONT_OPTIONS = [
-  "/fonts/NotoSans-Regular.ttf",
-  "/fonts/NotoSans-Bold.ttf",
-  "/fonts/Roboto-Regular.ttf",
-];
 
 export function EditRightPanel({
   document,
   setDocument,
-  selectedId,
+  selection,
 }: EditRightPanelProps) {
-  const selectedShape = document.shapes.find((shape) => shape.id === selectedId) ?? null;
-
-  function updateSelected(patch: Record<string, number | string | boolean | null>) {
-    if (!selectedId) return;
-    setDocument((prev) => ({
-      ...prev,
-      shapes: prev.shapes.map((shape) =>
-        shape.id === selectedId ? { ...shape, ...patch } as SketchShape : shape
-      ),
-    }));
-  }
+  const selectedShape =
+    document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
   return (
-    <div style={panelStyle}>
-      <h3 style={{ marginTop: 0, marginBottom: 16 }}>Параметры документа</h3>
-
-      <div style={{ display: "grid", gap: 12 }}>
-        <label style={inputLabel}>
-          Ширина листа
-          <input
-            type="number"
-            value={document.width}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                width: Math.max(1, Number(e.target.value) || 1),
-              }))
-            }
-          />
-        </label>
-
-        <label style={inputLabel}>
-          Высота листа
-          <input
-            type="number"
-            value={document.height}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                height: Math.max(1, Number(e.target.value) || 1),
-              }))
-            }
-          />
-        </label>
-
-        <label style={inputLabel}>
-          Safe Z
-          <input
-            type="number"
-            value={document.safeZ}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                safeZ: Number(e.target.value) || 0,
-              }))
-            }
-          />
-        </label>
-
-        <label style={inputLabel}>
-          Cut Z по умолчанию
-          <input
-            type="number"
-            value={document.cutZ}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                cutZ: Number(e.target.value) || 0,
-              }))
-            }
-          />
-        </label>
-
-        <label style={inputLabel}>
-          Feed cut
-          <input
-            type="number"
-            value={document.feedCut}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                feedCut: Math.max(1, Number(e.target.value) || 1),
-              }))
-            }
-          />
-        </label>
-
-        <label style={inputLabel}>
-          Feed rapid
-          <input
-            type="number"
-            value={document.feedRapid}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                feedRapid: Math.max(1, Number(e.target.value) || 1),
-              }))
-            }
-          />
-        </label>
-
-        <label style={checkboxLabel}>
-          <input
-            type="checkbox"
-            checked={document.spindleOn}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                spindleOn: e.target.checked,
-              }))
-            }
-          />
-          Лазер / spindle M3/M5
-        </label>
-
-        <label style={inputLabel}>
-          S power
-          <input
-            type="number"
-            value={document.laserPower}
-            onChange={(e) =>
-              setDocument((prev) => ({
-                ...prev,
-                laserPower: Math.max(0, Number(e.target.value) || 0),
-              }))
-            }
-          />
-        </label>
+    <div
+      style={{
+        ...ui.panel,
+        padding: 16,
+        height: "100%",
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+      }}
+      className="scrollbar-thin"
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={ui.iconBadge}>
+          <FiSliders size={18} />
+        </div>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+            Параметры документа
+          </div>
+          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+            Размер листа, подачи и режим резки
+          </div>
+        </div>
       </div>
 
+      <DocumentSettingsPanel document={document} setDocument={setDocument} />
+
       {selectedShape && (
-        <>
-          <h3 style={{ marginTop: 24, marginBottom: 16 }}>Выбранный объект</h3>
-          <div style={{ display: "grid", gap: 12 }}>
-            <label style={inputLabel}>
-              Name
-              <input
-                type="text"
-                value={selectedShape.name}
-                onChange={(e) => updateSelected({ name: e.target.value })}
-              />
-            </label>
-
-            <label style={inputLabel}>
-              Индивидуальная глубина Z
-              <input
-                type="number"
-                value={selectedShape.cutZ ?? document.cutZ}
-                onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
-              />
-            </label>
-
-            {selectedShape.type === "rectangle" && (
-              <>
-                <label style={inputLabel}>
-                  X
-                  <input
-                    type="number"
-                    value={selectedShape.x}
-                    onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Y
-                  <input
-                    type="number"
-                    value={selectedShape.y}
-                    onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Width
-                  <input
-                    type="number"
-                    value={selectedShape.width}
-                    onChange={(e) =>
-                      updateSelected({
-                        width: clamp(Number(e.target.value) || 1, 1, 100000),
-                      })
-                    }
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Height
-                  <input
-                    type="number"
-                    value={selectedShape.height}
-                    onChange={(e) =>
-                      updateSelected({
-                        height: clamp(Number(e.target.value) || 1, 1, 100000),
-                      })
-                    }
-                  />
-                </label>
-              </>
-            )}
-
-            {selectedShape.type === "circle" && (
-              <>
-                <label style={inputLabel}>
-                  CX
-                  <input
-                    type="number"
-                    value={selectedShape.cx}
-                    onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  CY
-                  <input
-                    type="number"
-                    value={selectedShape.cy}
-                    onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Radius
-                  <input
-                    type="number"
-                    value={selectedShape.radius}
-                    onChange={(e) =>
-                      updateSelected({
-                        radius: clamp(Number(e.target.value) || 1, 1, 100000),
-                      })
-                    }
-                  />
-                </label>
-              </>
-            )}
-
-            {selectedShape.type === "polyline" && (
-              <label style={checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={selectedShape.closed}
-                  onChange={(e) => updateSelected({ closed: e.target.checked })}
-                />
-                Closed
-              </label>
-            )}
-
-            {selectedShape.type === "text" && (
-              <>
-                <label style={inputLabel}>
-                  Text
-                  <input
-                    type="text"
-                    value={selectedShape.text}
-                    onChange={(e) => updateSelected({ text: e.target.value })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  X
-                  <input
-                    type="number"
-                    value={selectedShape.x}
-                    onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Y
-                  <input
-                    type="number"
-                    value={selectedShape.y}
-                    onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Height
-                  <input
-                    type="number"
-                    value={selectedShape.height}
-                    onChange={(e) =>
-                      updateSelected({
-                        height: clamp(Number(e.target.value) || 2, 2, 100000),
-                      })
-                    }
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Letter spacing
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={selectedShape.letterSpacing}
-                    onChange={(e) =>
-                      updateSelected({
-                        letterSpacing: Math.max(0, Number(e.target.value) || 0),
-                      })
-                    }
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Font
-                  <select
-                    value={selectedShape.fontFile}
-                    onChange={(e) => updateSelected({ fontFile: e.target.value })}
-                  >
-                    {FONT_OPTIONS.map((font) => (
-                      <option key={font} value={font}>
-                        {font.split("/").pop()}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label style={inputLabel}>
-                  Rotation
-                  <input
-                    type="number"
-                    value={selectedShape.rotation ?? 0}
-                    onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })}
-                  />
-                </label>
-                <label style={inputLabel}>
-                  Align
-                  <select
-                    value={selectedShape.align ?? "left"}
-                    onChange={(e) => updateSelected({ align: e.target.value })}
-                  >
-                    <option value="left">left</option>
-                    <option value="center">center</option>
-                    <option value="right">right</option>
-                  </select>
-                </label>
-              </>
-            )}
-          </div>
-        </>
+        <ShapePropertiesPanel
+          document={document}
+          setDocument={setDocument}
+          selectedShape={selectedShape}
+        />
       )}
     </div>
   );
 }
 
-const panelStyle: React.CSSProperties = {
-  background: "white",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-  height: "fit-content",
-};
-
-const inputLabel: React.CSSProperties = {
-  fontSize: 12,
-  color: "#475569",
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-};
-
-const checkboxLabel: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  fontSize: 14,
-  fontWeight: 600,
-};
-
 
 path: /src/components/EditTab.tsx
 ----------------------------------------
-import { useEffect, useMemo, useRef, useState } from "react";
-import type {
-  SketchDocument,
-  SketchPolylinePoint,
-  SketchShape,
-  SketchText,
-  SketchTool,
-} from "../types/sketch";
-import { getTextPolylines, type CadPoint } from "../utils/fontGeometry";
-import {
-  createId,
-  generateSketchGCode,
-  moveShape,
-} from "../utils/sketch";
-import {
-  cadToScreenPoint,
-  screenToCadPoint,
-  type ViewTransform,
-} from "../utils/coordinates";
+import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
+import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
+import { EditStatusBar } from "../modules/cad/panels/EditStatusBar";
+import { EditToolbar } from "../modules/cad/panels/EditToolbar";
+import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
+import type { SketchDocument } from "../modules/cad/model/types";
+import type { SelectionState } from "../modules/cad/model/selection";
+import { ui } from "../styles/ui";
 
 type EditTabProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   onGenerateGCode: (gcode: string) => void;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  selection: SelectionState;
+  onSelectionChange: (selection: SelectionState) => void;
 };
-
-type DraftShape =
-  | {
-      type: "rectangle";
-      startX: number;
-      startY: number;
-      endX: number;
-      endY: number;
-    }
-  | {
-      type: "circle";
-      startX: number;
-      startY: number;
-      endX: number;
-      endY: number;
-    }
-  | null;
-
-type TextPreviewMap = Record<string, CadPoint[][]>;
-
-const FONT_OPTIONS = [
-  "/fonts/NotoSans-Regular.ttf",
-  "/fonts/NotoSans-Bold.ttf",
-  "/fonts/Roboto-Regular.ttf",
-];
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function getRectangleFromDraft(draft: NonNullable<DraftShape>) {
-  const x = Math.min(draft.startX, draft.endX);
-  const y = Math.min(draft.startY, draft.endY);
-  const width = Math.abs(draft.endX - draft.startX);
-  const height = Math.abs(draft.endY - draft.startY);
-  return { x, y, width, height };
-}
-
-function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return Math.sqrt(dx * dx + dy * dy);
-}
 
 export function EditTab({
   document,
   setDocument,
   onGenerateGCode,
-  selectedId,
-  onSelect,
+  selection,
+  onSelectionChange,
 }: EditTabProps) {
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const [tool, setTool] = useState<SketchTool>("select");
-  const [draft, setDraft] = useState<DraftShape>(null);
-  const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
-  const [textDraft, setTextDraft] = useState("Привет");
-  const [textHeightDraft, setTextHeightDraft] = useState(12);
-  const [textLetterSpacingDraft, setTextLetterSpacingDraft] = useState(0);
-  const [textFontDraft, setTextFontDraft] = useState(FONT_OPTIONS[0]);
-  const [textPreviewMap, setTextPreviewMap] = useState<TextPreviewMap>({});
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [dragState, setDragState] = useState<{
-    shapeId: string;
-    startX: number;
-    startY: number;
-  } | null>(null);
-
-  const [view, setView] = useState<ViewTransform>({
-    scale: 2.5,
-    offsetX: 40,
-    offsetY: 40,
+  const editor = useCadEditor({
+    document,
+    setDocument,
+    onGenerateGCode,
+    selection,
+    onSelectionChange,
   });
 
-  useEffect(() => {
-    let cancelled = false;
-    async function buildTextPreview() {
-      const nextMap: TextPreviewMap = {};
-      for (const shape of document.shapes) {
-        if (shape.type !== "text") continue;
-        try {
-          nextMap[shape.id] = await getTextPolylines(shape);
-        } catch {
-          nextMap[shape.id] = [];
-        }
-      }
-      if (!cancelled) setTextPreviewMap(nextMap);
-    }
-    void buildTextPreview();
-    return () => { cancelled = true; };
-  }, [document.shapes]);
-
-  function resetView() {
-    setView({ scale: 2.5, offsetX: 40, offsetY: 40 });
-  }
-
-  function addRectangle(x: number, y: number, width: number, height: number) {
-    if (width < 1 || height < 1) return;
-    const shape: SketchShape = {
-      id: createId("rect"),
-      type: "rectangle",
-      name: `Rectangle ${document.shapes.filter((s) => s.type === "rectangle").length + 1}`,
-      x, y, width, height,
-      cutZ: null,
-    };
-    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    onSelect(shape.id);
-  }
-
-  function addCircle(cx: number, cy: number, radius: number) {
-    if (radius < 1) return;
-    const shape: SketchShape = {
-      id: createId("circle"),
-      type: "circle",
-      name: `Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`,
-      cx, cy, radius,
-      cutZ: null,
-    };
-    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    onSelect(shape.id);
-  }
-
-  function addText(x: number, y: number) {
-    const value = textDraft.trim();
-    if (!value) return;
-    const shape: SketchShape = {
-      id: createId("text"),
-      type: "text",
-      name: `Text ${document.shapes.filter((s) => s.type === "text").length + 1}`,
-      x, y,
-      text: value,
-      height: Math.max(2, textHeightDraft),
-      letterSpacing: Math.max(0, textLetterSpacingDraft),
-      fontFile: textFontDraft,
-      rotation: 0,
-      align: "left",
-      cutMode: "outline",
-      cutZ: null,
-    };
-    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    onSelect(shape.id);
-  }
-
-  function commitPolyline() {
-    if (polylineDraft.length < 2) {
-      setPolylineDraft([]);
-      return;
-    }
-    const shape: SketchShape = {
-      id: createId("poly"),
-      type: "polyline",
-      name: `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
-      points: polylineDraft,
-      closed: false,
-      cutZ: null,
-    };
-    setDocument((prev) => ({ ...prev, shapes: [...prev.shapes, shape] }));
-    onSelect(shape.id);
-    setPolylineDraft([]);
-  }
-
-  function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const cad = screenToCadPoint(
-      event.clientX,
-      event.clientY,
-      rect,
-      document.height,
-      view,
-    );
-
-    if (tool === "rectangle") {
-      setDraft({ type: "rectangle", startX: cad.x, startY: cad.y, endX: cad.x, endY: cad.y });
-      return;
-    }
-    if (tool === "circle") {
-      setDraft({ type: "circle", startX: cad.x, startY: cad.y, endX: cad.x, endY: cad.y });
-      return;
-    }
-    if (tool === "polyline") {
-      setPolylineDraft((prev) => [...prev, { x: cad.x, y: cad.y }]);
-      return;
-    }
-    if (tool === "text") {
-      addText(cad.x, cad.y);
-    }
-  }
-
-  function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const cad = screenToCadPoint(
-      event.clientX,
-      event.clientY,
-      rect,
-      document.height,
-      view,
-    );
-
-    if (draft) {
-      setDraft((prev) => (prev ? { ...prev, endX: cad.x, endY: cad.y } : null));
-      return;
-    }
-    if (dragState) {
-      const dx = cad.x - dragState.startX;
-      const dy = cad.y - dragState.startY;
-      setDocument((prev) => ({
-        ...prev,
-        shapes: prev.shapes.map((shape) =>
-          shape.id === dragState.shapeId ? moveShape(shape, dx, dy) : shape
-        ),
-      }));
-      setDragState({ shapeId: dragState.shapeId, startX: cad.x, startY: cad.y });
-    }
-  }
-
-  function handleCanvasPointerUp() {
-    if (draft?.type === "rectangle") {
-      const rect = getRectangleFromDraft(draft);
-      addRectangle(rect.x, rect.y, rect.width, rect.height);
-    }
-    if (draft?.type === "circle") {
-      const radius = distance({ x: draft.startX, y: draft.startY }, { x: draft.endX, y: draft.endY });
-      addCircle(draft.startX, draft.startY, radius);
-    }
-    setDraft(null);
-    setDragState(null);
-  }
-
-  function deleteSelected() {
-    if (!selectedId) return;
-    setDocument((prev) => ({
-      ...prev,
-      shapes: prev.shapes.filter((shape) => shape.id !== selectedId),
-    }));
-    onSelect(null);
-  }
-
-  function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
-    event.stopPropagation();
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const cad = screenToCadPoint(
-      event.clientX,
-      event.clientY,
-      rect,
-      document.height,
-      view,
-    );
-    onSelect(shapeId);
-    if (tool === "select") {
-      setDragState({ shapeId, startX: cad.x, startY: cad.y });
-    }
-  }
-
-  function renderShape(shape: SketchShape) {
-    const isSelected = shape.id === selectedId;
-    switch (shape.type) {
-      case "rectangle": {
-        const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, document.height, view);
-        return (
-          <rect
-            key={shape.id}
-            x={p.x}
-            y={p.y}
-            width={shape.width * view.scale}
-            height={shape.height * view.scale}
-            fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.06)"}
-            stroke={isSelected ? "#2563eb" : "#334155"}
-            strokeWidth={isSelected ? 2 : 1.5}
-            onPointerDown={(e) => bindSelectStart(e, shape.id)}
-          />
-        );
-      }
-      case "circle": {
-        const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, document.height, view);
-        return (
-          <circle
-            key={shape.id}
-            cx={p.x}
-            cy={p.y}
-            r={shape.radius * view.scale}
-            fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.06)"}
-            stroke={isSelected ? "#2563eb" : "#334155"}
-            strokeWidth={isSelected ? 2 : 1.5}
-            onPointerDown={(e) => bindSelectStart(e, shape.id)}
-          />
-        );
-      }
-      case "polyline": {
-        const points = shape.points
-          .map((point) => {
-            const p = cadToScreenPoint(point, document.height, view);
-            return `${p.x},${p.y}`;
-          })
-          .join(" ");
-        return (
-          <polyline
-            key={shape.id}
-            points={points}
-            fill="none"
-            stroke={isSelected ? "#2563eb" : "#334155"}
-            strokeWidth={isSelected ? 2 : 1.5}
-            onPointerDown={(e) => bindSelectStart(e, shape.id)}
-          />
-        );
-      }
-      case "text": {
-        const polylines = textPreviewMap[shape.id] ?? [];
-        return (
-          <g key={shape.id} onPointerDown={(e) => bindSelectStart(e, shape.id)}>
-            {polylines.map((polyline, index) => (
-              <polyline
-                key={`${shape.id}-${index}`}
-                points={polyline
-                  .map((point) => {
-                    const p = cadToScreenPoint(point, document.height, view);
-                    return `${p.x},${p.y}`;
-                  })
-                  .join(" ")}
-                fill="none"
-                stroke={isSelected ? "#2563eb" : "#334155"}
-                strokeWidth={isSelected ? 2 : 1.5}
-              />
-            ))}
-          </g>
-        );
-      }
-    }
-  }
-
-  async function handleGenerateClick() {
-    setIsGenerating(true);
-    try {
-      const gcode = await generateSketchGCode(document);
-      onGenerateGCode(gcode);
-    } finally {
-      setIsGenerating(false);
-    }
-  }
-
   return (
-    <div style={{ background: "white", borderRadius: 16, padding: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)", height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Панель инструментов */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <button type="button" onClick={() => setTool("select")}>Select</button>
-        <button type="button" onClick={() => setTool("rectangle")}>Rectangle</button>
-        <button type="button" onClick={() => setTool("circle")}>Circle</button>
-        <button type="button" onClick={() => setTool("polyline")}>Polyline</button>
-        <button type="button" onClick={() => setTool("text")}>Text</button>
-        <button type="button" onClick={commitPolyline}>Finish polyline</button>
-        <button type="button" onClick={deleteSelected}>Delete</button>
-        <button type="button" onClick={resetView}>Reset view</button>
-        <button type="button" onClick={handleGenerateClick} disabled={isGenerating} style={{ marginLeft: "auto" }}>
-          {isGenerating ? "Генерация..." : "Сгенерировать G‑code"}
-        </button>
-      </div>
+    <div
+      style={{
+        ...ui.panel,
+        padding: 16,
+        height: "100%",
+        minHeight: 0,
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        width: "100%",
+      }}
+    >
+      <EditToolbar
+        tool={editor.tool}
+        onToolChange={editor.setTool}
+        onCommitPolyline={editor.commitPolyline}
+        onDeleteSelected={editor.deleteSelected}
+        onResetView={editor.resetView}
+        onGenerate={editor.handleGenerateClick}
+        isGenerating={editor.isGenerating}
+      />
 
-      {tool === "text" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 100px", gap: 8, marginBottom: 12, padding: 12, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-          <label style={{ fontSize: 12 }}>Текст<input type="text" value={textDraft} onChange={(e) => setTextDraft(e.target.value)} style={{ width: "100%" }} /></label>
-          <label style={{ fontSize: 12 }}>Высота<input type="number" min="2" value={textHeightDraft} onChange={(e) => setTextHeightDraft(Math.max(2, Number(e.target.value) || 2))} style={{ width: "100%" }} /></label>
-          <label style={{ fontSize: 12 }}>Интервал<input type="number" min="0" step="0.5" value={textLetterSpacingDraft} onChange={(e) => setTextLetterSpacingDraft(Math.max(0, Number(e.target.value) || 0))} style={{ width: "100%" }} /></label>
-          <label style={{ fontSize: 12, gridColumn: "1 / -1" }}>Шрифт<select value={textFontDraft} onChange={(e) => setTextFontDraft(e.target.value)} style={{ width: "100%" }}>{FONT_OPTIONS.map((font) => (<option key={font} value={font}>{font.split("/").pop()}</option>))}</select></label>
-        </div>
+      {editor.tool === "text" && (
+        <TextToolPanel
+          value={editor.textTool}
+          fontOptions={editor.fontOptions}
+          onChange={(patch) =>
+            editor.setTextTool((prev) => ({
+              ...prev,
+              ...patch,
+            }))
+          }
+        />
       )}
 
-      {/* Холст */}
-      <div style={{ flex: 1, minHeight: 0, border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden", background: "#f8fafc" }}>
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="100%"
-          onPointerDown={handleCanvasPointerDown}
-          onPointerMove={handleCanvasPointerMove}
-          onPointerUp={handleCanvasPointerUp}
-          style={{ display: "block", touchAction: "none", cursor: "crosshair" }}
+      <div
+        style={{
+          ...ui.panelInset,
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflow: "hidden",
+          background: "#f8fafc",
+          display: "flex",
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflow: "hidden",
+          }}
         >
-          <defs>
-            <pattern id="grid" width={20} height={20} patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e2e8f0" strokeWidth="1" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-          <rect
-            x={view.offsetX}
-            y={view.offsetY}
-            width={document.width * view.scale}
-            height={document.height * view.scale}
-            fill="rgba(255,255,255,0.72)"
-            stroke="#cbd5e1"
-            strokeWidth={1.5}
+          <CadCanvas
+            svgRef={editor.svgRef}
+            document={document}
+            selection={selection}
+            view={editor.view}
+            draft={editor.draft}
+            polylineDraft={editor.polylineDraft}
+            textPreviewMap={editor.textPreviewMap}
+            tool={editor.tool}
+            onPointerDown={editor.handleCanvasPointerDown}
+            onPointerMove={editor.handleCanvasPointerMove}
+            onPointerUp={editor.handleCanvasPointerUp}
+            onPointerLeave={editor.handleCanvasPointerUp}
+            onWheel={editor.handleCanvasWheel}
+            onShapePointerDown={editor.bindSelectStart}
           />
-          {(() => {
-            const origin = cadToScreenPoint({ x: 0, y: 0 }, document.height, view);
-            return (
-              <g>
-                <circle cx={origin.x} cy={origin.y} r={4} fill="#ef4444" />
-                <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill="#0f172a">X0 Y0</text>
-              </g>
-            );
-          })()}
-          {document.shapes.map(renderShape)}
-          {polylineDraft.length > 1 && (
-            <polyline
-              points={polylineDraft.map((point) => { const p = cadToScreenPoint(point, document.height, view); return `${p.x},${p.y}`; }).join(" ")}
-              fill="none"
-              stroke="#ef4444"
-              strokeWidth={1.5}
-              strokeDasharray="6 4"
-            />
-          )}
-          {draft?.type === "rectangle" && (() => {
-            const rect = getRectangleFromDraft(draft);
-            const p = cadToScreenPoint({ x: rect.x, y: rect.y + rect.height }, document.height, view);
-            return <rect x={p.x} y={p.y} width={rect.width * view.scale} height={rect.height * view.scale} fill="rgba(37,99,235,0.12)" stroke="#2563eb" strokeDasharray="6 4" />;
-          })()}
-          {draft?.type === "circle" && (() => {
-            const r = distance({ x: draft.startX, y: draft.startY }, { x: draft.endX, y: draft.endY });
-            const center = cadToScreenPoint({ x: draft.startX, y: draft.startY }, document.height, view);
-            return <circle cx={center.x} cy={center.y} r={r * view.scale} fill="rgba(37,99,235,0.12)" stroke="#2563eb" strokeDasharray="6 4" />;
-          })()}
-        </svg>
+        </div>
       </div>
+
+      <EditStatusBar objectCount={document.shapes.length} />
     </div>
   );
 }
@@ -1684,6 +1166,10 @@ import {
   keymap,
   lineNumbers,
 } from "@codemirror/view";
+import { StreamLanguage } from "@codemirror/language";
+import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
+import type { StringStream } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import {
   FiCheck,
   FiCommand,
@@ -1727,6 +1213,90 @@ const COMMON_COMMANDS = [
   "F300",
 ];
 
+// --- Язык G‑code ---
+const gcodeLanguage = StreamLanguage.define({
+  token: (stream: StringStream) => {
+    if (stream.eatSpace()) return null;
+
+    // Комментарии ;...
+    if (stream.match(/^;.*/)) return "comment";
+
+    // Номера строк N10, N100
+    if (stream.match(/^[Nn]\d+/)) return "atom";
+
+    // G/M/T/S/F/P/L команды
+    if (stream.match(/^[GgMmTtSsFfPpLl]\d+(\.\d+)?/)) return "keyword";
+
+    // Координаты и параметры
+    if (stream.match(/^[XYZIJKABCUWV]\s*[+-]?\d*\.?\d+/)) return "variableName";
+
+    // Просто числа
+    if (stream.match(/^[+-]?\d*\.?\d+/)) return "number";
+
+    stream.next();
+    return null;
+  },
+});
+
+// --- Стили для тегов (One Dark) ---
+const oneDarkHighlightStyle = HighlightStyle.define([
+  { tag: tags.comment, color: "#7f8c8d", fontStyle: "italic" },
+  { tag: tags.keyword, color: "#c678dd" }, // фиолетовый (G‑коды, M‑коды)
+  { tag: tags.variableName, color: "#61afef" }, // синий (координаты)
+  { tag: tags.number, color: "#d19a66" }, // оранжевый
+  { tag: tags.atom, color: "#e5c07b" }, // жёлтый (номера строк)
+]);
+
+// --- Тема редактора (One Dark) ---
+const editorTheme = EditorView.theme({
+  "&": {
+    height: "100%",
+    width: "100%",
+    fontSize: "13px",
+    backgroundColor: "#282c34",
+    color: "#abb2bf",
+  },
+  ".cm-editor": {
+    height: "100%",
+  },
+  ".cm-scroller": {
+    overflow: "auto !important",
+    fontFamily:
+      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    lineHeight: "1.6",
+    padding: "8px 0",
+  },
+  ".cm-content": {
+    padding: "14px 16px",
+    whiteSpace: "pre",
+    caretColor: "#61afef",
+  },
+  ".cm-line": {
+    padding: "0 4px",
+  },
+  ".cm-focused": {
+    outline: "none",
+  },
+  ".cm-gutters": {
+    backgroundColor: "#21252b",
+    color: "#7f848e",
+    borderRight: "1px solid #3e4451",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "rgba(97, 175, 239, 0.10)",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "rgba(97, 175, 239, 0.16)",
+    color: "#abb2bf",
+  },
+  ".cm-cursor": {
+    borderLeftColor: "#61afef",
+  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+    backgroundColor: "rgba(80, 160, 210, 0.3)",
+  },
+});
+
 export function GCodeEditor({
   source,
   setSource,
@@ -1753,6 +1323,28 @@ export function GCodeEditor({
     const outputName = fileName.replace(/\.gcode$/i, "") + "_edited.gcode";
     downloadTextFile(localValueRef.current, outputName);
   }, [fileName]);
+
+  const extensions = useMemo(() => {
+    return [
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      EditorView.lineWrapping,
+      EditorView.editable.of(true),
+      gcodeLanguage,
+      syntaxHighlighting(oneDarkHighlightStyle),
+      editorTheme,
+      keymap.of([
+        {
+          key: "Mod-s",
+          preventDefault: true,
+          run: () => {
+            handleSave();
+            return true;
+          },
+        },
+      ]),
+    ];
+  }, [handleSave]);
 
   const handleChange = useCallback((value: string) => {
     localValueRef.current = value;
@@ -1831,76 +1423,6 @@ export function GCodeEditor({
     return COMMON_COMMANDS.filter((cmd) => cmd.toLowerCase().includes(q));
   }, [commandSearch]);
 
-  const extensions = useMemo(
-    () => [
-      lineNumbers(),
-      highlightActiveLineGutter(),
-      EditorView.lineWrapping,
-      EditorView.editable.of(true),
-      EditorView.theme({
-        "&": {
-          height: "100%",
-          width: "100%",
-          fontSize: "13px",
-          backgroundColor: "#0f172a",
-          color: "#e2e8f0",
-        },
-        ".cm-editor": {
-          height: "100%",
-        },
-        ".cm-scroller": {
-          overflow: "auto !important",
-          fontFamily:
-            'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-          lineHeight: "1.6",
-          padding: "8px 0",
-        },
-        ".cm-content": {
-          minHeight: "100%",
-          padding: "14px 16px",
-          whiteSpace: "pre",
-          caretColor: "#38bdf8",
-        },
-        ".cm-line": {
-          padding: "0 4px",
-        },
-        ".cm-focused": {
-          outline: "none",
-        },
-        ".cm-gutters": {
-          backgroundColor: "#0b1220",
-          color: "#64748b",
-          borderRight: "1px solid rgba(148, 163, 184, 0.18)",
-        },
-        ".cm-activeLine": {
-          backgroundColor: "rgba(59, 130, 246, 0.10)",
-        },
-        ".cm-activeLineGutter": {
-          backgroundColor: "rgba(59, 130, 246, 0.16)",
-          color: "#cbd5e1",
-        },
-        ".cm-cursor": {
-          borderLeftColor: "#38bdf8",
-        },
-        "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
-          {
-            backgroundColor: "rgba(56, 189, 248, 0.28)",
-          },
-      }),
-      keymap.of([
-        {
-          key: "Mod-s",
-          preventDefault: true,
-          run: () => {
-            handleSave();
-            return true;
-          },
-        },
-      ]),
-    ],
-    [handleSave],
-  );
-
   const isTab = variant === "tab";
 
   return (
@@ -1919,6 +1441,7 @@ export function GCodeEditor({
           "0 10px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.05)",
       }}
     >
+      {/* Шапка и панель команд */}
       <div
         style={{
           padding: "16px 16px 14px",
@@ -2115,6 +1638,7 @@ export function GCodeEditor({
         </div>
       </div>
 
+      {/* Основная область с редактором */}
       <div
         style={{
           flex: 1,
@@ -2149,6 +1673,7 @@ export function GCodeEditor({
           </div>
         </div>
 
+        {/* Контейнер CodeMirror */}
         <div
           style={{
             flex: 1,
@@ -2157,13 +1682,15 @@ export function GCodeEditor({
             overflow: "hidden",
             border: "1px solid #1e293b",
             boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-            background: "#0f172a",
+            background: "#282c34",
+            display: "flex",
           }}
         >
           <CodeMirror
             ref={editorRef}
             value={editorValue}
             height="100%"
+            width="100%"
             extensions={extensions}
             basicSetup={{
               foldGutter: false,
@@ -2179,6 +1706,7 @@ export function GCodeEditor({
               searchKeymap: true,
             }}
             onChange={handleChange}
+            style={{ height: "100%", width: "100%" }}
           />
         </div>
       </div>
@@ -2186,6 +1714,7 @@ export function GCodeEditor({
   );
 }
 
+// --- Стили для кнопок и значков ---
 const iconBadgeStyle: React.CSSProperties = {
   width: 42,
   height: 42,
@@ -2327,9 +1856,16 @@ export function GCodeEditorTab({
 
 path: /src/components/GCodeRightPanel.tsx
 ----------------------------------------
-import { FiActivity, FiMove, FiScissors, FiTrendingUp } from "react-icons/fi";
+import {
+  FiActivity,
+  FiFileText,
+  FiMove,
+  FiScissors,
+  FiTrendingUp,
+} from "react-icons/fi";
 import type { ParsedStats } from "../types/gcode";
 import { fmt } from "../utils";
+import { ui, theme } from "../styles/ui";
 
 type GCodeRightPanelProps = {
   stats: ParsedStats;
@@ -2338,21 +1874,18 @@ type GCodeRightPanelProps = {
 
 export function GCodeRightPanel({ stats, totalLength }: GCodeRightPanelProps) {
   return (
-    <div style={panelStyle}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-        <div style={panelIconStyle}>
-          <FiActivity size={18} />
-        </div>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 17 }}>Статистика G-code</h3>
-          <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-            Краткая сводка по текущему файлу
+    <div style={{ ...ui.panel, padding: 16 }}>
+      <div style={ui.panelHeader}>
+        <h3 style={ui.sectionTitle}>
+          <div style={ui.iconBadge}>
+            <FiActivity size={18} />
           </div>
-        </div>
+          <span>Статистика G-code</span>
+        </h3>
       </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        <StatItem icon={<FiFileMini />} label="Всего строк" value={stats.totalLines} />
+      <div style={{ display: "grid", gap: 10 }}>
+        <StatItem icon={<FiFileText size={16} />} label="Всего строк" value={stats.totalLines} />
         <StatItem icon={<FiMove size={16} />} label="Перемещений (G0/G1)" value={stats.totalMoves} />
         <StatItem icon={<FiTrendingUp size={16} />} label="Холостых (G0)" value={stats.rapidMoves} />
         <StatItem icon={<FiScissors size={16} />} label="Рабочих (G1)" value={stats.workMoves} />
@@ -2360,15 +1893,20 @@ export function GCodeRightPanel({ stats, totalLength }: GCodeRightPanelProps) {
         <StatItem icon={<FiActivity size={16} />} label="Длина пути" value={`${fmt(totalLength)} мм`} />
       </div>
 
-      <p style={hintStyle}>
-        Подсказка: быстрые команды в редакторе вставляются прямо в позицию курсора.
-      </p>
+      <div
+        style={{
+          ...ui.panelInset,
+          marginTop: 14,
+          padding: 12,
+          color: theme.textMuted,
+          fontSize: 13,
+          lineHeight: 1.6,
+        }}
+      >
+        Подсказка: быстрые команды в редакторе вставляются в текущую позицию курсора.
+      </div>
     </div>
   );
-}
-
-function FiFileMini() {
-  return <span style={{ fontSize: 15, lineHeight: 1 }}>≡</span>;
 }
 
 function StatItem({
@@ -2381,81 +1919,56 @@ function StatItem({
   value: number | string;
 }) {
   return (
-    <div style={statCardStyle}>
-      <div style={statIconStyle}>{icon}</div>
+    <div
+      style={{
+        ...ui.statCard,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 12,
+          display: "grid",
+          placeItems: "center",
+          background: theme.panelMuted,
+          color: theme.textSoft,
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
 
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>{label}</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>{value}</div>
+        <div style={ui.statLabel}>{label}</div>
+        <div style={{ ...ui.statValue, fontSize: 16 }}>{value}</div>
       </div>
     </div>
   );
 }
 
-const panelStyle: React.CSSProperties = {
-  background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
-  borderRadius: 20,
-  padding: 16,
-  border: "1px solid #e2e8f0",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
-  height: "fit-content",
-};
-
-const panelIconStyle: React.CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: 12,
-  display: "grid",
-  placeItems: "center",
-  background: "#e0f2fe",
-  color: "#0369a1",
-};
-
-const statCardStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  background: "#ffffff",
-  borderRadius: 14,
-  padding: "12px 14px",
-  border: "1px solid #e2e8f0",
-};
-
-const statIconStyle: React.CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: 10,
-  display: "grid",
-  placeItems: "center",
-  background: "#f1f5f9",
-  color: "#334155",
-  flexShrink: 0,
-};
-
-const hintStyle: React.CSSProperties = {
-  marginTop: 18,
-  marginBottom: 0,
-  color: "#64748b",
-  fontSize: 13,
-  lineHeight: 1.6,
-};
-
 
 path: /src/components/LeftPanel.tsx
 ----------------------------------------
 import type { ChangeEvent } from "react";
-import type { PlacementMode, StockDimensions } from "../types/gcode";
 import { useState } from "react";
 import {
-  FiFolder,
-  FiPlay,
-  FiPause,
-  FiSkipBack,
-  FiCamera,
   FiBox,
+  FiCamera,
   FiChevronDown,
   FiChevronUp,
+  FiFolder,
+  FiPause,
+  FiPlay,
+  FiSliders,
+  FiSkipBack,
+  FiUpload,
 } from "react-icons/fi";
+import type { PlacementMode, StockDimensions } from "../types/gcode";
+import { theme, ui } from "../styles/ui";
 
 type LeftPanelProps = {
   fileName: string;
@@ -2504,117 +2017,188 @@ export function LeftPanel({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {/* Блок Файл */}
-      <div style={cardStyle}>
-        <h3 style={cardTitle}>
-          <FiFolder style={{ marginRight: 8 }} /> Файл
-        </h3>
-        <div style={{ marginBottom: 12 }}>
+      <section style={{ ...ui.panel, padding: 16 }}>
+        <div style={ui.panelHeader}>
+          <h3 style={ui.sectionTitle}>
+            <div style={ui.iconBadge}>
+              <FiFolder size={18} />
+            </div>
+            <span>Файл проекта</span>
+          </h3>
+        </div>
+
+        <label
+          style={{
+            ...ui.buttonGhost,
+            width: "100%",
+            justifyContent: "center",
+            marginBottom: 12,
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <FiUpload size={16} />
+          <span>Загрузить G-code</span>
           <input
             type="file"
             accept=".gcode,.nc,.tap,.txt"
             onChange={onFileChange}
-            style={{ width: "100%" }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: 0,
+              cursor: "pointer",
+            }}
           />
-        </div>
-        <div style={infoRow}>
-          <span style={infoLabel}>Текущий файл</span>
-          <span style={infoValue}>{fileName}</span>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button type="button" onClick={onLoadDemo} style={smallButton}>
-            🚀 Демо
-          </button>
-          <button type="button" onClick={onResetCamera} style={smallButton}>
-            <FiCamera style={{ marginRight: 4 }} /> Сброс вида
-          </button>
-        </div>
-      </div>
+        </label>
 
-      {/* Блок Воспроизведение */}
-      <div style={cardStyle}>
-        <h3 style={cardTitle}>
-          {playing ? <FiPause style={{ marginRight: 8 }} /> : <FiPlay style={{ marginRight: 8 }} />}
-          Воспроизведение
-        </h3>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <button type="button" onClick={onPlayPause} style={actionButton}>
-            {playing ? <FiPause style={{ marginRight: 6 }} /> : <FiPlay style={{ marginRight: 6 }} />}
+        <div
+          style={{
+            ...ui.panelInset,
+            padding: 12,
+            marginBottom: 12,
+          }}
+        >
+          <div style={ui.mutedText}>Текущий файл</div>
+          <div
+            style={{
+              marginTop: 6,
+              fontWeight: 800,
+              color: theme.text,
+              wordBreak: "break-word",
+            }}
+          >
+            {fileName}
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <button type="button" onClick={onLoadDemo} style={ui.buttonGhost}>
+            <FiBox size={15} />
+            Демо
+          </button>
+
+          <button type="button" onClick={onResetCamera} style={ui.buttonGhost}>
+            <FiCamera size={15} />
+            Камера
+          </button>
+        </div>
+      </section>
+
+      <section style={{ ...ui.panel, padding: 16 }}>
+        <div style={ui.panelHeader}>
+          <h3 style={ui.sectionTitle}>
+            <div style={ui.iconBadge}>
+              {playing ? <FiPause size={18} /> : <FiPlay size={18} />}
+            </div>
+            <span>Воспроизведение</span>
+          </h3>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          <button
+            type="button"
+            onClick={onPlayPause}
+            style={ui.buttonPrimary}
+          >
+            {playing ? <FiPause size={15} /> : <FiPlay size={15} />}
             {playing ? "Пауза" : "Старт"}
           </button>
-          <button type="button" onClick={onResetPlayback} style={actionButton}>
-            <FiSkipBack style={{ marginRight: 6 }} /> В начало
+
+          <button
+            type="button"
+            onClick={onResetPlayback}
+            style={ui.buttonGhost}
+          >
+            <FiSkipBack size={15} />
+            С начала
           </button>
         </div>
-        <div style={sliderRow}>
-          <span style={sliderLabel}>Прогресс</span>
-          <span style={sliderValue}>{progress.toFixed(1)}%</span>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="0.1"
-            value={progress}
-            onChange={(e) => onProgressChange(Number(e.target.value))}
-            style={slider}
-          />
-        </div>
-        <div style={sliderRow}>
-          <span style={sliderLabel}>Скорость</span>
-          <span style={sliderValue}>{speed.toFixed(1)}x</span>
-          <input
-            type="range"
-            min="0.2"
-            max="5"
-            step="0.1"
-            value={speed}
-            onChange={(e) => onSpeedChange(Number(e.target.value))}
-            style={slider}
-          />
-        </div>
-      </div>
 
-      {/* Блок Заготовка (сворачиваемый) */}
-      <div style={cardStyle}>
+        <RangeCard
+          label="Прогресс"
+          value={`${progress.toFixed(1)}%`}
+          min={0}
+          max={100}
+          step={0.1}
+          current={progress}
+          onChange={onProgressChange}
+        />
+
+        <RangeCard
+          label="Скорость"
+          value={`${speed.toFixed(1)}x`}
+          min={0.2}
+          max={5}
+          step={0.1}
+          current={speed}
+          onChange={onSpeedChange}
+        />
+      </section>
+
+      <section style={{ ...ui.panel, padding: 16 }}>
         <div
-          onClick={() => setStockCollapsed(!stockCollapsed)}
-          style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          onClick={() => setStockCollapsed((v) => !v)}
+          style={{
+            ...ui.panelHeader,
+            cursor: "pointer",
+            marginBottom: stockCollapsed ? 0 : 14,
+          }}
         >
-          <h3 style={cardTitle}>
-            <FiBox style={{ marginRight: 8 }} /> Заготовка
+          <h3 style={ui.sectionTitle}>
+            <div style={ui.iconBadge}>
+              <FiSliders size={18} />
+            </div>
+            <span>Заготовка и сцена</span>
           </h3>
-          <span>{stockCollapsed ? <FiChevronDown /> : <FiChevronUp />}</span>
+
+          <div style={{ color: theme.textSoft }}>
+            {stockCollapsed ? <FiChevronDown size={18} /> : <FiChevronUp size={18} />}
+          </div>
         </div>
 
         {!stockCollapsed && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Позиционирование</div>
-              <label style={radioLabel}>
+          <>
+            <div
+              style={{
+                ...ui.panelInset,
+                padding: 12,
+                marginBottom: 12,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>
+                Позиционирование
+              </div>
+
+              <label style={radioLine}>
                 <input
                   type="radio"
-                  name="placementMode"
-                  value="origin"
                   checked={placementMode === "origin"}
                   onChange={() => onPlacementModeChange("origin")}
                 />
-                Левый нижний угол
+                <span>Левый нижний угол</span>
               </label>
-              <label style={radioLabel}>
+
+              <label style={radioLine}>
                 <input
                   type="radio"
-                  name="placementMode"
-                  value="center"
                   checked={placementMode === "center"}
                   onChange={() => onPlacementModeChange("center")}
                 />
-                Центрировать по траектории
+                <span>Центрировать по траектории</span>
               </label>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
-              <label style={inputLabel}>
-                Ширина, мм
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 8,
+                marginBottom: 12,
+              }}
+            >
+              <label style={ui.inputLabel}>
+                Ширина
                 <input
                   type="number"
                   min="1"
@@ -2625,10 +2209,12 @@ export function LeftPanel({
                       width: Math.max(1, Number(e.target.value) || 1),
                     })
                   }
+                  style={ui.input}
                 />
               </label>
-              <label style={inputLabel}>
-                Высота, мм
+
+              <label style={ui.inputLabel}>
+                Высота
                 <input
                   type="number"
                   min="1"
@@ -2639,10 +2225,12 @@ export function LeftPanel({
                       height: Math.max(1, Number(e.target.value) || 1),
                     })
                   }
+                  style={ui.input}
                 />
               </label>
-              <label style={inputLabel}>
-                Толщина, мм
+
+              <label style={ui.inputLabel}>
+                Толщина
                 <input
                   type="number"
                   min="0.1"
@@ -2654,11 +2242,25 @@ export function LeftPanel({
                       thickness: Math.max(0.1, Number(e.target.value) || 0.1),
                     })
                   }
+                  style={ui.input}
                 />
               </label>
             </div>
 
-            <label style={checkboxLabel}>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 12,
+                borderRadius: 14,
+                background: "#fff",
+                border: `1px solid ${theme.border}`,
+                fontSize: 13,
+                fontWeight: 700,
+                marginBottom: 12,
+              }}
+            >
               <input
                 type="checkbox"
                 checked={showMaterialRemoval}
@@ -2667,145 +2269,99 @@ export function LeftPanel({
               Показывать снятие материала
             </label>
 
-            <div style={{ marginTop: 12 }}>
-              <div style={sliderRow}>
-                <span style={sliderLabel}>Качество меша</span>
-                <span style={sliderValue}>{detailLevel}</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  step="1"
-                  value={detailLevel}
-                  onChange={(e) => onDetailLevelChange(Number(e.target.value))}
-                  style={slider}
-                />
-              </div>
-            </div>
-          </div>
+            <RangeCard
+              label="Качество меша"
+              value={String(detailLevel)}
+              min={1}
+              max={10}
+              step={1}
+              current={detailLevel}
+              onChange={onDetailLevelChange}
+            />
+          </>
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
-// --- Стили (без изменений) ---
-const cardStyle: React.CSSProperties = {
-  background: "white",
-  borderRadius: 16,
-  padding: 16,
-  boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-};
+function RangeCard({
+  label,
+  value,
+  min,
+  max,
+  step,
+  current,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  min: number;
+  max: number;
+  step: number;
+  current: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div
+      style={{
+        ...ui.panelInset,
+        padding: 12,
+        marginBottom: 10,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 8,
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: theme.primaryText }}>
+          {value}
+        </span>
+      </div>
 
-const cardTitle: React.CSSProperties = {
-  margin: "0 0 12px 0",
-  fontSize: 16,
-  fontWeight: 600,
-  color: "#0f172a",
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={current}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: "100%" }}
+      />
+    </div>
+  );
+}
+
+const radioLine: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
-};
-
-const infoRow: React.CSSProperties = {
-  background: "#f1f5f9",
-  borderRadius: 8,
-  padding: "8px 12px",
-  fontSize: 14,
-};
-
-const infoLabel: React.CSSProperties = {
-  color: "#64748b",
-  marginRight: 8,
-};
-
-const infoValue: React.CSSProperties = {
-  fontWeight: 600,
-  wordBreak: "break-all",
-};
-
-const smallButton: React.CSSProperties = {
-  padding: "6px 12px",
+  gap: 10,
   fontSize: 13,
-  borderRadius: 8,
-  border: "1px solid #cbd5e1",
-  background: "white",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-};
-
-const actionButton: React.CSSProperties = {
-  flex: 1,
-  padding: "8px 12px",
-  fontSize: 14,
-  fontWeight: 600,
-  borderRadius: 10,
-  border: "1px solid #2563eb",
-  background: "#dbeafe",
-  color: "#1d4ed8",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
-const sliderRow: React.CSSProperties = {
-  marginBottom: 12,
-};
-
-const sliderLabel: React.CSSProperties = {
-  fontSize: 14,
-  color: "#0f172a",
-  display: "block",
-  marginBottom: 4,
-};
-
-const sliderValue: React.CSSProperties = {
-  fontSize: 14,
-  fontWeight: 600,
-  float: "right",
-};
-
-const slider: React.CSSProperties = {
-  width: "100%",
-  marginTop: 4,
-};
-
-const radioLabel: React.CSSProperties = {
-  display: "block",
-  fontSize: 14,
-  marginBottom: 6,
-  color: "#0f172a",
-};
-
-const inputLabel: React.CSSProperties = {
-  fontSize: 12,
-  color: "#475569",
-};
-
-const checkboxLabel: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
-  fontSize: 14,
-  fontWeight: 600,
-  marginTop: 8,
+  color: theme.text,
+  marginBottom: 8,
 };
 
 
 path: /src/components/MainTabs.tsx
 ----------------------------------------
+import { FiCode, FiEdit3, FiEye } from "react-icons/fi";
 import type { MainTab } from "../types/ui";
+import { theme } from "../styles/ui";
 
 type MainTabsProps = {
   activeTab: MainTab;
   onChange: (tab: MainTab) => void;
 };
 
-const tabs: Array<{ id: MainTab; label: string; icon: string }> = [
-  { id: "view", label: "3D View", icon: "🌐" },
-  { id: "gcode", label: "G‑code Editor", icon: "📝" },
-  { id: "edit", label: "Edit", icon: "✏️" },
+const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
+  { id: "view", label: "3D Preview", icon: <FiEye size={16} /> },
+  { id: "gcode", label: "G-code", icon: <FiCode size={16} /> },
+  { id: "edit", label: "Editor", icon: <FiEdit3 size={16} /> },
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
@@ -2813,10 +2369,8 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
     <div
       style={{
         display: "flex",
-        gap: 8,
-        marginBottom: 16,
-        borderBottom: "2px solid #e2e8f0",
-        paddingBottom: 8,
+        gap: 10,
+        flexWrap: "wrap",
       }}
     >
       {tabs.map((tab) => {
@@ -2828,21 +2382,28 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
             type="button"
             onClick={() => onChange(tab.id)}
             style={{
-              padding: "10px 20px",
-              borderRadius: 30,
-              border: "none",
-              background: isActive ? "#2563eb" : "transparent",
-              color: isActive ? "white" : "#64748b",
-              fontWeight: 600,
-              fontSize: 15,
+              height: 42,
+              padding: "0 16px",
+              borderRadius: 999,
+              border: isActive
+                ? "1px solid #1d4ed8"
+                : `1px solid ${theme.border}`,
+              background: isActive
+                ? "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)"
+                : "#fff",
+              color: isActive ? "#fff" : theme.textSoft,
+              fontWeight: 800,
+              fontSize: 13,
               cursor: "pointer",
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
-              gap: 6,
-              transition: "all 0.2s",
+              gap: 8,
+              boxShadow: isActive
+                ? "0 10px 20px rgba(37, 99, 235, 0.18)"
+                : "none",
             }}
           >
-            <span>{tab.icon}</span>
+            {tab.icon}
             {tab.label}
           </button>
         );
@@ -3103,9 +2664,7 @@ export function PathScene({
 
   const axesHelper = useMemo(() => {
     const length = Math.max(stock.width, stock.height, stock.thickness) * 1.2;
-    if (length <= 0) {
-      return null;
-    }
+    if (length <= 0) return null;
 
     const origin = toScenePoint({ x: 0, y: 0, z: 0 });
     const xEnd = toScenePoint({ x: length, y: 0, z: 0 });
@@ -3196,6 +2755,7 @@ export function PathScene({
 
   const renderSegments = parsed.renderSegments;
   const renderedDoneCount = Math.floor((progress / 100) * renderSegments.length);
+  const doneSegments = renderSegments.slice(0, Math.max(renderedDoneCount, 0));
 
   return (
     <Canvas
@@ -3261,7 +2821,7 @@ export function PathScene({
             />
           ))}
 
-          {renderSegments.slice(0, Math.max(renderedDoneCount, 0)).map((seg) => (
+          {doneSegments.map((seg) => (
             <SimpleLine
               key={`done-${seg.id}`}
               start={seg.start}
@@ -3290,23 +2850,24 @@ export function PathScene({
         cutting={currentState.position.z <= 0}
         toScenePoint={toScenePoint}
       />
-<OrbitControls
-  ref={controlsRef}
-  key={cameraResetKey}
-  makeDefault
-  target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
-  enableDamping
-  dampingFactor={0.08}
-  screenSpacePanning
-  minDistance={10}
-  maxDistance={3000}
-  enableRotate
-  mouseButtons={{
-    LEFT: THREE.MOUSE.PAN,
-    MIDDLE: THREE.MOUSE.DOLLY,
-    RIGHT: THREE.MOUSE.PAN,
-  }}
-/>
+
+      <OrbitControls
+        ref={controlsRef}
+        key={cameraResetKey}
+        makeDefault
+        target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
+        enableDamping
+        dampingFactor={0.08}
+        screenSpacePanning
+        minDistance={10}
+        maxDistance={3000}
+        enableRotate
+        mouseButtons={{
+          LEFT: THREE.MOUSE.PAN,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN,
+        }}
+      />
 
       <CameraDebug controlsRef={controlsRef} onUpdate={onCameraUpdate} />
     </Canvas>
@@ -3352,9 +2913,22 @@ export function ProgressBillboard({ position, progress }: ProgressBillboardProps
 
 path: /src/components/RightInfoPanel.tsx
 ----------------------------------------
-import { StatCard } from "./StatCard";
-import type { CameraInfo, CurrentState, ParsedStats, Bounds, StockDimensions } from "../types/gcode";
+import {
+  FiActivity,
+  FiCamera,
+  FiCrosshair,
+  FiMaximize2,
+  FiMove,
+} from "react-icons/fi";
+import type {
+  CameraInfo,
+  CurrentState,
+  ParsedStats,
+  Bounds,
+  StockDimensions,
+} from "../types/gcode";
 import { fmt } from "../utils";
+import { ui, theme } from "../styles/ui";
 
 type RightInfoPanelProps = {
   bounds: Bounds;
@@ -3374,71 +2948,148 @@ export function RightInfoPanel({
   totalLength,
 }: RightInfoPanelProps) {
   return (
-    <div
-      style={{
-        background: "white",
-        borderRadius: 16,
-        padding: 16,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-        height: "fit-content",
-      }}
-    >
-      <h3 style={{ marginTop: 0, marginBottom: 16 }}>Информация</h3>
+    <div style={{ ...ui.panel, padding: 16 }}>
+      <div style={ui.panelHeader}>
+        <h3 style={ui.sectionTitle}>
+          <div style={ui.iconBadge}>
+            <FiActivity size={18} />
+          </div>
+          <span>Информация</span>
+        </h3>
+      </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <h4 style={{ marginBottom: 12 }}>Размеры и статистика</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <StatCard label="X" value={`${fmt(bounds.minX)} .. ${fmt(bounds.maxX)} мм`} />
-          <StatCard label="Y" value={`${fmt(bounds.minY)} .. ${fmt(bounds.maxY)} мм`} />
-          <StatCard label="Z" value={`${fmt(bounds.minZ)} .. ${fmt(bounds.maxZ)} мм`} />
-          <StatCard
+      <PanelGroup
+        title="Размеры и статистика"
+        icon={<FiMaximize2 size={16} />}
+      >
+        <StatGrid>
+          <MiniStat label="X" value={`${fmt(bounds.minX)} .. ${fmt(bounds.maxX)} мм`} />
+          <MiniStat label="Y" value={`${fmt(bounds.minY)} .. ${fmt(bounds.maxY)} мм`} />
+          <MiniStat label="Z" value={`${fmt(bounds.minZ)} .. ${fmt(bounds.maxZ)} мм`} />
+          <MiniStat
             label="Заготовка"
             value={`${fmt(stock.width)} × ${fmt(stock.height)} × ${fmt(stock.thickness)} мм`}
           />
-          <StatCard label="Движений" value={String(parsedStats.totalMoves)} />
-          <StatCard label="G0" value={String(parsedStats.rapidMoves)} />
-          <StatCard label="G1" value={String(parsedStats.workMoves)} />
-          <StatCard label="Режущих" value={String(parsedStats.cuttingMoves)} />
-          <StatCard label="Длина пути" value={`${fmt(totalLength)} мм`} />
-          <StatCard label="Render segments" value={String(parsedStats.renderMoves)} />
-        </div>
-      </div>
+          <MiniStat label="Движений" value={String(parsedStats.totalMoves)} />
+          <MiniStat label="G0" value={String(parsedStats.rapidMoves)} />
+          <MiniStat label="G1" value={String(parsedStats.workMoves)} />
+          <MiniStat label="Режущих" value={String(parsedStats.cuttingMoves)} />
+          <MiniStat label="Длина пути" value={`${fmt(totalLength)} мм`} />
+          <MiniStat label="Render segments" value={String(parsedStats.renderMoves)} />
+        </StatGrid>
+      </PanelGroup>
 
-      <div style={{ marginBottom: 20 }}>
-        <h4 style={{ marginBottom: 12 }}>Состояние инструмента</h4>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          <StatCard label="X" value={`${fmt(currentState.position.x)} мм`} />
-          <StatCard label="Y" value={`${fmt(currentState.position.y)} мм`} />
-          <StatCard label="Z" value={`${fmt(currentState.position.z)} мм`} />
-          <StatCard label="Команда" value={currentState.mode} />
-          <StatCard label="Строка" value={String(currentState.lineNumber)} />
-        </div>
+      <PanelGroup
+        title="Состояние инструмента"
+        icon={<FiMove size={16} />}
+      >
+        <StatGrid>
+          <MiniStat label="X" value={`${fmt(currentState.position.x)} мм`} />
+          <MiniStat label="Y" value={`${fmt(currentState.position.y)} мм`} />
+          <MiniStat label="Z" value={`${fmt(currentState.position.z)} мм`} />
+          <MiniStat label="Команда" value={currentState.mode} />
+          <MiniStat label="Строка" value={String(currentState.lineNumber)} />
+        </StatGrid>
 
-        <div style={{ marginTop: 10 }}>
-          <StatCard
-            label="Текущая строка G-code"
-            value={currentState.segment ? currentState.segment.raw : "-"}
-            mono
-          />
+        <div style={{ marginTop: 10, ...ui.statCard }}>
+          <div style={ui.statLabel}>Текущая строка G-code</div>
+          <div
+            style={{
+              ...ui.statValue,
+              fontFamily:
+                'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: 14,
+              wordBreak: "break-word",
+            }}
+          >
+            {currentState.segment ? currentState.segment.raw : "-"}
+          </div>
         </div>
-      </div>
+      </PanelGroup>
 
-      <div>
-        <h4 style={{ marginBottom: 12 }}>Камера</h4>
+      <PanelGroup title="Камера" icon={<FiCamera size={16} />}>
         {cameraInfo ? (
-          <>
-            <div>
-              Позиция: {cameraInfo.position.x.toFixed(1)}, {cameraInfo.position.y.toFixed(1)},{" "}
-              {cameraInfo.position.z.toFixed(1)}
-            </div>
-            <div>
-              Цель: {cameraInfo.target.x.toFixed(1)}, {cameraInfo.target.y.toFixed(1)},{" "}
-              {cameraInfo.target.z.toFixed(1)}
-            </div>
-          </>
+          <div style={{ display: "grid", gap: 10 }}>
+            <MiniStat
+              label="Позиция"
+              value={`${cameraInfo.position.x.toFixed(1)}, ${cameraInfo.position.y.toFixed(
+                1,
+              )}, ${cameraInfo.position.z.toFixed(1)}`}
+            />
+            <MiniStat
+              label="Цель"
+              value={`${cameraInfo.target.x.toFixed(1)}, ${cameraInfo.target.y.toFixed(
+                1,
+              )}, ${cameraInfo.target.z.toFixed(1)}`}
+            />
+          </div>
         ) : (
-          <div>N/A</div>
+          <div style={{ ...ui.panelInset, padding: 12, color: theme.textMuted }}>
+            Нет данных камеры
+          </div>
         )}
+      </PanelGroup>
+    </div>
+  );
+}
+
+function PanelGroup({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section style={{ marginBottom: 18 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          marginBottom: 10,
+          fontSize: 13,
+          fontWeight: 800,
+          color: theme.text,
+        }}
+      >
+        <FiCrosshair size={14} style={{ opacity: 0, width: 0 }} />
+        {icon}
+        <span>{title}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StatGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 10,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={ui.statCard}>
+      <div style={ui.statLabel}>{label}</div>
+      <div
+        style={{
+          ...ui.statValue,
+          fontSize: 15,
+          wordBreak: "break-word",
+        }}
+      >
+        {value}
       </div>
     </div>
   );
@@ -3497,6 +3148,8 @@ export function SimpleLine({
 
 path: /src/components/StatCard.tsx
 ----------------------------------------
+import { ui } from "../styles/ui";
+
 type StatCardProps = {
   label: string;
   value: string;
@@ -3505,14 +3158,15 @@ type StatCardProps = {
 
 export function StatCard({ label, value, mono = false }: StatCardProps) {
   return (
-    <div style={{ background: "#f1f5f9", borderRadius: 12, padding: 12 }}>
-      <div style={{ color: "#64748b", fontSize: 12, marginBottom: 4 }}>{label}</div>
+    <div style={ui.statCard}>
+      <div style={ui.statLabel}>{label}</div>
       <div
         style={{
-          fontSize: 18,
-          fontWeight: 600,
-          fontFamily: mono ? "monospace" : "inherit",
-          wordBreak: "break-all",
+          ...ui.statValue,
+          fontFamily: mono
+            ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+            : "inherit",
+          wordBreak: "break-word",
         }}
       >
         {value}
@@ -3724,8 +3378,20 @@ path: /src/hooks/useGCodeWorker.ts
 import { useEffect, useRef, useState } from "react";
 import type { ParsedGCode } from "../types/gcode";
 
+type WorkerRequest = {
+  requestId: number;
+  gcodeText: string;
+};
+
+type WorkerResponse = {
+  requestId: number;
+  parsed: ParsedGCode;
+};
+
 export function useGCodeWorker(source: string) {
   const workerRef = useRef<Worker | null>(null);
+  const requestIdRef = useRef(0);
+
   const [parsed, setParsed] = useState<ParsedGCode | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
@@ -3735,8 +3401,14 @@ export function useGCodeWorker(source: string) {
       { type: "module" },
     );
 
-    worker.onmessage = (event: MessageEvent<ParsedGCode>) => {
-      setParsed(event.data);
+    worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      const { requestId, parsed: nextParsed } = event.data;
+
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      setParsed(nextParsed);
       setIsParsing(false);
     };
 
@@ -3750,13 +3422,22 @@ export function useGCodeWorker(source: string) {
 
   useEffect(() => {
     if (!source.trim()) {
+      requestIdRef.current += 1;
       setParsed(null);
       setIsParsing(false);
       return;
     }
 
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setIsParsing(true);
-    workerRef.current?.postMessage({ gcodeText: source });
+
+    const payload: WorkerRequest = {
+      requestId,
+      gcodeText: source,
+    };
+
+    workerRef.current?.postMessage(payload);
   }, [source]);
 
   return {
@@ -3826,6 +3507,2638 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+
+
+path: /src/modules/cad/canvas/CadCanvas.tsx
+----------------------------------------
+import { CadGrid } from "./CadGrid";
+import { CadOriginMarker } from "./CadOriginMarker";
+import { CadSheet } from "./CadSheet";
+import { DraftOverlay } from "./DraftOverlay";
+import { ShapeRenderer } from "./ShapeRenderer";
+import type { DraftShape } from "../geometry/draftGeometry";
+import type {
+  SketchDocument,
+  SketchPolylinePoint,
+  SketchTool,
+} from "../model/types";
+import type { ViewTransform } from "../model/view";
+import type { SelectionState } from "../model/selection";
+import { isSelected } from "../model/selection";
+import type { CadPoint } from "../geometry/textGeometry";
+
+type CadCanvasProps = {
+  svgRef: React.RefObject<SVGSVGElement | null>;
+  document: SketchDocument;
+  selection: SelectionState;
+  view: ViewTransform;
+  draft: DraftShape;
+  polylineDraft: SketchPolylinePoint[];
+  textPreviewMap: Record<string, CadPoint[][]>;
+  tool: SketchTool;
+  onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerUp: () => void;
+  onPointerLeave: () => void;
+  onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
+  onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+};
+
+export function CadCanvas({
+  svgRef,
+  document,
+  selection,
+  view,
+  draft,
+  polylineDraft,
+  textPreviewMap,
+  tool,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerLeave,
+  onWheel,
+  onShapePointerDown,
+}: CadCanvasProps) {
+  return (
+    <svg
+      ref={svgRef}
+      width="100%"
+      height="100%"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerLeave={onPointerLeave}
+      onWheel={onWheel}
+      style={{
+        display: "block",
+        width: "100%",
+        height: "100%",
+        touchAction: "none",
+        userSelect: "none",
+        cursor:
+          tool === "text"
+            ? "text"
+            : tool === "select"
+              ? "default"
+              : "crosshair",
+      }}
+    >
+      <CadGrid document={document} view={view} />
+      <CadSheet document={document} view={view} />
+      <CadOriginMarker documentHeight={document.height} view={view} />
+
+      {document.shapes.map((shape) => (
+        <ShapeRenderer
+          key={shape.id}
+          shape={shape}
+          documentHeight={document.height}
+          view={view}
+          isSelected={isSelected(selection, shape.id)}
+          textPreviewMap={textPreviewMap}
+          onPointerDown={onShapePointerDown}
+        />
+      ))}
+
+      <DraftOverlay
+        draft={draft}
+        polylineDraft={polylineDraft}
+        documentHeight={document.height}
+        view={view}
+      />
+    </svg>
+  );
+}
+
+
+path: /src/modules/cad/canvas/CadGrid.tsx
+----------------------------------------
+import type { SketchDocument } from "../model/types";
+import type { ViewTransform } from "../model/view";
+
+type CadGridProps = {
+  document: SketchDocument;
+  view: ViewTransform;
+};
+
+export function CadGrid({ document, view }: CadGridProps) {
+  const baseStep = Math.max(1, document.snapStep || 1);
+  const minorStep = baseStep * view.scale;
+  const majorStep = minorStep * 5;
+
+  const width = document.width * view.scale;
+  const height = document.height * view.scale;
+
+  return (
+    <>
+      <defs>
+        <pattern
+          id="cad-grid-minor"
+          width={minorStep}
+          height={minorStep}
+          patternUnits="userSpaceOnUse"
+          x={view.offsetX}
+          y={view.offsetY}
+        >
+          <path
+            d={`M ${minorStep} 0 L 0 0 0 ${minorStep}`}
+            fill="none"
+            stroke="#e2e8f0"
+            strokeWidth="1"
+          />
+        </pattern>
+
+        <pattern
+          id="cad-grid-major"
+          width={majorStep}
+          height={majorStep}
+          patternUnits="userSpaceOnUse"
+          x={view.offsetX}
+          y={view.offsetY}
+        >
+          <rect width={majorStep} height={majorStep} fill="url(#cad-grid-minor)" />
+          <path
+            d={`M ${majorStep} 0 L 0 0 0 ${majorStep}`}
+            fill="none"
+            stroke="#cbd5e1"
+            strokeWidth="1.2"
+          />
+        </pattern>
+      </defs>
+
+      <rect
+        x={view.offsetX}
+        y={view.offsetY}
+        width={width}
+        height={height}
+        fill="url(#cad-grid-major)"
+        rx={12}
+      />
+    </>
+  );
+}
+
+
+path: /src/modules/cad/canvas/CadOriginMarker.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+
+type CadOriginMarkerProps = {
+  documentHeight: number;
+  view: ViewTransform;
+};
+
+export function CadOriginMarker({ documentHeight, view }: CadOriginMarkerProps) {
+  const origin = cadToScreenPoint({ x: 0, y: 0 }, documentHeight, view);
+
+  return (
+    <g>
+      <circle cx={origin.x} cy={origin.y} r={4} fill="#ef4444" />
+      <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill="#0f172a">
+        X0 Y0
+      </text>
+    </g>
+  );
+}
+
+
+path: /src/modules/cad/canvas/CadSheet.tsx
+----------------------------------------
+import type { SketchDocument } from "../model/types";
+import type { ViewTransform } from "../model/view";
+
+type CadSheetProps = {
+  document: SketchDocument;
+  view: ViewTransform;
+};
+
+export function CadSheet({ document, view }: CadSheetProps) {
+  return (
+    <rect
+      x={view.offsetX}
+      y={view.offsetY}
+      width={document.width * view.scale}
+      height={document.height * view.scale}
+      fill="rgba(255,255,255,0.86)"
+      stroke="#cbd5e1"
+      strokeWidth={1.5}
+      rx={12}
+    />
+  );
+}
+
+
+path: /src/modules/cad/canvas/CadViewport.tsx
+----------------------------------------
+export function CadViewport({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+
+path: /src/modules/cad/canvas/CircleShapeView.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { SketchCircle } from "../model/types";
+
+type CircleShapeViewProps = {
+  shape: SketchCircle;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
+};
+
+export function CircleShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: CircleShapeViewProps) {
+  const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, documentHeight, view);
+
+  return (
+    <circle
+      cx={p.x}
+      cy={p.y}
+      r={shape.radius * view.scale}
+      fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
+      stroke={isSelected ? "#2563eb" : "#475569"}
+      strokeWidth={isSelected ? 2 : 1.5}
+      onPointerDown={onPointerDown}
+    />
+  );
+}
+
+
+path: /src/modules/cad/canvas/DraftOverlay.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { SketchPolylinePoint } from "../model/types";
+import type { DraftShape } from "../geometry/draftGeometry";
+import { getRectangleFromDraft, getCircleFromDraft } from "../geometry/draftGeometry";
+
+type DraftOverlayProps = {
+  draft: DraftShape;
+  polylineDraft: SketchPolylinePoint[];
+  documentHeight: number;
+  view: ViewTransform;
+};
+
+export function DraftOverlay({ draft, polylineDraft, documentHeight, view }: DraftOverlayProps) {
+  return (
+    <>
+      {polylineDraft.length > 1 && (
+        <polyline
+          points={polylineDraft
+            .map((point) => {
+              const p = cadToScreenPoint(point, documentHeight, view);
+              return `${p.x},${p.y}`;
+            })
+            .join(" ")}
+          fill="none"
+          stroke="#ef4444"
+          strokeWidth={1.5}
+          strokeDasharray="6 4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+
+      {draft?.type === "rectangle" && (() => {
+        const rect = getRectangleFromDraft(draft);
+        const p = cadToScreenPoint({ x: rect.x, y: rect.y + rect.height }, documentHeight, view);
+        return (
+          <rect
+            x={p.x}
+            y={p.y}
+            width={rect.width * view.scale}
+            height={rect.height * view.scale}
+            fill="rgba(37,99,235,0.12)"
+            stroke="#2563eb"
+            strokeDasharray="6 4"
+            rx={8}
+          />
+        );
+      })()}
+
+      {draft?.type === "circle" && (() => {
+        const circle = getCircleFromDraft(draft);
+        const center = cadToScreenPoint({ x: circle.cx, y: circle.cy }, documentHeight, view);
+        return (
+          <circle
+            cx={center.x}
+            cy={center.y}
+            r={circle.radius * view.scale}
+            fill="rgba(37,99,235,0.12)"
+            stroke="#2563eb"
+            strokeDasharray="6 4"
+          />
+        );
+      })()}
+    </>
+  );
+}
+
+
+
+path: /src/modules/cad/canvas/PolylineShapeView.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { SketchPolyline } from "../model/types";
+
+type PolylineShapeViewProps = {
+  shape: SketchPolyline;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
+};
+
+export function PolylineShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: PolylineShapeViewProps) {
+  const points = shape.points
+    .map((point) => {
+      const p = cadToScreenPoint(point, documentHeight, view);
+      return `${p.x},${p.y}`;
+    })
+    .join(" ");
+
+  return (
+    <polyline
+      points={points}
+      fill="none"
+      stroke={isSelected ? "#2563eb" : "#475569"}
+      strokeWidth={isSelected ? 2 : 1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      onPointerDown={onPointerDown}
+    />
+  );
+}
+
+
+
+path: /src/modules/cad/canvas/RectangleShapeView.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { SketchRectangle } from "../model/types";
+
+type RectangleShapeViewProps = {
+  shape: SketchRectangle;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
+};
+
+export function RectangleShapeView({ shape, documentHeight, view, isSelected, onPointerDown }: RectangleShapeViewProps) {
+  const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, documentHeight, view);
+
+  return (
+    <rect
+      x={p.x}
+      y={p.y}
+      width={shape.width * view.scale}
+      height={shape.height * view.scale}
+      fill={isSelected ? "rgba(37,99,235,0.15)" : "rgba(15,23,42,0.05)"}
+      stroke={isSelected ? "#2563eb" : "#475569"}
+      strokeWidth={isSelected ? 2 : 1.5}
+      rx={8}
+      onPointerDown={onPointerDown}
+    />
+  );
+}
+
+
+path: /src/modules/cad/canvas/SelectionOverlay.tsx
+----------------------------------------
+export function SelectionOverlay() {
+  return null;
+}
+
+
+path: /src/modules/cad/canvas/ShapeRenderer.tsx
+----------------------------------------
+import type { CadPoint } from "../../../utils/fontGeometry";
+import type { ViewTransform } from "../model/view";
+import type { SketchShape } from "../model/types";
+import { RectangleShapeView } from "./RectangleShapeView";
+import { CircleShapeView } from "./CircleShapeView";
+import { PolylineShapeView } from "./PolylineShapeView";
+import { TextShapeView } from "./TextShapeView";
+
+type ShapeRendererProps = {
+  shape: SketchShape;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  textPreviewMap: Record<string, CadPoint[][]>;
+  onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+};
+
+export function ShapeRenderer({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  textPreviewMap,
+  onPointerDown,
+}: ShapeRendererProps) {
+  switch (shape.type) {
+    case "rectangle":
+      return (
+        <RectangleShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
+    case "circle":
+      return (
+        <CircleShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
+    case "polyline":
+      return (
+        <PolylineShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
+    case "text":
+      return (
+        <TextShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          polylines={textPreviewMap[shape.id] ?? []}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
+  }
+}
+
+
+path: /src/modules/cad/canvas/TextShapeView.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { CadPoint } from "../../../utils/fontGeometry";
+import type { SketchText } from "../model/types";
+
+type TextShapeViewProps = {
+  shape: SketchText;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  polylines: CadPoint[][];
+  onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
+};
+
+export function TextShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  polylines,
+  onPointerDown,
+}: TextShapeViewProps) {
+  return (
+    <g onPointerDown={onPointerDown}>
+      {polylines.map((polyline, index) => (
+        <polyline
+          key={`${shape.id}-${index}`}
+          points={polyline
+            .map((point) => {
+              const p = cadToScreenPoint(point, documentHeight, view);
+              return `${p.x},${p.y}`;
+            })
+            .join(" ")}
+          fill="none"
+          stroke={isSelected ? "#2563eb" : "#475569"}
+          strokeWidth={isSelected ? 2 : 1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ))}
+    </g>
+  );
+}
+
+
+path: /src/modules/cad/editor-state/commands.ts
+----------------------------------------
+import type { SketchPolylinePoint } from "../model/types";
+import type { DragState } from "./draftState";
+import type { DraftShape } from "../geometry/draftGeometry";
+
+export function startRectangleDraft(x: number, y: number): DraftShape {
+  return { type: "rectangle", startX: x, startY: y, endX: x, endY: y };
+}
+
+export function startCircleDraft(x: number, y: number): DraftShape {
+  return { type: "circle", startX: x, startY: y, endX: x, endY: y };
+}
+
+export function updateDraft(draft: DraftShape, x: number, y: number): DraftShape {
+  return draft ? { ...draft, endX: x, endY: y } : null;
+}
+
+export function commitRectangleDraft(draft: DraftShape) {
+  return draft?.type === "rectangle" ? draft : null;
+}
+
+export function startDrag(
+  shapeId: string,
+  x: number,
+  y: number,
+  selectionIds: string[],
+): DragState {
+  return {
+    shapeId,
+    startX: x,
+    startY: y,
+    selectionIds,
+  };
+}
+
+export function updateDrag(drag: DragState, x: number, y: number) {
+  if (!drag) return null;
+
+  return {
+    dx: x - drag.startX,
+    dy: y - drag.startY,
+    next: {
+      shapeId: drag.shapeId,
+      startX: x,
+      startY: y,
+      selectionIds: drag.selectionIds,
+    } as DragState,
+  };
+}
+
+export function finishDrag(): DragState {
+  return null;
+}
+
+export function appendPolylinePoint(
+  current: SketchPolylinePoint[],
+  point: SketchPolylinePoint,
+): SketchPolylinePoint[] {
+  return [...current, point];
+}
+
+export function commitPolylineDraft(points: SketchPolylinePoint[]): SketchPolylinePoint[] {
+  return points.length >= 2 ? points : [];
+}
+
+export function cancelDraft(): null {
+  return null;
+}
+
+
+path: /src/modules/cad/editor-state/draftState.ts
+----------------------------------------
+export type DragState = {
+  shapeId: string;
+  startX: number;
+  startY: number;
+  selectionIds: string[];
+} | null;
+
+
+path: /src/modules/cad/editor-state/editorState.ts
+----------------------------------------
+import type { SketchPolylinePoint, SketchTool } from "../model/types";
+import type { DraftShape } from "../geometry/draftGeometry";
+import type { TextToolState } from "./textToolState";
+import type { DragState } from "./draftState";
+import type { ViewTransform } from "../model/view";
+import { createDefaultView } from "../model/view";
+
+export type CadEditorState = {
+  tool: SketchTool;
+  draft: DraftShape;
+  polylineDraft: SketchPolylinePoint[];
+  dragState: DragState;
+  view: ViewTransform;
+  textTool: TextToolState;
+};
+
+export { createDefaultView };
+
+
+path: /src/modules/cad/editor-state/interactionMachine.ts
+----------------------------------------
+export const interactionMachine = {
+  idle: "idle",
+  drafting: "drafting",
+  dragging: "dragging",
+} as const;
+
+
+path: /src/modules/cad/editor-state/textToolState.ts
+----------------------------------------
+export type TextToolState = {
+  text: string;
+  height: number;
+  letterSpacing: number;
+  fontFile: string;
+};
+
+export const DEFAULT_FONT_OPTIONS = [
+  "/fonts/NotoSans-Regular.ttf",
+  "/fonts/NotoSans-Bold.ttf",
+  "/fonts/Roboto-Regular.ttf",
+];
+
+export function createDefaultTextToolState(): TextToolState {
+  return {
+    text: "Привет",
+    height: 12,
+    letterSpacing: 0,
+    fontFile: DEFAULT_FONT_OPTIONS[0],
+  };
+}
+
+
+path: /src/modules/cad/geometry/distance.ts
+----------------------------------------
+export function distance(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+
+path: /src/modules/cad/geometry/draftGeometry.ts
+----------------------------------------
+import { distance } from "./distance";
+
+export type RectangleDraft = {
+  type: "rectangle";
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+};
+
+export type CircleDraft = {
+  type: "circle";
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+};
+
+export type DraftShape = RectangleDraft | CircleDraft | null;
+
+export function normalizeDraftRect(draft: RectangleDraft) {
+  return {
+    x: Math.min(draft.startX, draft.endX),
+    y: Math.min(draft.startY, draft.endY),
+    width: Math.abs(draft.endX - draft.startX),
+    height: Math.abs(draft.endY - draft.startY),
+  };
+}
+
+export function getRectangleFromDraft(draft: RectangleDraft) {
+  return normalizeDraftRect(draft);
+}
+
+export function getCircleFromDraft(draft: CircleDraft) {
+  return {
+    cx: draft.startX,
+    cy: draft.startY,
+    radius: distance(
+      { x: draft.startX, y: draft.startY },
+      { x: draft.endX, y: draft.endY },
+    ),
+  };
+}
+
+
+path: /src/modules/cad/geometry/hitTest.ts
+----------------------------------------
+import type { SketchPolylinePoint, SketchShape } from "../model/types";
+import { distance } from "./distance";
+import { shapeBounds } from "../model/shapeBounds";
+
+function pointToSegmentDistance(point: SketchPolylinePoint, a: SketchPolylinePoint, b: SketchPolylinePoint): number {
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const apx = point.x - a.x;
+  const apy = point.y - a.y;
+  const ab2 = abx * abx + aby * aby;
+  if (ab2 === 0) return distance(point, a);
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
+  return distance(point, { x: a.x + abx * t, y: a.y + aby * t });
+}
+
+export function hitTestShape(point: SketchPolylinePoint, shape: SketchShape, tolerance = 3): boolean {
+  switch (shape.type) {
+    case "rectangle":
+      return (
+        point.x >= shape.x - tolerance &&
+        point.x <= shape.x + shape.width + tolerance &&
+        point.y >= shape.y - tolerance &&
+        point.y <= shape.y + shape.height + tolerance
+      );
+    case "circle":
+      return distance(point, { x: shape.cx, y: shape.cy }) <= shape.radius + tolerance;
+    case "polyline":
+      for (let i = 1; i < shape.points.length; i += 1) {
+        if (pointToSegmentDistance(point, shape.points[i - 1], shape.points[i]) <= tolerance) {
+          return true;
+        }
+      }
+      return false;
+    case "text": {
+      const bounds = shapeBounds(shape);
+      return (
+        point.x >= bounds.minX - tolerance &&
+        point.x <= bounds.maxX + tolerance &&
+        point.y >= bounds.minY - tolerance &&
+        point.y <= bounds.maxY + tolerance
+      );
+    }
+  }
+}
+
+export function hitTestShapes(point: SketchPolylinePoint, shapes: SketchShape[], tolerance = 3): SketchShape | null {
+  for (let i = shapes.length - 1; i >= 0; i -= 1) {
+    if (hitTestShape(point, shapes[i], tolerance)) {
+      return shapes[i];
+    }
+  }
+  return null;
+}
+
+export function hitTestHandles() {
+  return null;
+}
+
+
+path: /src/modules/cad/geometry/polyline.ts
+----------------------------------------
+import type { SketchPolylinePoint } from "../model/types";
+
+export function isClosedPolyline(points: SketchPolylinePoint[]): boolean {
+  if (points.length < 3) return false;
+  const first = points[0];
+  const last = points[points.length - 1];
+  return Math.abs(first.x - last.x) < 0.001 && Math.abs(first.y - last.y) < 0.001;
+}
+
+
+path: /src/modules/cad/geometry/snap.ts
+----------------------------------------
+import type { SketchPolylinePoint, SketchShape } from "../model/types";
+import { distance } from "./distance";
+
+export type SnapOptions = {
+  gridStep?: number;
+  tolerance?: number;
+  shapes?: SketchShape[];
+};
+
+export function snapToGrid(point: SketchPolylinePoint, gridStep = 10): SketchPolylinePoint {
+  return {
+    x: Math.round(point.x / gridStep) * gridStep,
+    y: Math.round(point.y / gridStep) * gridStep,
+  };
+}
+
+export function snapToEndpoints(point: SketchPolylinePoint, shapes: SketchShape[], tolerance = 4): SketchPolylinePoint {
+  const candidates: SketchPolylinePoint[] = [];
+  for (const shape of shapes) {
+    if (shape.type === "polyline") {
+      candidates.push(...shape.points);
+    }
+  }
+  let best = point;
+  let bestDistance = Infinity;
+  for (const candidate of candidates) {
+    const d = distance(point, candidate);
+    if (d <= tolerance && d < bestDistance) {
+      best = candidate;
+      bestDistance = d;
+    }
+  }
+  return best;
+}
+
+export function snapToMidpoints(point: SketchPolylinePoint) {
+  return point;
+}
+
+export function snapToIntersections(point: SketchPolylinePoint) {
+  return point;
+}
+
+export function applyDefaultSnap(point: SketchPolylinePoint, options: SnapOptions = {}) {
+  const { gridStep = 1, tolerance = 4, shapes = [] } = options;
+  const endpointSnapped = snapToEndpoints(point, shapes, tolerance);
+  if (endpointSnapped !== point) {
+    return endpointSnapped;
+  }
+  return snapToGrid(point, gridStep);
+}
+
+
+path: /src/modules/cad/geometry/textGeometry.ts
+----------------------------------------
+import { getTextPolylines as buildTextPolylines } from "../../../utils/fontGeometry";
+import type { CadPoint } from "../../../utils/fontGeometry";
+import type { SketchText } from "../model/types";
+
+export type { CadPoint };
+
+export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]> {
+  return buildTextPolylines(shape);
+}
+
+export async function getTextBounds(shape: SketchText) {
+  const polylines = await getTextPolylines(shape);
+
+  if (polylines.length === 0) {
+    return {
+      minX: shape.x,
+      minY: shape.y,
+      maxX: shape.x,
+      maxY: shape.y,
+    };
+  }
+
+  const points = polylines.flat();
+
+  return {
+    minX: Math.min(...points.map((p) => p.x)),
+    minY: Math.min(...points.map((p) => p.y)),
+    maxX: Math.max(...points.map((p) => p.x)),
+    maxY: Math.max(...points.map((p) => p.y)),
+  };
+}
+
+
+path: /src/modules/cad/geometry/transforms.ts
+----------------------------------------
+export { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
+
+
+path: /src/modules/cad/hooks/useCadEditor.ts
+----------------------------------------
+import { useRef, useState } from "react";
+import {
+  appendPolylinePoint,
+  finishDrag,
+  startCircleDraft,
+  startDrag,
+  startRectangleDraft,
+  updateDraft,
+  updateDrag,
+} from "../editor-state/commands";
+import type { DragState } from "../editor-state/draftState";
+import { createDefaultView } from "../editor-state/editorState";
+import {
+  DEFAULT_FONT_OPTIONS,
+  createDefaultTextToolState,
+} from "../editor-state/textToolState";
+import type { DraftShape } from "../geometry/draftGeometry";
+import {
+  getCircleFromDraft,
+  getRectangleFromDraft,
+} from "../geometry/draftGeometry";
+import { addShape } from "../model/document";
+import {
+  createCircleShape,
+  createPolylineShape,
+  createRectangleShape,
+  createTextShape,
+} from "../model/shapeFactory";
+import { moveShape } from "../model/shapeTransforms";
+import type {
+  SketchDocument,
+  SketchPolylinePoint,
+  SketchTool,
+} from "../model/types";
+import type { SelectionState } from "../model/selection";
+import {
+  clearSelection,
+  isSelected,
+  selectOnly,
+  toggleSelection,
+} from "../model/selection";
+import { generateSketchGCode } from "../../cam/gcode/generator";
+import { screenToCadPoint } from "../../../utils/coordinates";
+import { clamp } from "../../../utils";
+import { useTextPreviewMap } from "./useTextPreviewMap";
+import { applyDefaultSnap } from "../geometry/snap";
+
+type UseCadEditorParams = {
+  document: SketchDocument;
+  setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  onGenerateGCode: (gcode: string) => void;
+  selection: SelectionState;
+  onSelectionChange: (selection: SelectionState) => void;
+};
+
+type PanState = {
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startOffsetX: number;
+  startOffsetY: number;
+} | null;
+
+
+export function useCadEditor({
+  document,
+  setDocument,
+  onGenerateGCode,
+  selection,
+  onSelectionChange,
+}: UseCadEditorParams) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const [tool, setTool] = useState<SketchTool>("select");
+  const [draft, setDraft] = useState<DraftShape>(null);
+  const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
+  const [textTool, setTextTool] = useState(createDefaultTextToolState());
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [dragState, setDragState] = useState<DragState>(null);
+  const [panState, setPanState] = useState<PanState>(null);
+  const [view, setView] = useState(createDefaultView());
+
+  const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  function normalizePoint(point: SketchPolylinePoint): SketchPolylinePoint {
+    if (!document.snapEnabled) {
+      return point;
+    }
+
+    return applyDefaultSnap(point, {
+      gridStep: Math.max(1, document.snapStep),
+      shapes: document.shapes,
+    });
+  }
+
+  function resetView() {
+    setView(createDefaultView());
+  }
+
+  function addRectangle(x: number, y: number, width: number, height: number) {
+    if (width < 1 || height < 1) return;
+
+    const shape = createRectangleShape(
+      `Rectangle ${document.shapes.filter((s) => s.type === "rectangle").length + 1}`,
+      x,
+      y,
+      width,
+      height,
+    );
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+  }
+
+  function addCircle(cx: number, cy: number, radius: number) {
+    if (radius < 1) return;
+
+    const shape = createCircleShape(
+      `Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`,
+      cx,
+      cy,
+      radius,
+    );
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+  }
+
+  function addText(x: number, y: number) {
+    const value = textTool.text.trim();
+    if (!value) return;
+
+    const shape = createTextShape(
+      `Text ${document.shapes.filter((s) => s.type === "text").length + 1}`,
+      x,
+      y,
+      value,
+      Math.max(2, textTool.height),
+      Math.max(0, textTool.letterSpacing),
+      textTool.fontFile,
+    );
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+  }
+
+  function commitPolyline() {
+    if (polylineDraft.length < 2) {
+      setPolylineDraft([]);
+      return;
+    }
+
+    const shape = createPolylineShape(
+      `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
+      polylineDraft,
+      false,
+    );
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+    setPolylineDraft([]);
+  }
+
+  function getCadPoint(event: React.PointerEvent<SVGElement>) {
+    if (!svgRef.current) return null;
+
+    const rect = svgRef.current.getBoundingClientRect();
+    return screenToCadPoint(
+      event.clientX,
+      event.clientY,
+      rect,
+      document.height,
+      view,
+    );
+  }
+
+  function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
+    if (event.button === 1) {
+      event.preventDefault();
+      setPanState({
+        pointerId: event.pointerId,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startOffsetX: view.offsetX,
+        startOffsetY: view.offsetY,
+      });
+      return;
+    }
+
+    if (event.button !== 0) return;
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+    const cad = normalizePoint(rawCad);
+    
+
+    if (tool === "rectangle") {
+      setDraft(startRectangleDraft(cad.x, cad.y));
+      return;
+    }
+
+    if (tool === "circle") {
+      setDraft(startCircleDraft(cad.x, cad.y));
+      return;
+    }
+
+    if (tool === "polyline") {
+      setPolylineDraft((prev) => appendPolylinePoint(prev, { x: cad.x, y: cad.y }));
+      return;
+    }
+
+    if (tool === "text") {
+      addText(cad.x, cad.y);
+      return;
+    }
+
+    if (tool === "select") {
+      onSelectionChange(clearSelection());
+    }
+  }
+
+  function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
+    if (panState && panState.pointerId === event.pointerId) {
+      setView((prev) => ({
+        ...prev,
+        offsetX: panState.startOffsetX + (event.clientX - panState.startClientX),
+        offsetY: panState.startOffsetY + (event.clientY - panState.startClientY),
+      }));
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+    const cad = normalizePoint(rawCad);
+
+    if (draft) {
+      setDraft((prev) => updateDraft(prev, cad.x, cad.y));
+      return;
+    }
+
+    if (dragState) {
+      const next = updateDrag(dragState, cad.x, cad.y);
+      if (!next) return;
+
+      const selectedIds =
+        dragState.selectionIds.length > 0
+          ? dragState.selectionIds
+          : [dragState.shapeId];
+
+      setDocument((prev) => ({
+        ...prev,
+        shapes: prev.shapes.map((shape) =>
+          selectedIds.includes(shape.id) ? moveShape(shape, next.dx, next.dy) : shape,
+        ),
+      }));
+
+      setDragState(next.next);
+    }
+  }
+
+  function handleCanvasPointerUp() {
+    if (draft?.type === "rectangle") {
+      const rect = getRectangleFromDraft(draft);
+      addRectangle(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    if (draft?.type === "circle") {
+      const circle = getCircleFromDraft(draft);
+      addCircle(circle.cx, circle.cy, circle.radius);
+    }
+
+    setDraft(null);
+    setDragState(finishDrag());
+    setPanState(null);
+  }
+
+  function handleCanvasWheel(event: React.WheelEvent<SVGSVGElement>) {
+    event.preventDefault();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const anchorX = event.clientX - rect.left;
+    const anchorY = event.clientY - rect.top;
+
+    const zoomFactor = event.deltaY < 0 ? 1.1 : 0.9;
+
+    setView((prev) => {
+      const nextScale = clamp(prev.scale * zoomFactor, 0.25, 20);
+      const ratio = nextScale / prev.scale;
+
+      return {
+        scale: nextScale,
+        offsetX: anchorX - (anchorX - prev.offsetX) * ratio,
+        offsetY: anchorY - (anchorY - prev.offsetY) * ratio,
+      };
+    });
+  }
+
+  function deleteSelected() {
+    if (selection.ids.length === 0) return;
+
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.filter((shape) => !selection.ids.includes(shape.id)),
+    }));
+
+    onSelectionChange(clearSelection());
+  }
+
+  function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
+    event.stopPropagation();
+
+    if (event.button === 1) {
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+    const cad = normalizePoint(rawCad);
+
+    let nextSelection: SelectionState;
+
+    if (event.shiftKey) {
+      nextSelection = toggleSelection(selection, shapeId);
+    } else if (isSelected(selection, shapeId)) {
+      nextSelection = selection;
+    } else {
+      nextSelection = selectOnly(shapeId);
+    }
+
+    if (nextSelection !== selection) {
+      onSelectionChange(nextSelection);
+    }
+
+    if (tool !== "select" || event.button !== 0) {
+      return;
+    }
+
+    if (event.shiftKey) {
+      return;
+    }
+
+    setDragState(
+      startDrag(
+        shapeId,
+        cad.x,
+        cad.y,
+        nextSelection.ids.length > 0 ? nextSelection.ids : [shapeId],
+      ),
+    );
+  }
+
+  async function handleGenerateClick() {
+    setIsGenerating(true);
+
+    try {
+      const gcode = await generateSketchGCode(document);
+      onGenerateGCode(gcode);
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  return {
+    svgRef,
+    tool,
+    setTool,
+    draft,
+    polylineDraft,
+    textTool,
+    setTextTool,
+    textPreviewMap,
+    isGenerating,
+    view,
+    resetView,
+    commitPolyline,
+    deleteSelected,
+    handleGenerateClick,
+    handleCanvasPointerDown,
+    handleCanvasPointerMove,
+    handleCanvasPointerUp,
+    handleCanvasWheel,
+    bindSelectStart,
+    fontOptions: DEFAULT_FONT_OPTIONS,
+  };
+}
+
+
+path: /src/modules/cad/hooks/useTextPreviewMap.ts
+----------------------------------------
+import { useEffect, useState } from "react";
+import { getTextPolylines, type CadPoint } from "../geometry/textGeometry";
+import type { SketchShape } from "../model/types";
+
+export type TextPreviewMap = Record<string, CadPoint[][]>;
+
+export function useTextPreviewMap(shapes: SketchShape[]) {
+  const [textPreviewMap, setTextPreviewMap] = useState<TextPreviewMap>({});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function buildTextPreview() {
+      const nextMap: TextPreviewMap = {};
+
+      for (const shape of shapes) {
+        if (shape.type !== "text") continue;
+
+        try {
+          nextMap[shape.id] = await getTextPolylines(shape);
+        } catch {
+          nextMap[shape.id] = [];
+        }
+      }
+
+      if (!cancelled) {
+        setTextPreviewMap(nextMap);
+      }
+    }
+
+    void buildTextPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shapes]);
+
+  return textPreviewMap;
+}
+
+
+path: /src/modules/cad/model/document.ts
+----------------------------------------
+import type { SketchDocument, SketchShape } from "./types";
+
+export function createEmptySketchDocument(): SketchDocument {
+  return {
+    width: 300,
+    height: 180,
+    safeZ: 5,
+    cutZ: -1,
+    feedCut: 500,
+    feedRapid: 1200,
+    spindleOn: false,
+    laserPower: 800,
+    snapEnabled: true,
+    snapStep: 5,
+    shapes: [],
+  };
+}
+
+export function addShape(document: SketchDocument, shape: SketchShape): SketchDocument {
+  return { ...document, shapes: [...document.shapes, shape] };
+}
+
+export function removeShape(document: SketchDocument, shapeId: string): SketchDocument {
+  return {
+    ...document,
+    shapes: document.shapes.filter((shape) => shape.id !== shapeId),
+  };
+}
+
+export function updateShape(
+  document: SketchDocument,
+  shapeId: string,
+  patch: Partial<SketchShape>,
+): SketchDocument {
+  return {
+    ...document,
+    shapes: document.shapes.map((shape) =>
+      shape.id === shapeId ? ({ ...shape, ...patch } as SketchShape) : shape,
+    ),
+  };
+}
+
+export function replaceShape(
+  document: SketchDocument,
+  shapeId: string,
+  nextShape: SketchShape,
+): SketchDocument {
+  return {
+    ...document,
+    shapes: document.shapes.map((shape) =>
+      shape.id === shapeId ? nextShape : shape,
+    ),
+  };
+}
+
+
+path: /src/modules/cad/model/ids.ts
+----------------------------------------
+export function createId(prefix = "shape"): string {
+  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+
+
+path: /src/modules/cad/model/selection.ts
+----------------------------------------
+export type SelectionState = {
+  ids: string[];
+  primaryId: string | null;
+};
+
+export function createSelection(primaryId: string | null = null): SelectionState {
+  return {
+    ids: primaryId ? [primaryId] : [],
+    primaryId,
+  };
+}
+
+export function clearSelection(): SelectionState {
+  return {
+    ids: [],
+    primaryId: null,
+  };
+}
+
+export function hasSelection(selection: SelectionState): boolean {
+  return selection.ids.length > 0;
+}
+
+export function isSelected(selection: SelectionState, id: string): boolean {
+  return selection.ids.includes(id);
+}
+
+export function selectOnly(id: string | null): SelectionState {
+  return createSelection(id);
+}
+
+export function toggleSelection(selection: SelectionState, id: string): SelectionState {
+  if (selection.ids.includes(id)) {
+    const ids = selection.ids.filter((item) => item !== id);
+    return {
+      ids,
+      primaryId: selection.primaryId === id ? (ids[0] ?? null) : selection.primaryId,
+    };
+  }
+
+  return {
+    ids: [...selection.ids, id],
+    primaryId: id,
+  };
+}
+
+export function setPrimary(selection: SelectionState, id: string | null): SelectionState {
+  if (!id) return clearSelection();
+  if (selection.ids.includes(id)) {
+    return { ...selection, primaryId: id };
+  }
+  return {
+    ids: [...selection.ids, id],
+    primaryId: id,
+  };
+}
+
+
+path: /src/modules/cad/model/shapeBounds.ts
+----------------------------------------
+import type { SketchDocument, SketchShape } from "./types";
+
+export type Bounds2D = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+export function shapeBounds(shape: SketchShape): Bounds2D {
+  switch (shape.type) {
+    case "rectangle":
+      return {
+        minX: shape.x,
+        minY: shape.y,
+        maxX: shape.x + shape.width,
+        maxY: shape.y + shape.height,
+      };
+    case "circle":
+      return {
+        minX: shape.cx - shape.radius,
+        minY: shape.cy - shape.radius,
+        maxX: shape.cx + shape.radius,
+        maxY: shape.cy + shape.radius,
+      };
+    case "polyline": {
+      const xs = shape.points.map((p) => p.x);
+      const ys = shape.points.map((p) => p.y);
+      return {
+        minX: Math.min(...xs),
+        minY: Math.min(...ys),
+        maxX: Math.max(...xs),
+        maxY: Math.max(...ys),
+      };
+    }
+    case "text": {
+      const widthApprox =
+        Math.max(1, shape.text.length) * (shape.height * 0.62 + shape.letterSpacing);
+      return {
+        minX:
+          shape.align === "center"
+            ? shape.x - widthApprox / 2
+            : shape.align === "right"
+              ? shape.x - widthApprox
+              : shape.x,
+        minY: shape.y - shape.height * 0.25,
+        maxX:
+          shape.align === "center"
+            ? shape.x + widthApprox / 2
+            : shape.align === "right"
+              ? shape.x
+              : shape.x + widthApprox,
+        maxY: shape.y + shape.height,
+      };
+    }
+  }
+}
+
+export function documentBounds(document: SketchDocument): Bounds2D {
+  if (document.shapes.length === 0) {
+    return { minX: 0, minY: 0, maxX: document.width, maxY: document.height };
+  }
+
+  return selectionBounds(document.shapes);
+}
+
+export function selectionBounds(shapes: SketchShape[]): Bounds2D {
+  if (shapes.length === 0) {
+    return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  }
+
+  const bounds = shapes.map(shapeBounds);
+  return {
+    minX: Math.min(...bounds.map((b) => b.minX)),
+    minY: Math.min(...bounds.map((b) => b.minY)),
+    maxX: Math.max(...bounds.map((b) => b.maxX)),
+    maxY: Math.max(...bounds.map((b) => b.maxY)),
+  };
+}
+
+
+path: /src/modules/cad/model/shapeFactory.ts
+----------------------------------------
+import type {
+  SketchCircle,
+  SketchPolyline,
+  SketchPolylinePoint,
+  SketchRectangle,
+  SketchText,
+} from "./types";
+import { createId } from "./ids";
+
+export function createRectangleShape(
+  name: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): SketchRectangle {
+  return {
+    id: createId("rect"),
+    type: "rectangle",
+    name,
+    x,
+    y,
+    width,
+    height,
+    cutZ: null,
+  };
+}
+
+export function createCircleShape(
+  name: string,
+  cx: number,
+  cy: number,
+  radius: number,
+): SketchCircle {
+  return {
+    id: createId("circle"),
+    type: "circle",
+    name,
+    cx,
+    cy,
+    radius,
+    cutZ: null,
+  };
+}
+
+export function createPolylineShape(
+  name: string,
+  points: SketchPolylinePoint[],
+  closed = false,
+): SketchPolyline {
+  return {
+    id: createId("poly"),
+    type: "polyline",
+    name,
+    points,
+    closed,
+    cutZ: null,
+  };
+}
+
+export function createTextShape(
+  name: string,
+  x: number,
+  y: number,
+  text: string,
+  height: number,
+  letterSpacing: number,
+  fontFile: string,
+): SketchText {
+  return {
+    id: createId("text"),
+    type: "text",
+    name,
+    x,
+    y,
+    text,
+    height,
+    letterSpacing,
+    fontFile,
+    rotation: 0,
+    align: "left",
+    cutMode: "outline",
+    cutZ: null,
+  };
+}
+
+
+path: /src/modules/cad/model/shapes.ts
+----------------------------------------
+export type {
+  SketchRectangle,
+  SketchCircle,
+  SketchPolyline,
+  SketchPolylinePoint,
+  SketchText,
+  SketchShape,
+  SketchDocument,
+  SketchTool,
+} from "./types";
+
+
+path: /src/modules/cad/model/shapeTransforms.ts
+----------------------------------------
+import type { CadPoint } from "../../../utils/fontGeometry";
+import type { SketchShape } from "./types";
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+export function moveShape(shape: SketchShape, dx: number, dy: number): SketchShape {
+  switch (shape.type) {
+    case "rectangle":
+      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+    case "circle":
+      return { ...shape, cx: round(shape.cx + dx), cy: round(shape.cy + dy) };
+    case "polyline":
+      return {
+        ...shape,
+        points: shape.points.map((p) => ({ x: round(p.x + dx), y: round(p.y + dy) })),
+      };
+    case "text":
+      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+  }
+}
+
+export function rotatePoint(point: CadPoint, origin: CadPoint, angleDeg: number): CadPoint {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = point.x - origin.x;
+  const dy = point.y - origin.y;
+  return {
+    x: round(origin.x + dx * cos - dy * sin),
+    y: round(origin.y + dx * sin + dy * cos),
+  };
+}
+
+export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint): SketchShape {
+  switch (shape.type) {
+    case "rectangle": {
+      const p = rotatePoint({ x: shape.x, y: shape.y }, origin, angle);
+      return { ...shape, x: p.x, y: p.y };
+    }
+    case "circle": {
+      const p = rotatePoint({ x: shape.cx, y: shape.cy }, origin, angle);
+      return { ...shape, cx: p.x, cy: p.y };
+    }
+    case "polyline":
+      return {
+        ...shape,
+        points: shape.points.map((p) => rotatePoint(p, origin, angle)),
+      };
+    case "text":
+      return {
+        ...shape,
+        ...rotatePoint({ x: shape.x, y: shape.y }, origin, angle),
+        rotation: (shape.rotation ?? 0) + angle,
+      };
+  }
+}
+
+export function scaleShape(
+  shape: SketchShape,
+  sx: number,
+  sy: number,
+  origin: CadPoint,
+): SketchShape {
+  const scalePoint = (point: CadPoint): CadPoint => ({
+    x: round(origin.x + (point.x - origin.x) * sx),
+    y: round(origin.y + (point.y - origin.y) * sy),
+  });
+
+  switch (shape.type) {
+    case "rectangle": {
+      const p = scalePoint({ x: shape.x, y: shape.y });
+      return {
+        ...shape,
+        x: p.x,
+        y: p.y,
+        width: round(shape.width * sx),
+        height: round(shape.height * sy),
+      };
+    }
+    case "circle": {
+      const p = scalePoint({ x: shape.cx, y: shape.cy });
+      return {
+        ...shape,
+        cx: p.x,
+        cy: p.y,
+        radius: round(shape.radius * Math.max(sx, sy)),
+      };
+    }
+    case "polyline":
+      return { ...shape, points: shape.points.map(scalePoint) };
+    case "text": {
+      const p = scalePoint({ x: shape.x, y: shape.y });
+      return {
+        ...shape,
+        x: p.x,
+        y: p.y,
+        height: round(shape.height * sy),
+        letterSpacing: round(shape.letterSpacing * sx),
+      };
+    }
+  }
+}
+
+
+path: /src/modules/cad/model/types.ts
+----------------------------------------
+export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text";
+
+export type SketchBase = {
+  id: string;
+  name: string;
+  cutZ?: number | null;
+};
+
+export type SketchRectangle = SketchBase & {
+  type: "rectangle";
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type SketchCircle = SketchBase & {
+  type: "circle";
+  cx: number;
+  cy: number;
+  radius: number;
+};
+
+export type SketchPolylinePoint = {
+  x: number;
+  y: number;
+};
+
+export type SketchPolyline = SketchBase & {
+  type: "polyline";
+  points: SketchPolylinePoint[];
+  closed: boolean;
+};
+
+export type SketchText = SketchBase & {
+  type: "text";
+  x: number;
+  y: number;
+  text: string;
+  height: number;
+  letterSpacing: number;
+  fontFile: string;
+  rotation?: number;
+  align?: "left" | "center" | "right";
+  cutMode?: "outline" | "pocket";
+};
+
+export type SketchShape =
+  | SketchRectangle
+  | SketchCircle
+  | SketchPolyline
+  | SketchText;
+
+export type SketchDocument = {
+  width: number;
+  height: number;
+  safeZ: number;
+  cutZ: number;
+  feedCut: number;
+  feedRapid: number;
+  spindleOn: boolean;
+  laserPower: number;
+  snapEnabled: boolean;
+  snapStep: number;
+  shapes: SketchShape[];
+};
+
+export type SketchTool =
+  | "select"
+  | "rectangle"
+  | "circle"
+  | "polyline"
+  | "text"
+  | "pan";
+
+
+path: /src/modules/cad/model/view.ts
+----------------------------------------
+export type ViewTransform = {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+export const DEFAULT_VIEW: ViewTransform = {
+  scale: 2.5,
+  offsetX: 40,
+  offsetY: 40,
+};
+
+export function createDefaultView(): ViewTransform {
+  return { ...DEFAULT_VIEW };
+}
+
+
+path: /src/modules/cad/panels/DocumentSettingsPanel.tsx
+----------------------------------------
+import { ui } from "../../../styles/ui";
+import type { SketchDocument } from "../model/types";
+
+type DocumentSettingsPanelProps = {
+  document: SketchDocument;
+  setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+};
+
+const twoColumnGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: 10,
+  minWidth: 0,
+};
+
+const fieldLabel: React.CSSProperties = {
+  ...ui.inputLabel,
+};
+
+const checkboxRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#0f172a",
+  padding: 12,
+  borderRadius: 12,
+  background: "#fff",
+  border: "1px solid #dbe4ee",
+};
+
+function CardBlock({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ background: "#fff", border: "1px solid #dbe4ee", borderRadius: 14, padding: 12, minWidth: 0 }}>
+      {children}
+    </div>
+  );
+}
+
+export function DocumentSettingsPanel({ document, setDocument }: DocumentSettingsPanelProps) {
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      <CardBlock>
+        <div style={{ display: "grid", gap: 10 }}>
+          <label style={fieldLabel}>
+            Шаг сетки
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              value={document.snapStep}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  snapStep: Math.max(1, Number(e.target.value) || 1),
+                }))
+              }
+            />
+          </label>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={document.snapEnabled}
+              onChange={(e) =>
+                setDocument((prev) => ({
+                  ...prev,
+                  snapEnabled: e.target.checked,
+                }))
+              }
+            />
+            <span>Привязка к сетке</span>
+          </label>
+        </div>
+      </CardBlock>
+
+      <CardBlock>
+        <div style={twoColumnGrid}>
+          <label style={fieldLabel}>Ширина листа<input style={ui.input} type="number" value={document.width} onChange={(e) => setDocument((prev) => ({ ...prev, width: Math.max(1, Number(e.target.value) || 1) }))} /></label>
+          <label style={fieldLabel}>Высота листа<input style={ui.input} type="number" value={document.height} onChange={(e) => setDocument((prev) => ({ ...prev, height: Math.max(1, Number(e.target.value) || 1) }))} /></label>
+        </div>
+      </CardBlock>
+
+      <CardBlock>
+        <div style={twoColumnGrid}>
+          <label style={fieldLabel}>Safe Z<input style={ui.input} type="number" value={document.safeZ} onChange={(e) => setDocument((prev) => ({ ...prev, safeZ: Number(e.target.value) || 0 }))} /></label>
+          <label style={fieldLabel}>Cut Z по умолчанию<input style={ui.input} type="number" value={document.cutZ} onChange={(e) => setDocument((prev) => ({ ...prev, cutZ: Number(e.target.value) || 0 }))} /></label>
+        </div>
+      </CardBlock>
+
+      <CardBlock>
+        <div style={twoColumnGrid}>
+          <label style={fieldLabel}>Feed cut<input style={ui.input} type="number" value={document.feedCut} onChange={(e) => setDocument((prev) => ({ ...prev, feedCut: Math.max(1, Number(e.target.value) || 1) }))} /></label>
+          <label style={fieldLabel}>Feed rapid<input style={ui.input} type="number" value={document.feedRapid} onChange={(e) => setDocument((prev) => ({ ...prev, feedRapid: Math.max(1, Number(e.target.value) || 1) }))} /></label>
+        </div>
+      </CardBlock>
+
+      <label style={checkboxRow}>
+        <input type="checkbox" checked={document.spindleOn} onChange={(e) => setDocument((prev) => ({ ...prev, spindleOn: e.target.checked }))} />
+        <span>Лазер / spindle M3/M5</span>
+      </label>
+
+      <label style={fieldLabel}>S power<input style={ui.input} type="number" value={document.laserPower} onChange={(e) => setDocument((prev) => ({ ...prev, laserPower: Math.max(0, Number(e.target.value) || 0) }))} /></label>
+    </div>
+  );
+}
+
+
+
+path: /src/modules/cad/panels/EditStatusBar.tsx
+----------------------------------------
+import { theme } from "../../../styles/ui";
+
+export function EditStatusBar({ objectCount }: { objectCount: number }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
+        marginTop: 12,
+        color: theme.textMuted,
+        fontSize: 12,
+        flexShrink: 0,
+      }}
+    >
+      <span>Инструменты сверху работают по подсказкам при наведении</span>
+      <span>Объектов: {objectCount}</span>
+    </div>
+  );
+}
+
+
+path: /src/modules/cad/panels/EditToolbar.tsx
+----------------------------------------
+import { FiCheck, FiCircle, FiMaximize, FiMousePointer, FiPenTool, FiPlay, FiSquare, FiTrash2, FiType } from "react-icons/fi";
+import { ui } from "../../../styles/ui";
+import type { SketchTool } from "../model/types";
+
+type EditToolbarProps = {
+  tool: SketchTool;
+  onToolChange: (tool: SketchTool) => void;
+  onCommitPolyline: () => void;
+  onDeleteSelected: () => void;
+  onResetView: () => void;
+  onGenerate: () => void;
+  isGenerating: boolean;
+};
+
+const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
+  { id: "select", label: "Select", hint: "Выделение и перетаскивание объектов", icon: <FiMousePointer size={16} /> },
+  { id: "rectangle", label: "Rectangle", hint: "Нарисовать прямоугольник", icon: <FiSquare size={16} /> },
+  { id: "circle", label: "Circle", hint: "Нарисовать окружность", icon: <FiCircle size={16} /> },
+  { id: "polyline", label: "Polyline", hint: "Добавление точек полилинии", icon: <FiPenTool size={16} /> },
+  { id: "text", label: "Text", hint: "Вставка текстового объекта", icon: <FiType size={16} /> },
+];
+
+export function EditToolbar({ tool, onToolChange, onCommitPolyline, onDeleteSelected, onResetView, onGenerate, isGenerating }: EditToolbarProps) {
+  return (
+    <div
+      style={{
+        ...ui.panelInset,
+        padding: 10,
+        marginBottom: 12,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        flexWrap: "wrap",
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {tools.map((item) => {
+          const active = tool === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              title={`${item.label} — ${item.hint}`}
+              onClick={() => onToolChange(item.id)}
+              style={{ ...(active ? ui.buttonPrimary : ui.buttonGhost), width: 38, height: 38, padding: 0 }}
+            >
+              {item.icon}
+            </button>
+          );
+        })}
+
+        <button type="button" title="Завершить текущую полилинию" onClick={onCommitPolyline} style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}>
+          <FiCheck size={16} />
+        </button>
+
+        <button type="button" title="Удалить выбранный объект" onClick={onDeleteSelected} style={{ ...ui.buttonDanger, width: 38, height: 38, padding: 0 }}>
+          <FiTrash2 size={16} />
+        </button>
+
+        <button type="button" title="Сбросить масштаб и позицию холста" onClick={onResetView} style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}>
+          <FiMaximize size={16} />
+        </button>
+      </div>
+
+      <button type="button" onClick={onGenerate} disabled={isGenerating} title="Сгенерировать G-code из текущего документа" style={{ ...ui.buttonPrimary, flexShrink: 0 }}>
+        <FiPlay size={16} />
+        {isGenerating ? "Генерация..." : "Сгенерировать G-code"}
+      </button>
+    </div>
+  );
+}
+
+
+
+path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
+----------------------------------------
+import { FiBox, FiCircle, FiEdit3, FiMove, FiType } from "react-icons/fi";
+import { clamp } from "../../../utils";
+import { theme, ui } from "../../../styles/ui";
+import type { SketchDocument, SketchShape } from "../model/types";
+import { updateShape } from "../model/document";
+import { DEFAULT_FONT_OPTIONS } from "../editor-state/textToolState";
+
+type ShapePropertiesPanelProps = {
+  document: SketchDocument;
+  setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  selectedShape: SketchShape;
+};
+
+function CardBlock({ children }: { children: React.ReactNode }) {
+  return <div style={{ background: "#fff", border: `1px solid ${theme.border}`, borderRadius: 14, padding: 12, minWidth: 0 }}>{children}</div>;
+}
+
+const twoColumnGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10, minWidth: 0 };
+const fieldLabel: React.CSSProperties = { ...ui.inputLabel };
+const checkboxRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, fontSize: 13, fontWeight: 700, color: theme.text, padding: 12, borderRadius: 12, background: "#fff", border: `1px solid ${theme.border}` };
+
+function getShapeIcon(type: SketchShape["type"]) {
+  switch (type) {
+    case "rectangle": return <FiBox size={18} />;
+    case "circle": return <FiCircle size={18} />;
+    case "polyline": return <FiMove size={18} />;
+    case "text": return <FiType size={18} />;
+    default: return <FiEdit3 size={18} />;
+  }
+}
+
+export function ShapePropertiesPanel({ document, setDocument, selectedShape }: ShapePropertiesPanelProps) {
+  function updateSelected(patch: Record<string, number | string | boolean | null>) {
+    setDocument((prev) => updateShape(prev, selectedShape.id, patch as Partial<SketchShape>));
+  }
+
+  return (
+    <>
+      <div style={{ height: 1, background: theme.border, margin: "18px 0" }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+        <div style={ui.iconBadge}>{getShapeIcon(selectedShape.type)}</div>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>Выбранный объект</div>
+          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>Тип: {selectedShape.type}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <CardBlock><label style={fieldLabel}>Имя<input style={ui.input} type="text" value={selectedShape.name} onChange={(e) => updateSelected({ name: e.target.value })} /></label></CardBlock>
+        <CardBlock><label style={fieldLabel}>Индивидуальная глубина Z<input style={ui.input} type="number" value={selectedShape.cutZ ?? document.cutZ} onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })} /></label></CardBlock>
+
+        {selectedShape.type === "rectangle" && (
+          <CardBlock><div style={twoColumnGrid}>
+            <label style={fieldLabel}>X<input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} /></label>
+            <label style={fieldLabel}>Y<input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} /></label>
+            <label style={fieldLabel}>Width<input style={ui.input} type="number" value={selectedShape.width} onChange={(e) => updateSelected({ width: clamp(Number(e.target.value) || 1, 1, 100000) })} /></label>
+            <label style={fieldLabel}>Height<input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 1, 1, 100000) })} /></label>
+          </div></CardBlock>
+        )}
+
+        {selectedShape.type === "circle" && (
+          <CardBlock><div style={twoColumnGrid}>
+            <label style={fieldLabel}>CX<input style={ui.input} type="number" value={selectedShape.cx} onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })} /></label>
+            <label style={fieldLabel}>CY<input style={ui.input} type="number" value={selectedShape.cy} onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })} /></label>
+            <label style={fieldLabel}>Radius<input style={ui.input} type="number" value={selectedShape.radius} onChange={(e) => updateSelected({ radius: clamp(Number(e.target.value) || 1, 1, 100000) })} /></label>
+          </div></CardBlock>
+        )}
+
+        {selectedShape.type === "polyline" && (
+          <label style={checkboxRow}><input type="checkbox" checked={selectedShape.closed} onChange={(e) => updateSelected({ closed: e.target.checked })} /><span>Замкнуть полилинию</span></label>
+        )}
+
+        {selectedShape.type === "text" && (
+          <>
+            <CardBlock><label style={fieldLabel}>Текст<input style={ui.input} type="text" value={selectedShape.text} onChange={(e) => updateSelected({ text: e.target.value })} /></label></CardBlock>
+            <CardBlock><div style={twoColumnGrid}>
+              <label style={fieldLabel}>X<input style={ui.input} type="number" value={selectedShape.x} onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })} /></label>
+              <label style={fieldLabel}>Y<input style={ui.input} type="number" value={selectedShape.y} onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })} /></label>
+              <label style={fieldLabel}>Height<input style={ui.input} type="number" value={selectedShape.height} onChange={(e) => updateSelected({ height: clamp(Number(e.target.value) || 2, 2, 100000) })} /></label>
+              <label style={fieldLabel}>Letter spacing<input style={ui.input} type="number" step="0.5" value={selectedShape.letterSpacing} onChange={(e) => updateSelected({ letterSpacing: Math.max(0, Number(e.target.value) || 0) })} /></label>
+            </div></CardBlock>
+            <CardBlock><div style={twoColumnGrid}>
+              <label style={fieldLabel}>Font<select value={selectedShape.fontFile} onChange={(e) => updateSelected({ fontFile: e.target.value })} style={ui.select}>{DEFAULT_FONT_OPTIONS.map((font) => <option key={font} value={font}>{font.split("/").pop()}</option>)}</select></label>
+              <label style={fieldLabel}>Rotation<input style={ui.input} type="number" value={selectedShape.rotation ?? 0} onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })} /></label>
+              <label style={{ ...fieldLabel, gridColumn: "1 / -1" }}>Align<select value={selectedShape.align ?? "left"} onChange={(e) => updateSelected({ align: e.target.value })} style={ui.select}><option value="left">left</option><option value="center">center</option><option value="right">right</option></select></label>
+            </div></CardBlock>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+
+path: /src/modules/cad/panels/TextToolPanel.tsx
+----------------------------------------
+import { ui } from "../../../styles/ui";
+import type { TextToolState } from "../editor-state/textToolState";
+
+type TextToolPanelProps = {
+  value: TextToolState;
+  fontOptions: string[];
+  onChange: (patch: Partial<TextToolState>) => void;
+};
+
+const miniLabel: React.CSSProperties = {
+  ...ui.inputLabel,
+};
+
+export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelProps) {
+  return (
+    <div
+      style={{
+        ...ui.panelInset,
+        padding: 12,
+        marginBottom: 12,
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) 120px 120px",
+        gap: 10,
+        flexShrink: 0,
+      }}
+    >
+      <label style={miniLabel}>
+        Текст
+        <input type="text" value={value.text} onChange={(e) => onChange({ text: e.target.value })} style={ui.input} />
+      </label>
+
+      <label style={miniLabel}>
+        Высота
+        <input
+          type="number"
+          min="2"
+          value={value.height}
+          onChange={(e) => onChange({ height: Math.max(2, Number(e.target.value) || 2) })}
+          style={ui.input}
+        />
+      </label>
+
+      <label style={miniLabel}>
+        Интервал
+        <input
+          type="number"
+          min="0"
+          step="0.5"
+          value={value.letterSpacing}
+          onChange={(e) => onChange({ letterSpacing: Math.max(0, Number(e.target.value) || 0) })}
+          style={ui.input}
+        />
+      </label>
+
+      <label style={{ ...miniLabel, gridColumn: "1 / -1" }}>
+        Шрифт
+        <select value={value.fontFile} onChange={(e) => onChange({ fontFile: e.target.value })} style={ui.select}>
+          {fontOptions.map((font) => (
+            <option key={font} value={font}>
+              {font.split("/").pop()}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+
+path: /src/modules/cam/gcode/emitters.ts
+----------------------------------------
+import type { SketchDocument } from "../../cad/model/types";
+import { fmt } from "./format";
+
+export function emitCutStart(doc: SketchDocument, cutZ = doc.cutZ): string[] {
+  if (doc.spindleOn) {
+    return [`M3 S${Math.max(0, Math.round(doc.laserPower))}`];
+  }
+  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedCut)}`];
+}
+
+export function emitCutEnd(doc: SketchDocument): string[] {
+  if (doc.spindleOn) {
+    return ["M5"];
+  }
+  return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
+}
+
+export function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
+  return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
+}
+
+
+path: /src/modules/cam/gcode/format.ts
+----------------------------------------
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+export function fmt(value: number): string {
+  return round(value).toFixed(3).replace(/\.?0+$/, "");
+}
+
+
+path: /src/modules/cam/gcode/generator.ts
+----------------------------------------
+import type { SketchDocument } from "../../cad/model/types";
+import { emitCutEnd, emitCutStart, emitMoveTo } from "./emitters";
+import { fmt } from "./format";
+import { shapeToToolpaths } from "./shapeToToolpath";
+
+export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
+  const lines: string[] = [
+    "; Generated by GCode Studio / CAD module",
+    "G21",
+    "G90",
+    `G0 Z${fmt(doc.safeZ)}`,
+  ];
+
+  for (const shape of doc.shapes) {
+    const toolpaths = await shapeToToolpaths(shape, doc);
+    for (const toolpath of toolpaths) {
+      if (toolpath.points.length < 2) continue;
+      lines.push(`; ${toolpath.name}`);
+      lines.push(...emitMoveTo(toolpath.points[0].x, toolpath.points[0].y, doc.feedRapid));
+      lines.push(...emitCutStart(doc, toolpath.cutZ));
+      for (let i = 1; i < toolpath.points.length; i += 1) {
+        lines.push(`G1 X${fmt(toolpath.points[i].x)} Y${fmt(toolpath.points[i].y)} F${fmt(doc.feedCut)}`);
+      }
+      if (toolpath.closed) {
+        lines.push(`G1 X${fmt(toolpath.points[0].x)} Y${fmt(toolpath.points[0].y)} F${fmt(doc.feedCut)}`);
+      }
+      lines.push(...emitCutEnd(doc));
+    }
+  }
+
+  lines.push(`G0 Z${fmt(doc.safeZ)}`);
+  lines.push("G0 X0 Y0");
+  return lines.join("\n") + "\n";
+}
+
+
+
+path: /src/modules/cam/gcode/shapeToToolpath.ts
+----------------------------------------
+import type { SketchCircle, SketchDocument, SketchPolyline, SketchRectangle, SketchShape, SketchText } from "../../cad/model/types";
+import { getTextPolylines } from "../../cad/geometry/textGeometry";
+import type { Toolpath } from "../types";
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
+  return shape.cutZ ?? doc.cutZ;
+}
+
+function circleToPolylinePoints(shape: SketchCircle, segments = 72) {
+  const points: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i <= segments; i += 1) {
+    const t = (i / segments) * Math.PI * 2;
+    points.push({ x: round(shape.cx + Math.cos(t) * shape.radius), y: round(shape.cy + Math.sin(t) * shape.radius) });
+  }
+  return points;
+}
+
+export function rectangleToToolpath(shape: SketchRectangle, doc: SketchDocument): Toolpath {
+  return {
+    name: `RECTANGLE ${shape.name}`,
+    closed: true,
+    cutZ: resolveCutZ(shape, doc),
+    points: [
+      { x: shape.x, y: shape.y },
+      { x: shape.x + shape.width, y: shape.y },
+      { x: shape.x + shape.width, y: shape.y + shape.height },
+      { x: shape.x, y: shape.y + shape.height },
+    ],
+  };
+}
+
+export function circleToToolpath(shape: SketchCircle, doc: SketchDocument): Toolpath {
+  return {
+    name: `CIRCLE ${shape.name}`,
+    closed: true,
+    cutZ: resolveCutZ(shape, doc),
+    points: circleToPolylinePoints(shape, 72),
+  };
+}
+
+export function polylineToToolpath(shape: SketchPolyline, doc: SketchDocument): Toolpath {
+  return {
+    name: `POLYLINE ${shape.name}`,
+    closed: shape.closed,
+    cutZ: resolveCutZ(shape, doc),
+    points: shape.points,
+  };
+}
+
+export async function textToToolpaths(shape: SketchText, doc: SketchDocument): Promise<Toolpath[]> {
+  const polylines = await getTextPolylines(shape);
+  const cutZ = resolveCutZ(shape, doc);
+  return polylines
+    .filter((polyline) => polyline.length >= 2)
+    .map((polyline, index) => ({
+      name: `TEXT ${shape.name} #${index + 1}`,
+      closed: false,
+      cutZ,
+      points: polyline,
+    }));
+}
+
+export async function shapeToToolpaths(shape: SketchShape, doc: SketchDocument): Promise<Toolpath[]> {
+  switch (shape.type) {
+    case "rectangle": return [rectangleToToolpath(shape, doc)];
+    case "circle": return [circleToToolpath(shape, doc)];
+    case "polyline": return [polylineToToolpath(shape, doc)];
+    case "text": return textToToolpaths(shape, doc);
+  }
+}
+
+
+path: /src/modules/cam/types.ts
+----------------------------------------
+export type ToolpathPoint = { x: number; y: number };
+
+export type Toolpath = {
+  name: string;
+  points: ToolpathPoint[];
+  closed: boolean;
+  cutZ: number;
+};
+
+
+path: /src/styles/ui.ts
+----------------------------------------
+import type { CSSProperties } from "react";
+
+export const theme = {
+  bg: "#0b1220",
+  bgSoft: "#111827",
+  app: "#f3f6fb",
+  panel: "rgba(255,255,255,0.88)",
+  panelSolid: "#ffffff",
+  panelMuted: "#f8fafc",
+  border: "#dbe4ee",
+  borderStrong: "#c7d2e0",
+  text: "#0f172a",
+  textSoft: "#475569",
+  textMuted: "#64748b",
+  primary: "#2563eb",
+  primarySoft: "#dbeafe",
+  primaryText: "#1d4ed8",
+  success: "#16a34a",
+  warning: "#d97706",
+  danger: "#e11d48",
+  dangerSoft: "#fff1f2",
+  shadow:
+    "0 20px 40px rgba(15, 23, 42, 0.08), 0 8px 18px rgba(15, 23, 42, 0.05)",
+  shadowSoft: "0 8px 24px rgba(15, 23, 42, 0.06)",
+  radius: {
+    lg: 18,
+    xl: 22,
+    pill: 999,
+  },
+};
+
+export const ui = {
+  appShell: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top left, rgba(37,99,235,0.08), transparent 22%), linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%)",
+    color: theme.text,
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  } satisfies CSSProperties,
+
+  page: {
+    height: "100vh",
+    padding: 20,
+    boxSizing: "border-box",
+  } satisfies CSSProperties,
+
+  pageGrid: {
+    height: "100%",
+    display: "grid",
+    gridTemplateColumns: "320px minmax(0, 1fr) 320px",
+    gap: 20,
+    minHeight: 0,
+    maxWidth: 1880,
+    margin: "0 auto",
+  } satisfies CSSProperties,
+
+  column: {
+    minHeight: 0,
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    gap: 16,
+  } satisfies CSSProperties,
+
+  panel: {
+    background: theme.panel,
+    backdropFilter: "blur(14px)",
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.radius.xl,
+    boxShadow: theme.shadow,
+  } satisfies CSSProperties,
+
+  panelInset: {
+    background: theme.panelMuted,
+    border: `1px solid ${theme.border}`,
+    borderRadius: theme.radius.lg,
+  } satisfies CSSProperties,
+
+  panelHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 14,
+  } satisfies CSSProperties,
+
+  sectionTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 700,
+    color: theme.text,
+  } satisfies CSSProperties,
+
+  sectionSubtle: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginTop: 4,
+  } satisfies CSSProperties,
+
+  button: {
+    height: 40,
+    padding: "0 14px",
+    borderRadius: 12,
+    border: `1px solid ${theme.borderStrong}`,
+    background: "#fff",
+    color: theme.text,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+
+  buttonPrimary: {
+    height: 40,
+    padding: "0 14px",
+    borderRadius: 12,
+    border: "1px solid #1d4ed8",
+    background: "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)",
+    color: "#fff",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(37, 99, 235, 0.22)",
+  } satisfies CSSProperties,
+
+  buttonGhost: {
+    height: 38,
+    padding: "0 12px",
+    borderRadius: 12,
+    border: `1px solid ${theme.border}`,
+    background: theme.panelMuted,
+    color: theme.text,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+
+  buttonDanger: {
+    height: 40,
+    padding: "0 14px",
+    borderRadius: 12,
+    border: "1px solid #fecdd3",
+    background: theme.dangerSoft,
+    color: theme.danger,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: "pointer",
+  } satisfies CSSProperties,
+
+  iconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    display: "grid",
+    placeItems: "center",
+    background: theme.primarySoft,
+    color: theme.primaryText,
+    flexShrink: 0,
+  } satisfies CSSProperties,
+
+  input: {
+    width: "100%",
+    height: 40,
+    borderRadius: 12,
+    border: `1px solid ${theme.borderStrong}`,
+    background: "#fff",
+    color: theme.text,
+    padding: "0 12px",
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box",
+  } satisfies CSSProperties,
+
+  select: {
+    width: "100%",
+    height: 40,
+    borderRadius: 12,
+    border: `1px solid ${theme.borderStrong}`,
+    background: "#fff",
+    color: theme.text,
+    padding: "0 12px",
+    fontSize: 13,
+    outline: "none",
+    boxSizing: "border-box",
+  } satisfies CSSProperties,
+
+  inputLabel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    fontSize: 12,
+    fontWeight: 600,
+    color: theme.textSoft,
+  } satisfies CSSProperties,
+
+  statCard: {
+    background: "#fff",
+    border: `1px solid ${theme.border}`,
+    borderRadius: 16,
+    padding: 14,
+    boxShadow: theme.shadowSoft,
+  } satisfies CSSProperties,
+
+  statLabel: {
+    fontSize: 12,
+    color: theme.textMuted,
+    marginBottom: 6,
+  } satisfies CSSProperties,
+
+  statValue: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: theme.text,
+    lineHeight: 1.25,
+  } satisfies CSSProperties,
+
+  mutedText: {
+    fontSize: 12,
+    color: theme.textMuted,
+  } satisfies CSSProperties,
+};
+
+export function mergeStyles(
+  ...styles: Array<CSSProperties | undefined>
+): CSSProperties {
+  return Object.assign({}, ...styles);
+}
 
 
 path: /src/types/coordinates.ts
@@ -3948,82 +6261,6 @@ export type CameraInfo = {
 };
 
 
-path: /src/types/sketch.ts
-----------------------------------------
-export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text";
-
-export type SketchBase = {
-  id: string;
-  name: string;
-  cutZ?: number | null;
-};
-
-export type SketchRectangle = SketchBase & {
-  type: "rectangle";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type SketchCircle = SketchBase & {
-  type: "circle";
-  cx: number;
-  cy: number;
-  radius: number;
-};
-
-export type SketchPolylinePoint = {
-  x: number;
-  y: number;
-};
-
-export type SketchPolyline = SketchBase & {
-  type: "polyline";
-  points: SketchPolylinePoint[];
-  closed: boolean;
-};
-
-export type SketchText = SketchBase & {
-  type: "text";
-  x: number;
-  y: number;
-  text: string;
-  height: number;
-  letterSpacing: number;
-  fontFile: string;
-  rotation?: number;
-  align?: "left" | "center" | "right";
-  cutMode?: "outline" | "pocket";
-};
-
-export type SketchShape =
-  | SketchRectangle
-  | SketchCircle
-  | SketchPolyline
-  | SketchText;
-
-export type SketchDocument = {
-  width: number;
-  height: number;
-  safeZ: number;
-  cutZ: number;
-  feedCut: number;
-  feedRapid: number;
-  spindleOn: boolean;
-  laserPower: number;
-  shapes: SketchShape[];
-};
-
-export type SketchTool =
-  | "select"
-  | "rectangle"
-  | "circle"
-  | "polyline"
-  | "text"
-  | "pan";
-
-
 path: /src/types/ui.ts
 ----------------------------------------
 export type MainTab = "view" | "gcode" | "edit";
@@ -4034,12 +6271,7 @@ path: /src/utils/coordinates.ts
 import * as THREE from "three";
 import type { Point3 } from "../types/gcode";
 import type { CadPoint2, SvgPoint2 } from "../types/coordinates";
-
-export type ViewTransform = {
-  scale: number;
-  offsetX: number;
-  offsetY: number;
-};
+import type { ViewTransform } from "../modules/cad/model/view";
 
 export function cadToSvgPoint(point: CadPoint2, documentHeight: number): SvgPoint2 {
   return {
@@ -4102,7 +6334,7 @@ export function machineToScenePoint(p: Point3): THREE.Vector3 {
 path: /src/utils/fontGeometry.ts
 ----------------------------------------
 import opentype from "opentype.js";
-import type { SketchText } from "../types/sketch";
+import type { SketchText } from "../modules/cad/model/types";
 
 export type CadPoint = {
   x: number;
@@ -4435,119 +6667,13 @@ import type {
   SketchPolyline,
   SketchRectangle,
   SketchShape,
-  SketchText,
-} from "../types/sketch";
-import { getTextPolylines } from "./fontGeometry";
+} from "../modules/cad/model/types";
 
-function round(value: number): number {
-  return Number(value.toFixed(3));
-}
-
-function fmt(value: number): string {
-  return round(value).toFixed(3).replace(/\.?0+$/, "");
-}
-
-function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
-  return shape.cutZ ?? doc.cutZ;
-}
-
-export function createId(prefix = "shape"): string {
-  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-export function createEmptySketchDocument(): SketchDocument {
-  return {
-    width: 300,
-    height: 180,
-    safeZ: 5,
-    cutZ: -1,
-    feedCut: 500,
-    feedRapid: 1200,
-    spindleOn: false,
-    laserPower: 800,
-    shapes: [],
-  };
-}
-
-export function shapeBounds(shape: SketchShape) {
-  switch (shape.type) {
-    case "rectangle":
-      return {
-        minX: shape.x,
-        minY: shape.y,
-        maxX: shape.x + shape.width,
-        maxY: shape.y + shape.height,
-      };
-
-    case "circle":
-      return {
-        minX: shape.cx - shape.radius,
-        minY: shape.cy - shape.radius,
-        maxX: shape.cx + shape.radius,
-        maxY: shape.cy + shape.radius,
-      };
-
-    case "polyline": {
-      const xs = shape.points.map((p) => p.x);
-      const ys = shape.points.map((p) => p.y);
-      return {
-        minX: Math.min(...xs),
-        minY: Math.min(...ys),
-        maxX: Math.max(...xs),
-        maxY: Math.max(...ys),
-      };
-    }
-
-    case "text": {
-      const widthApprox =
-        Math.max(1, shape.text.length) *
-        (shape.height * 0.62 + shape.letterSpacing);
-
-      return {
-        minX:
-          shape.align === "center"
-            ? shape.x - widthApprox / 2
-            : shape.align === "right"
-              ? shape.x - widthApprox
-              : shape.x,
-        minY: shape.y - shape.height * 0.25,
-        maxX:
-          shape.align === "center"
-            ? shape.x + widthApprox / 2
-            : shape.align === "right"
-              ? shape.x
-              : shape.x + widthApprox,
-        maxY: shape.y + shape.height,
-      };
-    }
-  }
-}
-
-export function moveShape(shape: SketchShape, dx: number, dy: number): SketchShape {
-  switch (shape.type) {
-    case "rectangle":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
-
-    case "circle":
-      return { ...shape, cx: round(shape.cx + dx), cy: round(shape.cy + dy) };
-
-    case "polyline":
-      return {
-        ...shape,
-        points: shape.points.map((p) => ({
-          x: round(p.x + dx),
-          y: round(p.y + dy),
-        })),
-      };
-
-    case "text":
-      return {
-        ...shape,
-        x: round(shape.x + dx),
-        y: round(shape.y + dy),
-      };
-  }
-}
+export { createId } from "../modules/cad/model/ids";
+export { createEmptySketchDocument } from "../modules/cad/model/document";
+export { shapeBounds } from "../modules/cad/model/shapeBounds";
+export { moveShape } from "../modules/cad/model/shapeTransforms";
+export { generateSketchGCode } from "../modules/cam/gcode/generator";
 
 export function updateRectangle(
   shape: SketchRectangle,
@@ -4570,159 +6696,8 @@ export function updatePolyline(
   return { ...shape, ...patch };
 }
 
-function emitCutStart(doc: SketchDocument, cutZ = doc.cutZ): string[] {
-  if (doc.spindleOn) {
-    return [`M3 S${Math.max(0, Math.round(doc.laserPower))}`];
-  }
-
-  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedCut)}`];
-}
-
-function emitCutEnd(doc: SketchDocument): string[] {
-  if (doc.spindleOn) {
-    return ["M5"];
-  }
-
-  return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
-}
-
-function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
-  return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
-}
-
-function rectangleToGCode(shape: SketchRectangle, doc: SketchDocument): string[] {
-  const x1 = shape.x;
-  const y1 = shape.y;
-  const x2 = shape.x + shape.width;
-  const y2 = shape.y + shape.height;
-  const cutZ = resolveCutZ(shape, doc);
-
-  return [
-    `; RECTANGLE ${shape.name}`,
-    ...emitMoveTo(x1, y1, doc.feedRapid),
-    ...emitCutStart(doc, cutZ),
-    `G1 X${fmt(x2)} Y${fmt(y1)} F${fmt(doc.feedCut)}`,
-    `G1 X${fmt(x2)} Y${fmt(y2)} F${fmt(doc.feedCut)}`,
-    `G1 X${fmt(x1)} Y${fmt(y2)} F${fmt(doc.feedCut)}`,
-    `G1 X${fmt(x1)} Y${fmt(y1)} F${fmt(doc.feedCut)}`,
-    ...emitCutEnd(doc),
-  ];
-}
-
-function circleToPolylinePoints(shape: SketchCircle, segments = 72) {
-  const points: Array<{ x: number; y: number }> = [];
-
-  for (let i = 0; i <= segments; i += 1) {
-    const t = (i / segments) * Math.PI * 2;
-    points.push({
-      x: round(shape.cx + Math.cos(t) * shape.radius),
-      y: round(shape.cy + Math.sin(t) * shape.radius),
-    });
-  }
-
-  return points;
-}
-
-function polylinePointsToGCode(
-  name: string,
-  points: Array<{ x: number; y: number }>,
-  closed: boolean,
-  doc: SketchDocument,
-  cutZ = doc.cutZ,
-): string[] {
-  if (points.length < 2) {
-    return [];
-  }
-
-  const lines: string[] = [
-    `; POLYLINE ${name}`,
-    ...emitMoveTo(points[0].x, points[0].y, doc.feedRapid),
-    ...emitCutStart(doc, cutZ),
-  ];
-
-  for (let i = 1; i < points.length; i += 1) {
-    lines.push(`G1 X${fmt(points[i].x)} Y${fmt(points[i].y)} F${fmt(doc.feedCut)}`);
-  }
-
-  if (closed) {
-    lines.push(`G1 X${fmt(points[0].x)} Y${fmt(points[0].y)} F${fmt(doc.feedCut)}`);
-  }
-
-  lines.push(...emitCutEnd(doc));
-
-  return lines;
-}
-
-function circleToGCode(shape: SketchCircle, doc: SketchDocument): string[] {
-  const points = circleToPolylinePoints(shape, 72);
-  return polylinePointsToGCode(shape.name, points, true, doc, resolveCutZ(shape, doc));
-}
-
-function polylineToGCode(shape: SketchPolyline, doc: SketchDocument): string[] {
-  return polylinePointsToGCode(
-    shape.name,
-    shape.points,
-    shape.closed,
-    doc,
-    resolveCutZ(shape, doc),
-  );
-}
-
-async function textToGCode(shape: SketchText, doc: SketchDocument): Promise<string[]> {
-  const cutZ = resolveCutZ(shape, doc);
-  const polylines = await getTextPolylines(shape);
-  const lines: string[] = [`; TEXT ${shape.name}: ${shape.text}`];
-
-  for (const polyline of polylines) {
-    if (polyline.length < 2) {
-      continue;
-    }
-
-    lines.push(...emitMoveTo(polyline[0].x, polyline[0].y, doc.feedRapid));
-    lines.push(...emitCutStart(doc, cutZ));
-
-    for (let i = 1; i < polyline.length; i += 1) {
-      lines.push(`G1 X${fmt(polyline[i].x)} Y${fmt(polyline[i].y)} F${fmt(doc.feedCut)}`);
-    }
-
-    lines.push(...emitCutEnd(doc));
-  }
-
-  return lines;
-}
-
-export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
-  const lines: string[] = [
-    "; Generated by GCode Studio / EditTab",
-    "G21",
-    "G90",
-    `G0 Z${fmt(doc.safeZ)}`,
-  ];
-
-  for (const shape of doc.shapes) {
-    switch (shape.type) {
-      case "rectangle":
-        lines.push(...rectangleToGCode(shape, doc));
-        break;
-
-      case "circle":
-        lines.push(...circleToGCode(shape, doc));
-        break;
-
-      case "polyline":
-        lines.push(...polylineToGCode(shape, doc));
-        break;
-
-      case "text":
-        lines.push(...(await textToGCode(shape, doc)));
-        break;
-    }
-  }
-
-  lines.push(`G0 Z${fmt(doc.safeZ)}`);
-  lines.push("G0 X0 Y0");
-
-  return lines.join("\n") + "\n";
+export function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
+  return shape.cutZ ?? doc.cutZ;
 }
 
 
@@ -4737,6 +6712,16 @@ import type {
 } from "../types/gcode";
 
 const MAX_RENDER_SEGMENTS = 25_000;
+
+type WorkerRequest = {
+  requestId: number;
+  gcodeText: string;
+};
+
+type WorkerResponse = {
+  requestId: number;
+  parsed: ParsedGCode;
+};
 
 function stripComments(line: string): string {
   return line.split(";")[0].replace(/\([^)]*\)/g, "").trim();
@@ -4785,20 +6770,13 @@ function parseGCode(text: string): ParsedGCode {
     const upperLine = line.toUpperCase();
     const gCodes = getGCodes(upperLine);
 
-    if (gCodes.includes("20")) {
-      unitScale = 25.4;
-    }
-    if (gCodes.includes("21")) {
-      unitScale = 1;
-    }
-    if (gCodes.includes("90")) {
-      absoluteMode = true;
-    }
-    if (gCodes.includes("91")) {
-      absoluteMode = false;
-    }
+    if (gCodes.includes("20")) unitScale = 25.4;
+    if (gCodes.includes("21")) unitScale = 1;
+    if (gCodes.includes("90")) absoluteMode = true;
+    if (gCodes.includes("91")) absoluteMode = false;
 
     let motionMode: MotionMode | null = null;
+
     if (gCodes.includes("0") || gCodes.includes("00")) {
       motionMode = "G0";
     }
@@ -4865,15 +6843,10 @@ function parseGCode(text: string): ParsedGCode {
     segments.push(segment);
     points.push({ x: next.x, y: next.y, z: next.z });
 
-    if (effectiveMode === "G0") {
-      rapidMoves += 1;
-    } else {
-      workMoves += 1;
-    }
+    if (effectiveMode === "G0") rapidMoves += 1;
+    else workMoves += 1;
 
-    if (isCutting) {
-      cuttingMoves += 1;
-    }
+    if (isCutting) cuttingMoves += 1;
 
     state = next;
   }
@@ -4927,8 +6900,12 @@ function parseGCode(text: string): ParsedGCode {
   };
 }
 
-self.onmessage = (event: MessageEvent<{ gcodeText: string }>) => {
-  const result = parseGCode(event.data.gcodeText);
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  const result: WorkerResponse = {
+    requestId: event.data.requestId,
+    parsed: parseGCode(event.data.gcodeText),
+  };
+
   self.postMessage(result);
 };
 
@@ -5018,8 +6995,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 46
+included: 91
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 136647
+totalBytes(approx): 185649

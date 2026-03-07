@@ -1,9 +1,9 @@
 import { useThree } from "@react-three/fiber";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
-import { toScenePoint } from "../utils";
+import { getStockPlacement, toScenePoint } from "../utils";
 
 type AutoFitCameraProps = {
   bounds: Bounds;
@@ -22,6 +22,11 @@ export function AutoFitCamera({
 }: AutoFitCameraProps) {
   const { camera } = useThree();
 
+  const placement = useMemo(
+    () => getStockPlacement(bounds, stock, placementMode),
+    [bounds, stock, placementMode],
+  );
+
   useEffect(() => {
     const sizeX = Math.max(stock.width, bounds.maxX - bounds.minX, 1);
     const sizeY = Math.max(stock.height, bounds.maxY - bounds.minY, 1);
@@ -34,7 +39,7 @@ export function AutoFitCamera({
     const maxHorizontalSize = Math.max(sizeX, sizeY);
     const maxSize = Math.max(sizeX, sizeY, sizeZ);
 
-    const targetScene = toScenePoint({ x: 0, y: 0, z: 0 });
+    const targetScene = toScenePoint(placement.centerGcode);
     const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
 
     const cameraPosition = new THREE.Vector3(
@@ -54,7 +59,7 @@ export function AutoFitCamera({
       controlsRef.current.target.copy(targetScene);
       controlsRef.current.update();
     }
-  }, [bounds, camera, cameraResetKey, controlsRef, placementMode, stock]);
+  }, [bounds, camera, cameraResetKey, controlsRef, placement, stock]);
 
   return null;
 }

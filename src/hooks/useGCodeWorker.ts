@@ -1,8 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import type { ParsedGCode } from "../types/gcode";
 
+type WorkerRequest = {
+  requestId: number;
+  gcodeText: string;
+};
+
+type WorkerResponse = {
+  requestId: number;
+  parsed: ParsedGCode;
+};
+
 export function useGCodeWorker(source: string) {
   const workerRef = useRef<Worker | null>(null);
+  const requestIdRef = useRef(0);
+
   const [parsed, setParsed] = useState<ParsedGCode | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
@@ -12,8 +24,14 @@ export function useGCodeWorker(source: string) {
       { type: "module" },
     );
 
-    worker.onmessage = (event: MessageEvent<ParsedGCode>) => {
-      setParsed(event.data);
+    worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      const { requestId, parsed: nextParsed } = event.data;
+
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
+      setParsed(nextParsed);
       setIsParsing(false);
     };
 
@@ -27,13 +45,22 @@ export function useGCodeWorker(source: string) {
 
   useEffect(() => {
     if (!source.trim()) {
+      requestIdRef.current += 1;
       setParsed(null);
       setIsParsing(false);
       return;
     }
 
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setIsParsing(true);
-    workerRef.current?.postMessage({ gcodeText: source });
+
+    const payload: WorkerRequest = {
+      requestId,
+      gcodeText: source,
+    };
+
+    workerRef.current?.postMessage(payload);
   }, [source]);
 
   return {

@@ -60,6 +60,8 @@ export type SketchDocument = {
   feedRapid: number;
   spindleOn: boolean;
   laserPower: number;
+  snapEnabled: boolean;
+  snapStep: number;
   shapes: SketchShape[];
 };
 

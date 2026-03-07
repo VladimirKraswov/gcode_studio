@@ -8,6 +8,16 @@ import type {
 
 const MAX_RENDER_SEGMENTS = 25_000;
 
+type WorkerRequest = {
+  requestId: number;
+  gcodeText: string;
+};
+
+type WorkerResponse = {
+  requestId: number;
+  parsed: ParsedGCode;
+};
+
 function stripComments(line: string): string {
   return line.split(";")[0].replace(/\([^)]*\)/g, "").trim();
 }
@@ -55,20 +65,13 @@ function parseGCode(text: string): ParsedGCode {
     const upperLine = line.toUpperCase();
     const gCodes = getGCodes(upperLine);
 
-    if (gCodes.includes("20")) {
-      unitScale = 25.4;
-    }
-    if (gCodes.includes("21")) {
-      unitScale = 1;
-    }
-    if (gCodes.includes("90")) {
-      absoluteMode = true;
-    }
-    if (gCodes.includes("91")) {
-      absoluteMode = false;
-    }
+    if (gCodes.includes("20")) unitScale = 25.4;
+    if (gCodes.includes("21")) unitScale = 1;
+    if (gCodes.includes("90")) absoluteMode = true;
+    if (gCodes.includes("91")) absoluteMode = false;
 
     let motionMode: MotionMode | null = null;
+
     if (gCodes.includes("0") || gCodes.includes("00")) {
       motionMode = "G0";
     }
@@ -135,15 +138,10 @@ function parseGCode(text: string): ParsedGCode {
     segments.push(segment);
     points.push({ x: next.x, y: next.y, z: next.z });
 
-    if (effectiveMode === "G0") {
-      rapidMoves += 1;
-    } else {
-      workMoves += 1;
-    }
+    if (effectiveMode === "G0") rapidMoves += 1;
+    else workMoves += 1;
 
-    if (isCutting) {
-      cuttingMoves += 1;
-    }
+    if (isCutting) cuttingMoves += 1;
 
     state = next;
   }
@@ -197,7 +195,11 @@ function parseGCode(text: string): ParsedGCode {
   };
 }
 
-self.onmessage = (event: MessageEvent<{ gcodeText: string }>) => {
-  const result = parseGCode(event.data.gcodeText);
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  const result: WorkerResponse = {
+    requestId: event.data.requestId,
+    parsed: parseGCode(event.data.gcodeText),
+  };
+
   self.postMessage(result);
 };

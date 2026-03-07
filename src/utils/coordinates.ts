@@ -1,12 +1,7 @@
 import * as THREE from "three";
 import type { Point3 } from "../types/gcode";
 import type { CadPoint2, SvgPoint2 } from "../types/coordinates";
-
-export type ViewTransform = {
-  scale: number;
-  offsetX: number;
-  offsetY: number;
-};
+import type { ViewTransform } from "../modules/cad/model/view";
 
 export function cadToSvgPoint(point: CadPoint2, documentHeight: number): SvgPoint2 {
   return {
