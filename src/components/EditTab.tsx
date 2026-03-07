@@ -62,6 +62,12 @@ export function EditTab({
     panButtonMode,
   });
 
+  const primaryShape =
+    document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
+  const canGroupSelected = selection.ids.length > 1;
+  const canUngroupSelected = Boolean(primaryShape?.groupId);
+
   return (
     <>
       <div
@@ -92,6 +98,8 @@ export function EditTab({
           onImportSvg={editor.startSvgImport}
           onGroupSelected={editor.groupSelected}
           onUngroupSelected={editor.ungroupSelected}
+          canGroupSelected={canGroupSelected}
+          canUngroupSelected={canUngroupSelected}
         />
 
         {editor.tool === "text" && (
@@ -156,6 +164,9 @@ export function EditTab({
                 onWheel={editor.handleCanvasWheel}
                 onShapePointerDown={editor.bindSelectStart}
                 onSelectionPointerDown={editor.bindSelectionDragStart}
+                onScaleHandlePointerDown={editor.bindScaleHandleStart}
+                onRotateHandlePointerDown={editor.bindRotateHandleStart}
+                isTransforming={editor.isTransforming}
               />
             </div>
           </div>
@@ -166,6 +177,7 @@ export function EditTab({
           tool={editor.tool}
           isDragging={editor.isDragging}
           isPanning={editor.isPanning}
+          isTransforming={editor.isTransforming}
         />
       </div>
 

@@ -33,6 +33,8 @@ type EditToolbarProps = {
   onImportSvg: (file: File) => void;
   onGroupSelected: () => void;
   onUngroupSelected: () => void;
+  canGroupSelected: boolean;
+  canUngroupSelected: boolean;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
@@ -58,6 +60,8 @@ export function EditToolbar({
   onImportSvg,
   onGroupSelected,
   onUngroupSelected,
+  canGroupSelected,
+  canUngroupSelected,
 }: EditToolbarProps) {
   const svgInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -130,23 +134,27 @@ export function EditToolbar({
           }}
         />
 
-        <button
-          type="button"
-          title="Сгруппировать выбранные объекты"
-          onClick={onGroupSelected}
-          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
-        >
-          <FiLayers size={16} />
-        </button>
+        {canGroupSelected && (
+          <button
+            type="button"
+            title="Сгруппировать выбранные объекты"
+            onClick={onGroupSelected}
+            style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+          >
+            <FiLayers size={16} />
+          </button>
+        )}
 
-        <button
-          type="button"
-          title="Разгруппировать выбранные объекты"
-          onClick={onUngroupSelected}
-          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
-        >
-          <FiX size={16} />
-        </button>
+        {canUngroupSelected && (
+          <button
+            type="button"
+            title="Разгруппировать выбранную группу"
+            onClick={onUngroupSelected}
+            style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+          >
+            <FiX size={16} />
+          </button>
+        )}
 
         <button
           type="button"

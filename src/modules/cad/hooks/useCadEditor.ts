@@ -27,10 +27,11 @@ import {
   createSvgShape,
   createTextShape,
 } from "../model/shapeFactory";
-import { moveShape } from "../model/shapeTransforms";
+import { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
 import type {
   SketchDocument,
   SketchPolylinePoint,
+  SketchShape,
   SketchTool,
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
@@ -54,6 +55,7 @@ import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
 import { renameGroup, reorderShapes, toggleGroupCollapsed } from "../model/grouping";
+import { selectionBounds, groupBounds } from "../model/shapeBounds";
 import type { CadPanButtonMode } from "../../../utils/settings";
 
 type UseCadEditorParams = {
@@ -79,6 +81,112 @@ type PanState = {
   startOffsetY: number;
 } | null;
 
+type ScaleHandle = "nw" | "ne" | "sw" | "se";
+
+type TransformSnapshot = {
+  [shapeId: string]: SketchShape;
+};
+
+type ScaleTransformState = {
+  kind: "scale";
+  pointerId: number;
+  selectionIds: string[];
+  origin: SketchPolylinePoint;
+  startDistance: number;
+  initialShapes: TransformSnapshot;
+};
+
+type RotateTransformState = {
+  kind: "rotate";
+  pointerId: number;
+  selectionIds: string[];
+  center: SketchPolylinePoint;
+  startAngle: number;
+  initialShapes: TransformSnapshot;
+};
+
+type TransformState = ScaleTransformState | RotateTransformState | null;
+
+function angleBetween(center: SketchPolylinePoint, point: SketchPolylinePoint): number {
+  return Math.atan2(point.y - center.y, point.x - center.x);
+}
+
+function getSelectionShapeIds(
+  document: SketchDocument,
+  selection: SelectionState,
+): string[] {
+  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
+  if (primary?.groupId) {
+    return document.shapes
+      .filter((shape) => shape.groupId === primary.groupId)
+      .map((shape) => shape.id);
+  }
+
+  return selection.ids;
+}
+
+function buildShapeSnapshot(document: SketchDocument, ids: string[]): TransformSnapshot {
+  const snapshot: TransformSnapshot = {};
+
+  document.shapes.forEach((shape) => {
+    if (ids.includes(shape.id)) {
+      snapshot[shape.id] = shape;
+    }
+  });
+
+  return snapshot;
+}
+
+function getSelectionBox(
+  document: SketchDocument,
+  selection: SelectionState,
+) {
+  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
+  if (primary?.groupId) {
+    return groupBounds(document, primary.groupId);
+  }
+
+  return selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)));
+}
+
+function getScaleOrigin(bounds: {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}, handle: ScaleHandle): SketchPolylinePoint {
+  switch (handle) {
+    case "nw":
+      return { x: bounds.maxX, y: bounds.minY };
+    case "ne":
+      return { x: bounds.minX, y: bounds.minY };
+    case "sw":
+      return { x: bounds.maxX, y: bounds.maxY };
+    case "se":
+      return { x: bounds.minX, y: bounds.maxY };
+  }
+}
+
+function getScaleHandlePoint(bounds: {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}, handle: ScaleHandle): SketchPolylinePoint {
+  switch (handle) {
+    case "nw":
+      return { x: bounds.minX, y: bounds.maxY };
+    case "ne":
+      return { x: bounds.maxX, y: bounds.maxY };
+    case "sw":
+      return { x: bounds.minX, y: bounds.minY };
+    case "se":
+      return { x: bounds.maxX, y: bounds.minY };
+  }
+}
+
 export function useCadEditor({
   document,
   setDocument,
@@ -102,6 +210,7 @@ export function useCadEditor({
   const [isGenerating, setIsGenerating] = useState(false);
   const [dragState, setDragState] = useState<DragState>(null);
   const [panState, setPanState] = useState<PanState>(null);
+  const [transformState, setTransformState] = useState<TransformState>(null);
   const [isSelectionHover, setIsSelectionHover] = useState(false);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
@@ -348,6 +457,47 @@ export function useCadEditor({
       }));
 
       setDragState(next.next);
+      return;
+    }
+
+    if (transformState?.kind === "scale" && transformState.pointerId === event.pointerId) {
+      const currentDistance = Math.hypot(
+        cad.x - transformState.origin.x,
+        cad.y - transformState.origin.y,
+      );
+
+      const uniformScale = clamp(
+        currentDistance / Math.max(0.0001, transformState.startDistance),
+        0.05,
+        100,
+      );
+
+      setDocumentSilently((prev) => ({
+        ...prev,
+        shapes: prev.shapes.map((shape) => {
+          const initial = transformState.initialShapes[shape.id];
+          return initial
+            ? scaleShape(initial, uniformScale, uniformScale, transformState.origin)
+            : shape;
+        }),
+      }));
+      return;
+    }
+
+    if (transformState?.kind === "rotate" && transformState.pointerId === event.pointerId) {
+      const currentAngle = angleBetween(transformState.center, cad);
+      const deltaDeg =
+        ((currentAngle - transformState.startAngle) * 180) / Math.PI;
+
+      setDocumentSilently((prev) => ({
+        ...prev,
+        shapes: prev.shapes.map((shape) => {
+          const initial = transformState.initialShapes[shape.id];
+          return initial
+            ? rotateShape(initial, deltaDeg, transformState.center)
+            : shape;
+        }),
+      }));
     }
   }
 
@@ -365,6 +515,7 @@ export function useCadEditor({
     setDraft(null);
     setDragState(finishDrag());
     setPanState(null);
+    setTransformState(null);
     setIsSelectionHover(false);
   }
 
@@ -528,6 +679,68 @@ export function useCadEditor({
     );
   }
 
+  function bindScaleHandleStart(
+    event: React.PointerEvent<SVGCircleElement>,
+    handle: ScaleHandle,
+  ) {
+    event.stopPropagation();
+
+    if (tool !== "select" || event.button !== 0 || selection.ids.length === 0) {
+      return;
+    }
+
+    const bounds = getSelectionBox(document, selection);
+    const origin = getScaleOrigin(bounds, handle);
+    const handlePoint = getScaleHandlePoint(bounds, handle);
+    const selectionIds = getSelectionShapeIds(document, selection);
+
+    checkpointHistory();
+    setIsSelectionHover(false);
+
+    setTransformState({
+      kind: "scale",
+      pointerId: event.pointerId,
+      selectionIds,
+      origin,
+      startDistance: Math.max(
+        0.0001,
+        Math.hypot(handlePoint.x - origin.x, handlePoint.y - origin.y),
+      ),
+      initialShapes: buildShapeSnapshot(document, selectionIds),
+    });
+  }
+
+  function bindRotateHandleStart(event: React.PointerEvent<SVGCircleElement>) {
+    event.stopPropagation();
+
+    if (tool !== "select" || event.button !== 0 || selection.ids.length === 0) {
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+
+    const bounds = getSelectionBox(document, selection);
+    const center = {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+
+    const selectionIds = getSelectionShapeIds(document, selection);
+
+    checkpointHistory();
+    setIsSelectionHover(false);
+
+    setTransformState({
+      kind: "rotate",
+      pointerId: event.pointerId,
+      selectionIds,
+      center,
+      startAngle: angleBetween(center, rawCad),
+      initialShapes: buildShapeSnapshot(document, selectionIds),
+    });
+  }
+
   async function handleGenerateClick() {
     setIsGenerating(true);
 
@@ -541,6 +754,7 @@ export function useCadEditor({
 
   const isDragging = dragState !== null;
   const isPanning = panState !== null;
+  const isTransforming = transformState !== null;
 
   return {
     svgRef,
@@ -568,6 +782,8 @@ export function useCadEditor({
     handleCanvasWheel,
     bindSelectStart,
     bindSelectionDragStart,
+    bindScaleHandleStart,
+    bindRotateHandleStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
 
     svgImport,
@@ -583,6 +799,7 @@ export function useCadEditor({
 
     isDragging,
     isPanning,
+    isTransforming,
     isSelectionHover,
     setIsSelectionHover,
   };

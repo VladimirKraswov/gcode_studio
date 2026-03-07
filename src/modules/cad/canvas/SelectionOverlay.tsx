@@ -4,12 +4,19 @@ import type { SketchDocument } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
 
+type ScaleHandle = "nw" | "ne" | "sw" | "se";
+
 type SelectionOverlayProps = {
   document: SketchDocument;
   selection: SelectionState;
   documentHeight: number;
   view: ViewTransform;
   onPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
+  onScaleHandlePointerDown?: (
+    event: React.PointerEvent<SVGCircleElement>,
+    handle: ScaleHandle,
+  ) => void;
+  onRotateHandlePointerDown?: (event: React.PointerEvent<SVGCircleElement>) => void;
   isDragging?: boolean;
   isHover?: boolean;
   onHoverChange?: (value: boolean) => void;
@@ -21,6 +28,8 @@ export function SelectionOverlay({
   documentHeight,
   view,
   onPointerDown,
+  onScaleHandlePointerDown,
+  onRotateHandlePointerDown,
   isDragging = false,
   isHover = false,
   onHoverChange,
@@ -43,6 +52,10 @@ export function SelectionOverlay({
   const y = topLeft.y - 6;
   const width = (bounds.maxX - bounds.minX) * view.scale + 12;
   const height = (bounds.maxY - bounds.minY) * view.scale + 12;
+
+  const cx = x + width / 2;
+  const rotateLineTop = y - 24;
+  const rotateHandleY = y - 34;
 
   const palette = isDragging
     ? {
@@ -67,6 +80,18 @@ export function SelectionOverlay({
           width: 1.5,
           handleCursor: "grab" as const,
         };
+
+  const corners: Array<{
+    key: ScaleHandle;
+    cx: number;
+    cy: number;
+    cursor: string;
+  }> = [
+    { key: "nw", cx: x, cy: y, cursor: "nwse-resize" },
+    { key: "ne", cx: x + width, cy: y, cursor: "nesw-resize" },
+    { key: "sw", cx: x, cy: y + height, cursor: "nesw-resize" },
+    { key: "se", cx: x + width, cy: y + height, cursor: "nwse-resize" },
+  ];
 
   return (
     <g>
@@ -100,46 +125,61 @@ export function SelectionOverlay({
         pointerEvents="none"
       />
 
-      {!isDragging && (
-        <>
-          <circle
-            cx={x}
-            cy={y}
-            r={4}
-            fill="#ffffff"
-            stroke={palette.stroke}
-            strokeWidth={1.5}
-            pointerEvents="none"
-          />
-          <circle
-            cx={x + width}
-            cy={y}
-            r={4}
-            fill="#ffffff"
-            stroke={palette.stroke}
-            strokeWidth={1.5}
-            pointerEvents="none"
-          />
-          <circle
-            cx={x}
-            cy={y + height}
-            r={4}
-            fill="#ffffff"
-            stroke={palette.stroke}
-            strokeWidth={1.5}
-            pointerEvents="none"
-          />
-          <circle
-            cx={x + width}
-            cy={y + height}
-            r={4}
-            fill="#ffffff"
-            stroke={palette.stroke}
-            strokeWidth={1.5}
-            pointerEvents="none"
-          />
-        </>
-      )}
+      <line
+        x1={cx}
+        y1={y}
+        x2={cx}
+        y2={rotateLineTop}
+        stroke={palette.stroke}
+        strokeWidth={1.5}
+        pointerEvents="none"
+      />
+
+      <circle
+        cx={cx}
+        cy={rotateHandleY}
+        r={11}
+        fill="transparent"
+        stroke="transparent"
+        onPointerDown={onRotateHandlePointerDown}
+        style={{ cursor: "alias" }}
+      />
+
+      <circle
+        cx={cx}
+        cy={rotateHandleY}
+        r={5.5}
+        fill="#ffffff"
+        stroke={palette.stroke}
+        strokeWidth={1.5}
+        onPointerDown={onRotateHandlePointerDown}
+        style={{ cursor: "alias" }}
+      />
+
+      {!isDragging &&
+        corners.map((corner) => (
+          <g key={corner.key}>
+            <circle
+              cx={corner.cx}
+              cy={corner.cy}
+              r={12}
+              fill="transparent"
+              stroke="transparent"
+              onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
+              style={{ cursor: corner.cursor }}
+            />
+            <circle
+              cx={corner.cx}
+              cy={corner.cy}
+              r={4}
+              fill="#ffffff"
+              stroke={palette.stroke}
+              strokeWidth={1.5}
+              onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
+              style={{ cursor: corner.cursor }}
+            />
+          </g>
+        ))}
     </g>
   );
 }

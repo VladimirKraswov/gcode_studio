@@ -6,6 +6,7 @@ type EditStatusBarProps = {
   tool: SketchTool;
   isDragging: boolean;
   isPanning: boolean;
+  isTransforming: boolean;
 };
 
 export function EditStatusBar({
@@ -13,22 +14,25 @@ export function EditStatusBar({
   tool,
   isDragging,
   isPanning,
+  isTransforming,
 }: EditStatusBarProps) {
-  const interactionLabel = isDragging
-    ? "Перетаскивание объекта"
-    : isPanning
-      ? "Панорамирование"
-      : tool === "select"
-        ? "Выделение"
-        : tool === "text"
-          ? "Вставка текста"
-          : tool === "polyline"
-            ? "Рисование полилинии"
-            : tool === "rectangle"
-              ? "Рисование прямоугольника"
-              : tool === "circle"
-                ? "Рисование окружности"
-                : "Редактирование";
+  const interactionLabel = isTransforming
+    ? "Масштабирование / поворот"
+    : isDragging
+      ? "Перетаскивание объекта"
+      : isPanning
+        ? "Панорамирование"
+        : tool === "select"
+          ? "Выделение"
+          : tool === "text"
+            ? "Вставка текста"
+            : tool === "polyline"
+              ? "Рисование полилинии"
+              : tool === "rectangle"
+                ? "Рисование прямоугольника"
+                : tool === "circle"
+                  ? "Рисование окружности"
+                  : "Редактирование";
 
   return (
     <div
@@ -44,7 +48,7 @@ export function EditStatusBar({
       }}
     >
       <span>
-        Выделение: grab/grabbing. Тонкие линии имеют расширенную область попадания.
+        Углы рамки — масштаб. Круг сверху — поворот. Тонкие линии имеют расширенную область попадания.
       </span>
       <span>
         {interactionLabel} · Объектов: {objectCount}

@@ -23,6 +23,23 @@ function resolveStrokeWidth(shape: SketchShape): number {
   return Math.max(0.1, shape.strokeWidth ?? 1);
 }
 
+function rotatePoint(
+  point: ToolpathPoint,
+  origin: ToolpathPoint,
+  angleDeg: number,
+): ToolpathPoint {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = point.x - origin.x;
+  const dy = point.y - origin.y;
+
+  return {
+    x: round(origin.x + dx * cos - dy * sin),
+    y: round(origin.y + dx * sin + dy * cos),
+  };
+}
+
 function buildBandOffsets(
   targetWidth: number,
   toolDiameter: number,
@@ -85,12 +102,24 @@ function rectangleOffsetLoop(
 
   if (w <= 0 || h <= 0) return null;
 
-  return [
+  const points = [
     { x: round(x), y: round(y) },
     { x: round(x + w), y: round(y) },
     { x: round(x + w), y: round(y + h) },
     { x: round(x), y: round(y + h) },
   ];
+
+  const rotation = shape.rotation ?? 0;
+  if (!rotation) {
+    return points;
+  }
+
+  const center = {
+    x: shape.x + shape.width / 2,
+    y: shape.y + shape.height / 2,
+  };
+
+  return points.map((point) => rotatePoint(point, center, rotation));
 }
 
 function polylineNormal(a: ToolpathPoint, b: ToolpathPoint) {
@@ -256,13 +285,22 @@ export function svgToToolpaths(
 
   const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
   const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+  const rotation = shape.rotation ?? 0;
+  const center = {
+    x: shape.x + shape.width / 2,
+    y: shape.y + shape.height / 2,
+  };
 
   const baseContours = shape.contours
     .map((contour) =>
-      contour.map((point) => ({
-        x: round(shape.x + point.x * scaleX),
-        y: round(shape.y + point.y * scaleY),
-      })),
+      contour.map((point) => {
+        const p = {
+          x: round(shape.x + point.x * scaleX),
+          y: round(shape.y + point.y * scaleY),
+        };
+
+        return rotation ? rotatePoint(p, center, rotation) : p;
+      }),
     )
     .filter((contour) => contour.length >= 2);
 

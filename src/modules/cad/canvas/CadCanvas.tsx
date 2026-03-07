@@ -15,6 +15,8 @@ import type { SelectionState } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
+type ScaleHandle = "nw" | "ne" | "sw" | "se";
+
 type CadCanvasProps = {
   svgRef: React.RefObject<SVGSVGElement | null>;
   document: SketchDocument;
@@ -27,6 +29,7 @@ type CadCanvasProps = {
   isDragging: boolean;
   isPanning: boolean;
   isSelectionHover: boolean;
+  isTransforming: boolean;
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
@@ -35,6 +38,11 @@ type CadCanvasProps = {
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
   onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
+  onScaleHandlePointerDown?: (
+    event: React.PointerEvent<SVGCircleElement>,
+    handle: ScaleHandle,
+  ) => void;
+  onRotateHandlePointerDown?: (event: React.PointerEvent<SVGCircleElement>) => void;
 };
 
 export function CadCanvas({
@@ -49,6 +57,7 @@ export function CadCanvas({
   isDragging,
   isPanning,
   isSelectionHover,
+  isTransforming,
   onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
@@ -57,6 +66,8 @@ export function CadCanvas({
   onWheel,
   onShapePointerDown,
   onSelectionPointerDown,
+  onScaleHandlePointerDown,
+  onRotateHandlePointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
@@ -72,7 +83,7 @@ export function CadCanvas({
     if (isPanning) return "grabbing";
     if (tool === "text") return "text";
     if (tool !== "select") return "crosshair";
-    if (isDragging) return "grabbing";
+    if (isDragging || isTransforming) return "grabbing";
     if (isSelectionHover) return "grab";
     return "default";
   }
@@ -119,7 +130,9 @@ export function CadCanvas({
         documentHeight={document.height}
         view={view}
         onPointerDown={onSelectionPointerDown}
-        isDragging={isDragging}
+        onScaleHandlePointerDown={onScaleHandlePointerDown}
+        onRotateHandlePointerDown={onRotateHandlePointerDown}
+        isDragging={isDragging || isTransforming}
         isHover={isSelectionHover}
         onHoverChange={onSelectionHoverChange}
       />

@@ -1,4 +1,3 @@
-
 // =============================
 // FILE: src/modules/cad/model/types.ts
 // =============================
@@ -26,6 +25,7 @@ export type SketchRectangle = SketchBase & {
   y: number;
   width: number;
   height: number;
+  rotation?: number;
 };
 
 export type SketchCircle = SketchBase & {
@@ -69,6 +69,7 @@ export type SketchSvg = SketchBase & {
   sourceHeight: number;
   preserveAspectRatio: boolean;
   contours: SketchPolylinePoint[][];
+  rotation?: number;
 };
 
 export type SketchShape =
