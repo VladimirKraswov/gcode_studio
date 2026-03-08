@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-07T22:24:26.409Z
+generated: 2026-03-08T09:39:29.035Z
 
 
 
@@ -1545,16 +1545,19 @@ export function EditTab({
                 isDragging={editor.isDragging}
                 isPanning={editor.isPanning}
                 isSelectionHover={editor.isSelectionHover}
+                constraintDraft={editor.constraintDraft}
                 onSelectionHoverChange={editor.setIsSelectionHover}
                 onPointerDown={editor.handleCanvasPointerDown}
                 onPointerMove={editor.handleCanvasPointerMove}
                 onPointerUp={editor.handleCanvasPointerUp}
-                onPointerLeave={editor.handleCanvasPointerUp}
+                onPointerLeave={editor.handleCanvasPointerLeave}
                 onWheel={editor.handleCanvasWheel}
                 onShapePointerDown={editor.bindSelectStart}
                 onSelectionPointerDown={editor.bindSelectionDragStart}
                 onScaleHandlePointerDown={editor.bindScaleHandleStart}
                 onRotateHandlePointerDown={editor.bindRotateHandleStart}
+                onConstraintEdgeHandlePointerDown={editor.bindConstraintEdgeHandleStart}
+                onConstraintLabelPointerDown={editor.bindConstraintLabelDragStart}
                 isTransforming={editor.isTransforming}
               />
             </div>
@@ -4659,8 +4662,10 @@ import { CadSheet } from "./CadSheet";
 import { DraftOverlay } from "./DraftOverlay";
 import { ShapeRenderer } from "./ShapeRenderer";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { CadConstraintOverlay } from "./CadConstraintOverlay";
 import type { DraftShape } from "../geometry/draftGeometry";
 import type {
+  ConstraintEdge,
   SketchDocument,
   SketchPolylinePoint,
   SketchTool,
@@ -4671,6 +4676,24 @@ import { collectVisibleShapes } from "../model/grouping";
 import type { CadPoint } from "../geometry/textGeometry";
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
+
+type ConstraintDraftTarget =
+  | {
+      kind: "sheet";
+      edge: ConstraintEdge;
+    }
+  | {
+      kind: "shape";
+      shapeId: string;
+      edge: ConstraintEdge;
+    };
+
+type ConstraintDraftState = {
+  shapeId: string;
+  edge: ConstraintEdge;
+  pointer: { x: number; y: number };
+  hoverTarget: ConstraintDraftTarget | null;
+} | null;
 
 type CadCanvasProps = {
   svgRef: React.RefObject<SVGSVGElement | null>;
@@ -4685,11 +4708,12 @@ type CadCanvasProps = {
   isPanning: boolean;
   isSelectionHover: boolean;
   isTransforming: boolean;
+  constraintDraft: ConstraintDraftState;
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
-  onPointerUp: () => void;
-  onPointerLeave: () => void;
+  onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onPointerLeave: (event: React.PointerEvent<SVGSVGElement>) => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
   onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
@@ -4698,6 +4722,14 @@ type CadCanvasProps = {
     handle: ScaleHandle,
   ) => void;
   onRotateHandlePointerDown?: (event: React.PointerEvent<SVGCircleElement>) => void;
+  onConstraintEdgeHandlePointerDown?: (
+    event: React.PointerEvent<SVGCircleElement>,
+    edge: ConstraintEdge,
+  ) => void;
+  onConstraintLabelPointerDown?: (
+    event: React.PointerEvent<SVGRectElement>,
+    constraintId: string,
+  ) => void;
 };
 
 export function CadCanvas({
@@ -4713,6 +4745,7 @@ export function CadCanvas({
   isPanning,
   isSelectionHover,
   isTransforming,
+  constraintDraft,
   onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
@@ -4723,6 +4756,8 @@ export function CadCanvas({
   onSelectionPointerDown,
   onScaleHandlePointerDown,
   onRotateHandlePointerDown,
+  onConstraintEdgeHandlePointerDown,
+  onConstraintLabelPointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
@@ -4740,6 +4775,7 @@ export function CadCanvas({
     if (tool !== "select") return "crosshair";
     if (isDragging || isTransforming) return "grabbing";
     if (isSelectionHover) return "grab";
+    if (constraintDraft) return "crosshair";
     return "default";
   }
 
@@ -4792,6 +4828,18 @@ export function CadCanvas({
         onHoverChange={onSelectionHoverChange}
       />
 
+      {tool === "select" && selection.primaryId && onConstraintEdgeHandlePointerDown && onConstraintLabelPointerDown && (
+        <CadConstraintOverlay
+          document={document}
+          selection={selection}
+          documentHeight={document.height}
+          view={view}
+          constraintDraft={constraintDraft}
+          onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
+          onConstraintLabelPointerDown={onConstraintLabelPointerDown}
+        />
+      )}
+
       <DraftOverlay
         draft={draft}
         polylineDraft={polylineDraft}
@@ -4799,6 +4847,380 @@ export function CadCanvas({
         view={view}
       />
     </svg>
+  );
+}
+
+
+path: /src/modules/cad/canvas/CadConstraintOverlay.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import {
+  distanceSignByEdge,
+  edgeAxis,
+  getConstraintTargetBounds,
+  getDistanceBetweenEdges,
+  getEdgeMidpoint,
+  getSheetBounds,
+} from "../model/constraints";
+import { shapeBounds } from "../model/shapeBounds";
+import type {
+  ConstraintEdge,
+  SketchDistanceConstraint,
+  SketchDocument,
+} from "../model/types";
+import type { SelectionState } from "../model/selection";
+import type { ViewTransform } from "../model/view";
+
+type ConstraintDraftTarget =
+  | {
+      kind: "sheet";
+      edge: ConstraintEdge;
+    }
+  | {
+      kind: "shape";
+      shapeId: string;
+      edge: ConstraintEdge;
+    };
+
+type ConstraintDraftState = {
+  shapeId: string;
+  edge: ConstraintEdge;
+  pointer: { x: number; y: number };
+  hoverTarget: ConstraintDraftTarget | null;
+} | null;
+
+type CadConstraintOverlayProps = {
+  document: SketchDocument;
+  selection: SelectionState;
+  documentHeight: number;
+  view: ViewTransform;
+  constraintDraft: ConstraintDraftState;
+  onEdgeHandlePointerDown: (
+    event: React.PointerEvent<SVGCircleElement>,
+    edge: ConstraintEdge,
+  ) => void;
+  onConstraintLabelPointerDown: (
+    event: React.PointerEvent<SVGRectElement>,
+    constraintId: string,
+  ) => void;
+};
+
+function edgeTitle(edge: ConstraintEdge): string {
+  switch (edge) {
+    case "left":
+      return "L";
+    case "right":
+      return "R";
+    case "top":
+      return "T";
+    case "bottom":
+      return "B";
+  }
+}
+
+function formatDistance(value: number): string {
+  return `${Number(value.toFixed(3)).toString()} мм`;
+}
+
+function labelPosition(
+  source: { x: number; y: number },
+  target: { x: number; y: number },
+  edge: ConstraintEdge,
+) {
+  const mid = {
+    x: (source.x + target.x) / 2,
+    y: (source.y + target.y) / 2,
+  };
+
+  if (edgeAxis(edge) === "x") {
+    return { x: mid.x, y: mid.y - 18 };
+  }
+
+  return { x: mid.x + 18, y: mid.y };
+}
+
+function sourceHandleColor(edge: ConstraintEdge): string {
+  switch (edge) {
+    case "left":
+    case "right":
+      return "#2563eb";
+    case "top":
+    case "bottom":
+      return "#7c3aed";
+  }
+}
+
+export function CadConstraintOverlay({
+  document,
+  selection,
+  documentHeight,
+  view,
+  constraintDraft,
+  onEdgeHandlePointerDown,
+  onConstraintLabelPointerDown,
+}: CadConstraintOverlayProps) {
+  const selectedShape =
+    document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+
+  const selectedBounds = selectedShape ? shapeBounds(selectedShape) : null;
+  const selectedConstraints = selectedShape
+    ? document.constraints.filter((item) => item.shapeId === selectedShape.id)
+    : [];
+
+  return (
+    <g>
+      {selectedConstraints.map((constraint) => {
+        const sourceShape = document.shapes.find((item) => item.id === constraint.shapeId);
+        if (!sourceShape) return null;
+
+        const sourceBounds = shapeBounds(sourceShape);
+        const targetBounds = getConstraintTargetBounds(document, constraint);
+        if (!targetBounds) return null;
+
+        const sourceMid = getEdgeMidpoint(sourceBounds, constraint.edge);
+        const targetMid = getEdgeMidpoint(targetBounds, constraint.targetEdge);
+
+        const sourceScreen = cadToScreenPoint(sourceMid, documentHeight, view);
+        const targetScreen = cadToScreenPoint(targetMid, documentHeight, view);
+        const label = labelPosition(sourceScreen, targetScreen, constraint.edge);
+
+        const displayDistance =
+          constraint.target.kind === "shape" || constraint.target.kind === "sheet"
+            ? getDistanceBetweenEdges(
+                sourceBounds,
+                constraint.edge,
+                targetBounds,
+                constraint.targetEdge,
+              )
+            : constraint.distance;
+
+        return (
+          <g key={constraint.id}>
+            <line
+              x1={sourceScreen.x}
+              y1={sourceScreen.y}
+              x2={targetScreen.x}
+              y2={targetScreen.y}
+              stroke={constraint.enabled ? "#0f172a" : "#94a3b8"}
+              strokeWidth={1.5}
+              strokeDasharray={edgeAxis(constraint.edge) === "x" ? "8 5" : "6 4"}
+              opacity={0.9}
+              pointerEvents="none"
+            />
+
+            <circle
+              cx={sourceScreen.x}
+              cy={sourceScreen.y}
+              r={3.5}
+              fill="#ffffff"
+              stroke="#1d4ed8"
+              strokeWidth={1.5}
+              pointerEvents="none"
+            />
+
+            <circle
+              cx={targetScreen.x}
+              cy={targetScreen.y}
+              r={3.5}
+              fill="#ffffff"
+              stroke="#475569"
+              strokeWidth={1.5}
+              pointerEvents="none"
+            />
+
+            <g>
+              <rect
+                x={label.x - 32}
+                y={label.y - 11}
+                width={64}
+                height={22}
+                rx={11}
+                fill="#ffffff"
+                stroke="#cbd5e1"
+                strokeWidth={1}
+                onPointerDown={(event) => onConstraintLabelPointerDown(event, constraint.id)}
+                style={{ cursor: edgeAxis(constraint.edge) === "x" ? "ew-resize" : "ns-resize" }}
+              />
+              <text
+                x={label.x}
+                y={label.y + 4}
+                fontSize="12"
+                fontWeight="700"
+                fill="#0f172a"
+                textAnchor="middle"
+                pointerEvents="none"
+              >
+                {formatDistance(displayDistance)}
+              </text>
+            </g>
+          </g>
+        );
+      })}
+
+      {selectedBounds &&
+        (["left", "right", "top", "bottom"] as ConstraintEdge[]).map((edge) => {
+          const point = getEdgeMidpoint(selectedBounds, edge);
+          const screen = cadToScreenPoint(point, documentHeight, view);
+          const color = sourceHandleColor(edge);
+
+          return (
+            <g key={`edge-handle-${edge}`}>
+              <circle
+                cx={screen.x}
+                cy={screen.y}
+                r={13}
+                fill="transparent"
+                onPointerDown={(event) => onEdgeHandlePointerDown(event, edge)}
+                style={{ cursor: "crosshair" }}
+              />
+              <circle
+                cx={screen.x}
+                cy={screen.y}
+                r={6}
+                fill="#ffffff"
+                stroke={color}
+                strokeWidth={2}
+                onPointerDown={(event) => onEdgeHandlePointerDown(event, edge)}
+                style={{ cursor: "crosshair" }}
+              />
+              <text
+                x={screen.x}
+                y={screen.y - 11}
+                fontSize="11"
+                fontWeight="700"
+                fill={color}
+                textAnchor="middle"
+                pointerEvents="none"
+              >
+                {edgeTitle(edge)}
+              </text>
+            </g>
+          );
+        })}
+
+      {constraintDraft && selectedShape && (() => {
+        const shape = document.shapes.find((item) => item.id === constraintDraft.shapeId);
+        if (!shape) return null;
+
+        const sourceBounds = shapeBounds(shape);
+        const sourceMid = getEdgeMidpoint(sourceBounds, constraintDraft.edge);
+        const sourceScreen = cadToScreenPoint(sourceMid, documentHeight, view);
+
+        let targetCad = constraintDraft.pointer;
+
+        if (constraintDraft.hoverTarget) {
+          if (constraintDraft.hoverTarget.kind === "sheet") {
+            targetCad = getEdgeMidpoint(
+              getSheetBounds(document),
+              constraintDraft.hoverTarget.edge,
+            );
+          } else {
+            const targetShape = document.shapes.find(
+              (item) => item.id === (constraintDraft.hoverTarget as Extract<ConstraintDraftTarget, { kind: "shape" }>).shapeId,
+            );
+            if (targetShape) {
+              targetCad = getEdgeMidpoint(
+                shapeBounds(targetShape),
+                constraintDraft.hoverTarget.edge,
+              );
+            }
+          }
+        }
+
+        const targetScreen = cadToScreenPoint(targetCad, documentHeight, view);
+        const label = labelPosition(sourceScreen, targetScreen, constraintDraft.edge);
+
+        let previewDistance = 0;
+
+        if (constraintDraft.hoverTarget) {
+          const targetBounds =
+            constraintDraft.hoverTarget.kind === "sheet"
+              ? getSheetBounds(document)
+              : shapeBounds(
+                  document.shapes.find(
+                    (item) => item.id === (constraintDraft.hoverTarget as Extract<ConstraintDraftTarget, { kind: "shape" }>).shapeId,
+                  )!,
+                );
+
+          previewDistance = getDistanceBetweenEdges(
+            sourceBounds,
+            constraintDraft.edge,
+            targetBounds,
+            constraintDraft.hoverTarget.edge,
+          );
+        } else {
+          const axis = edgeAxis(constraintDraft.edge);
+          const sourceValue =
+            axis === "x" ? sourceMid.x : sourceMid.y;
+          const pointerValue =
+            axis === "x" ? constraintDraft.pointer.x : constraintDraft.pointer.y;
+          previewDistance = Number(
+            (
+              (pointerValue - sourceValue) *
+              distanceSignByEdge(constraintDraft.edge)
+            ).toFixed(3),
+          );
+        }
+
+        return (
+          <g>
+            <line
+              x1={sourceScreen.x}
+              y1={sourceScreen.y}
+              x2={targetScreen.x}
+              y2={targetScreen.y}
+              stroke="#f59e0b"
+              strokeWidth={2}
+              strokeDasharray="8 5"
+              pointerEvents="none"
+            />
+
+            <circle
+              cx={sourceScreen.x}
+              cy={sourceScreen.y}
+              r={4}
+              fill="#ffffff"
+              stroke="#f59e0b"
+              strokeWidth={2}
+              pointerEvents="none"
+            />
+
+            <circle
+              cx={targetScreen.x}
+              cy={targetScreen.y}
+              r={4}
+              fill="#ffffff"
+              stroke="#f59e0b"
+              strokeWidth={2}
+              pointerEvents="none"
+            />
+
+            <rect
+              x={label.x - 34}
+              y={label.y - 11}
+              width={68}
+              height={22}
+              rx={11}
+              fill="#fff7ed"
+              stroke="#fdba74"
+              strokeWidth={1}
+              pointerEvents="none"
+            />
+            <text
+              x={label.x}
+              y={label.y + 4}
+              fontSize="12"
+              fontWeight="700"
+              fill="#9a3412"
+              textAnchor="middle"
+              pointerEvents="none"
+            >
+              {formatDistance(previewDistance)}
+            </text>
+          </g>
+        );
+      })()}
+    </g>
   );
 }
 
@@ -6401,6 +6823,7 @@ import {
 } from "../model/shapeFactory";
 import { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
 import type {
+  ConstraintEdge,
   SketchDocument,
   SketchPolylinePoint,
   SketchShape,
@@ -6427,8 +6850,17 @@ import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
 import { renameGroup, reorderShapes, toggleGroupCollapsed } from "../model/grouping";
-import { selectionBounds, groupBounds } from "../model/shapeBounds";
+import { selectionBounds, groupBounds, shapeBounds, type Bounds2D } from "../model/shapeBounds";
 import type { CadPanButtonMode } from "../../../utils/settings";
+import {
+  edgeAxis,
+  getConstraintTargetBounds,
+  getDistanceBetweenEdges,
+  getEdgeValue,
+  getSheetBounds,
+  updateConstraint,
+  upsertConstraintForEdge,
+} from "../model/constraints";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -6478,6 +6910,34 @@ type RotateTransformState = {
 };
 
 type TransformState = ScaleTransformState | RotateTransformState | null;
+
+type ConstraintDraftTarget =
+  | {
+      kind: "sheet";
+      edge: ConstraintEdge;
+    }
+  | {
+      kind: "shape";
+      shapeId: string;
+      edge: ConstraintEdge;
+    };
+
+type ConstraintCreateState = {
+  pointerId: number;
+  shapeId: string;
+  edge: ConstraintEdge;
+  pointer: SketchPolylinePoint;
+  hoverTarget: ConstraintDraftTarget | null;
+} | null;
+
+type ConstraintLabelDragState = {
+  pointerId: number;
+  constraintId: string;
+  axis: "x" | "y";
+  sign: 1 | -1;
+  startPoint: SketchPolylinePoint;
+  initialDistance: number;
+} | null;
 
 function angleBetween(center: SketchPolylinePoint, point: SketchPolylinePoint): number {
   return Math.atan2(point.y - center.y, point.x - center.x);
@@ -6559,6 +7019,27 @@ function getScaleHandlePoint(bounds: {
   }
 }
 
+function edgeDistanceToPoint(
+  point: SketchPolylinePoint,
+  bounds: Bounds2D,
+  edge: ConstraintEdge,
+): number {
+  switch (edge) {
+    case "left":
+      return Math.abs(point.x - bounds.minX);
+    case "right":
+      return Math.abs(point.x - bounds.maxX);
+    case "bottom":
+      return Math.abs(point.y - bounds.minY);
+    case "top":
+      return Math.abs(point.y - bounds.maxY);
+  }
+}
+
+function getCompatibleEdges(axis: "x" | "y"): ConstraintEdge[] {
+  return axis === "x" ? ["left", "right"] : ["bottom", "top"];
+}
+
 export function useCadEditor({
   document,
   setDocument,
@@ -6584,6 +7065,10 @@ export function useCadEditor({
   const [panState, setPanState] = useState<PanState>(null);
   const [transformState, setTransformState] = useState<TransformState>(null);
   const [isSelectionHover, setIsSelectionHover] = useState(false);
+  const [constraintCreateState, setConstraintCreateState] =
+    useState<ConstraintCreateState>(null);
+  const [constraintLabelDragState, setConstraintLabelDragState] =
+    useState<ConstraintLabelDragState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
 
@@ -6752,6 +7237,61 @@ export function useCadEditor({
     );
   }
 
+  function findConstraintTargetAtPoint(
+    point: SketchPolylinePoint,
+    sourceShapeId: string,
+    sourceEdge: ConstraintEdge,
+  ): ConstraintDraftTarget | null {
+    const axis = edgeAxis(sourceEdge);
+    const compatibleEdges = getCompatibleEdges(axis);
+    const tolerance = Math.max(4, 10 / view.scale);
+
+    let best:
+      | {
+          target: ConstraintDraftTarget;
+          score: number;
+        }
+      | null = null;
+
+    const sheetBounds = getSheetBounds(document);
+    for (const edge of compatibleEdges) {
+      const distance = edgeDistanceToPoint(point, sheetBounds, edge);
+      if (distance <= tolerance) {
+        const score = distance;
+        if (!best || score < best.score) {
+          best = {
+            target: { kind: "sheet", edge },
+            score,
+          };
+        }
+      }
+    }
+
+    for (const shape of document.shapes) {
+      if (shape.id === sourceShapeId) continue;
+
+      const bounds = shapeBounds(shape);
+      for (const edge of compatibleEdges) {
+        const distance = edgeDistanceToPoint(point, bounds, edge);
+        if (distance <= tolerance) {
+          const score = distance;
+          if (!best || score < best.score) {
+            best = {
+              target: {
+                kind: "shape",
+                shapeId: shape.id,
+                edge,
+              },
+              score,
+            };
+          }
+        }
+      }
+    }
+
+    return best?.target ?? null;
+  }
+
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
     if (isPanMouseButton(event.button)) {
       startPan(event);
@@ -6806,6 +7346,46 @@ export function useCadEditor({
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
     const cad = normalizePoint(rawCad);
+
+    if (
+      constraintCreateState &&
+      constraintCreateState.pointerId === event.pointerId
+    ) {
+      setConstraintCreateState({
+        ...constraintCreateState,
+        pointer: cad,
+        hoverTarget: findConstraintTargetAtPoint(
+          cad,
+          constraintCreateState.shapeId,
+          constraintCreateState.edge,
+        ),
+      });
+      return;
+    }
+
+    if (
+      constraintLabelDragState &&
+      constraintLabelDragState.pointerId === event.pointerId
+    ) {
+      const axisDelta =
+        constraintLabelDragState.axis === "x"
+          ? cad.x - constraintLabelDragState.startPoint.x
+          : cad.y - constraintLabelDragState.startPoint.y;
+
+      const nextDistance = Number(
+        (
+          constraintLabelDragState.initialDistance +
+          axisDelta * constraintLabelDragState.sign
+        ).toFixed(3),
+      );
+
+      setDocumentSilently((prev) =>
+        updateConstraint(prev, constraintLabelDragState.constraintId, {
+          distance: nextDistance,
+        }),
+      );
+      return;
+    }
 
     if (draft) {
       setDraft((prev) => updateDraft(prev, cad.x, cad.y));
@@ -6873,7 +7453,69 @@ export function useCadEditor({
     }
   }
 
-  function handleCanvasPointerUp() {
+  function finishConstraintCreate() {
+    if (!constraintCreateState) return;
+
+    const sourceShape = document.shapes.find(
+      (item) => item.id === constraintCreateState.shapeId,
+    );
+    if (!sourceShape) {
+      setConstraintCreateState(null);
+      return;
+    }
+
+    const target = constraintCreateState.hoverTarget;
+    if (!target) {
+      setConstraintCreateState(null);
+      return;
+    }
+
+    const sourceBounds = shapeBounds(sourceShape);
+    const targetBounds =
+      target.kind === "sheet"
+        ? getSheetBounds(document)
+        : shapeBounds(
+            document.shapes.find((item) => item.id === target.shapeId)!,
+          );
+
+    const distance = getDistanceBetweenEdges(
+      sourceBounds,
+      constraintCreateState.edge,
+      targetBounds,
+      target.edge,
+    );
+
+    setDocument((prev) =>
+      upsertConstraintForEdge(prev, {
+        enabled: true,
+        shapeId: constraintCreateState.shapeId,
+        edge: constraintCreateState.edge,
+        target:
+          target.kind === "sheet"
+            ? { kind: "sheet" }
+            : { kind: "shape", shapeId: target.shapeId },
+        targetEdge: target.edge,
+        distance,
+      }),
+    );
+
+    setConstraintCreateState(null);
+  }
+
+  function handleCanvasPointerUp(event: React.PointerEvent<SVGSVGElement>) {
+    if (constraintCreateState && constraintCreateState.pointerId === event.pointerId) {
+      finishConstraintCreate();
+      return;
+    }
+
+    if (
+      constraintLabelDragState &&
+      constraintLabelDragState.pointerId === event.pointerId
+    ) {
+      setConstraintLabelDragState(null);
+      return;
+    }
+
     if (draft?.type === "rectangle") {
       const rect = getRectangleFromDraft(draft);
       addRectangle(rect.x, rect.y, rect.width, rect.height);
@@ -6889,6 +7531,10 @@ export function useCadEditor({
     setPanState(null);
     setTransformState(null);
     setIsSelectionHover(false);
+  }
+
+  function handleCanvasPointerLeave(event: React.PointerEvent<SVGSVGElement>) {
+    handleCanvasPointerUp(event);
   }
 
   function handleCanvasWheel(event: React.WheelEvent<SVGSVGElement>) {
@@ -6920,6 +7566,14 @@ export function useCadEditor({
     const nextDocument = {
       ...document,
       shapes: document.shapes.filter((shape) => !selection.ids.includes(shape.id)),
+      constraints: document.constraints.filter(
+        (constraint) =>
+          !selection.ids.includes(constraint.shapeId) &&
+          !(
+            constraint.target.kind === "shape" &&
+            selection.ids.includes(constraint.target.shapeId)
+          ),
+      ),
     };
 
     setDocument(nextDocument);
@@ -6933,6 +7587,14 @@ export function useCadEditor({
     const nextDocument = {
       ...document,
       shapes: document.shapes.filter((shape) => shape.id !== shapeId),
+      constraints: document.constraints.filter(
+        (constraint) =>
+          constraint.shapeId !== shapeId &&
+          !(
+            constraint.target.kind === "shape" &&
+            constraint.target.shapeId === shapeId
+          ),
+      ),
     };
 
     setDocument(nextDocument);
@@ -7113,6 +7775,60 @@ export function useCadEditor({
     });
   }
 
+  function bindConstraintEdgeHandleStart(
+    event: React.PointerEvent<SVGCircleElement>,
+    edge: ConstraintEdge,
+  ) {
+    event.stopPropagation();
+
+    if (tool !== "select" || event.button !== 0 || !selection.primaryId) {
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+
+    checkpointHistory();
+    setIsSelectionHover(false);
+
+    setConstraintCreateState({
+      pointerId: event.pointerId,
+      shapeId: selection.primaryId,
+      edge,
+      pointer: rawCad,
+      hoverTarget: findConstraintTargetAtPoint(rawCad, selection.primaryId, edge),
+    });
+  }
+
+  function bindConstraintLabelDragStart(
+    event: React.PointerEvent<SVGRectElement>,
+    constraintId: string,
+  ) {
+    event.stopPropagation();
+
+    if (tool !== "select" || event.button !== 0) {
+      return;
+    }
+
+    const rawCad = getCadPoint(event);
+    if (!rawCad) return;
+
+    const constraint = document.constraints.find((item) => item.id === constraintId);
+    if (!constraint) return;
+
+    checkpointHistory();
+    setIsSelectionHover(false);
+
+    setConstraintLabelDragState({
+      pointerId: event.pointerId,
+      constraintId,
+      axis: edgeAxis(constraint.edge),
+      sign: constraint.edge === "left" || constraint.edge === "bottom" ? 1 : -1,
+      startPoint: rawCad,
+      initialDistance: constraint.distance,
+    });
+  }
+
   async function handleGenerateClick() {
     setIsGenerating(true);
 
@@ -7126,7 +7842,10 @@ export function useCadEditor({
 
   const isDragging = dragState !== null;
   const isPanning = panState !== null;
-  const isTransforming = transformState !== null;
+  const isTransforming =
+    transformState !== null ||
+    constraintCreateState !== null ||
+    constraintLabelDragState !== null;
 
   return {
     svgRef,
@@ -7151,11 +7870,14 @@ export function useCadEditor({
     handleCanvasPointerDown,
     handleCanvasPointerMove,
     handleCanvasPointerUp,
+    handleCanvasPointerLeave,
     handleCanvasWheel,
     bindSelectStart,
     bindSelectionDragStart,
     bindScaleHandleStart,
     bindRotateHandleStart,
+    bindConstraintEdgeHandleStart,
+    bindConstraintLabelDragStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
 
     svgImport,
@@ -7174,6 +7896,15 @@ export function useCadEditor({
     isTransforming,
     isSelectionHover,
     setIsSelectionHover,
+    constraintDraft:
+      constraintCreateState === null
+        ? null
+        : {
+            shapeId: constraintCreateState.shapeId,
+            edge: constraintCreateState.edge,
+            pointer: constraintCreateState.pointer,
+            hoverTarget: constraintCreateState.hoverTarget,
+          },
   };
 }
 
@@ -7486,7 +8217,7 @@ export function useTextPreviewMap(shapes: SketchShape[]) {
 path: /src/modules/cad/model/constraints.ts
 ----------------------------------------
 import { moveShape } from "./shapeTransforms";
-import { shapeBounds } from "./shapeBounds";
+import { shapeBounds, type Bounds2D } from "./shapeBounds";
 import { createId } from "./ids";
 import type {
   ConstraintEdge,
@@ -7509,7 +8240,7 @@ function isHorizontalEdge(edge: ConstraintEdge): boolean {
   return edge === "left" || edge === "right";
 }
 
-function edgeAxis(edge: ConstraintEdge): Axis {
+export function edgeAxis(edge: ConstraintEdge): Axis {
   return isHorizontalEdge(edge) ? "x" : "y";
 }
 
@@ -7538,21 +8269,25 @@ function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function getTargetBounds(
+export function getSheetBounds(document: SketchDocument): Bounds2D {
+  return {
+    minX: 0,
+    minY: 0,
+    maxX: document.width,
+    maxY: document.height,
+  };
+}
+
+export function getConstraintTargetBounds(
   document: SketchDocument,
   constraint: SketchDistanceConstraint,
-) {
+): Bounds2D | null {
   if (constraint.target.kind === "sheet") {
-    return {
-      minX: 0,
-      minY: 0,
-      maxX: document.width,
-      maxY: document.height,
-    };
+    return getSheetBounds(document);
   }
 
   const targetShape = document.shapes.find(
-    (shape) => shape.id === (constraint.target as { shapeId: string }).shapeId,
+    (shape) => constraint.target.kind === "shape" && shape.id === constraint.target.shapeId,
   );
 
   if (!targetShape) {
@@ -7562,8 +8297,8 @@ function getTargetBounds(
   return shapeBounds(targetShape);
 }
 
-function getEdgeValue(
-  bounds: { minX: number; minY: number; maxX: number; maxY: number },
+export function getEdgeValue(
+  bounds: Bounds2D,
   edge: ConstraintEdge,
 ): number {
   switch (edge) {
@@ -7578,9 +8313,41 @@ function getEdgeValue(
   }
 }
 
+export function getEdgeMidpoint(
+  bounds: Bounds2D,
+  edge: ConstraintEdge,
+): { x: number; y: number } {
+  switch (edge) {
+    case "left":
+      return { x: bounds.minX, y: (bounds.minY + bounds.maxY) / 2 };
+    case "right":
+      return { x: bounds.maxX, y: (bounds.minY + bounds.maxY) / 2 };
+    case "bottom":
+      return { x: (bounds.minX + bounds.maxX) / 2, y: bounds.minY };
+    case "top":
+      return { x: (bounds.minX + bounds.maxX) / 2, y: bounds.maxY };
+  }
+}
+
+export function distanceSignByEdge(edge: ConstraintEdge): 1 | -1 {
+  return edge === "left" || edge === "bottom" ? 1 : -1;
+}
+
+export function getDistanceBetweenEdges(
+  sourceBounds: Bounds2D,
+  sourceEdge: ConstraintEdge,
+  targetBounds: Bounds2D,
+  targetEdge: ConstraintEdge,
+): number {
+  const sourceValue = getEdgeValue(sourceBounds, sourceEdge);
+  const targetValue = getEdgeValue(targetBounds, targetEdge);
+
+  return round((targetValue - sourceValue) * distanceSignByEdge(sourceEdge) * -1);
+}
+
 function computeDesiredMin(
   shape: SketchShape,
-  targetBounds: { minX: number; minY: number; maxX: number; maxY: number },
+  targetBounds: Bounds2D,
   constraint: SketchDistanceConstraint,
 ): { axis: Axis; desiredMin: number } {
   const bounds = shapeBounds(shape);
@@ -7683,6 +8450,32 @@ export function addConstraint(
   };
 }
 
+export function upsertConstraintForEdge(
+  document: SketchDocument,
+  constraint: Omit<SketchDistanceConstraint, "id">,
+): SketchDocument {
+  const existing = document.constraints.find(
+    (item) => item.shapeId === constraint.shapeId && item.edge === constraint.edge,
+  );
+
+  if (!existing) {
+    return addConstraint(document, constraint);
+  }
+
+  return {
+    ...document,
+    constraints: document.constraints.map((item) =>
+      item.id === existing.id
+        ? {
+            ...item,
+            ...constraint,
+            id: item.id,
+          }
+        : item,
+    ),
+  };
+}
+
 export function applyDistanceConstraints(document: SketchDocument): {
   document: SketchDocument;
   issues: ConstraintIssue[];
@@ -7740,7 +8533,7 @@ export function applyDistanceConstraints(document: SketchDocument): {
         continue;
       }
 
-      const targetBounds = getTargetBounds(nextDocument, constraint);
+      const targetBounds = getConstraintTargetBounds(nextDocument, constraint);
       if (!targetBounds) {
         issues.push(
           buildIssue(
@@ -9299,7 +10092,7 @@ export function EditStatusBar({
   isTransforming,
 }: EditStatusBarProps) {
   const interactionLabel = isTransforming
-    ? "Масштабирование / поворот"
+    ? "Трансформация / ограничение"
     : isDragging
       ? "Перетаскивание объекта"
       : isPanning
@@ -9330,7 +10123,7 @@ export function EditStatusBar({
       }}
     >
       <span>
-        Углы рамки — масштаб. Круг сверху — поворот. Тонкие линии имеют расширенную область попадания.
+        Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.
       </span>
       <span>
         {interactionLabel} · Объектов: {objectCount}
@@ -12648,8 +13441,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 102
+included: 103
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 337089
+totalBytes(approx): 359337

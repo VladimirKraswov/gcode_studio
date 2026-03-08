@@ -1,46 +1,47 @@
-// path: /src/modules/cad/model/shapeTransforms.ts
 import type { CadPoint } from "../../../utils/fontGeometry";
+import {
+  rotateCadPoint,
+  scaleCadPoint,
+  translateCadPoint,
+} from "../../geometry/geometryEngine";
 import type { SketchShape } from "./types";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function scalePoint(point: CadPoint, origin: CadPoint, sx: number, sy: number): CadPoint {
-  return {
-    x: round(origin.x + (point.x - origin.x) * sx),
-    y: round(origin.y + (point.y - origin.y) * sy),
-  };
-}
-
 export function moveShape(shape: SketchShape, dx: number, dy: number): SketchShape {
   switch (shape.type) {
-    case "rectangle":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
-    case "circle":
-      return { ...shape, cx: round(shape.cx + dx), cy: round(shape.cy + dy) };
+    case "rectangle": {
+      const next = translateCadPoint({ x: shape.x, y: shape.y }, dx, dy);
+      return { ...shape, x: next.x, y: next.y };
+    }
+
+    case "circle": {
+      const next = translateCadPoint({ x: shape.cx, y: shape.cy }, dx, dy);
+      return { ...shape, cx: next.x, cy: next.y };
+    }
+
     case "polyline":
       return {
         ...shape,
-        points: shape.points.map((p) => ({ x: round(p.x + dx), y: round(p.y + dy) })),
+        points: shape.points.map((point) => translateCadPoint(point, dx, dy)),
       };
-    case "text":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
-    case "svg":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+
+    case "text": {
+      const next = translateCadPoint({ x: shape.x, y: shape.y }, dx, dy);
+      return { ...shape, x: next.x, y: next.y };
+    }
+
+    case "svg": {
+      const next = translateCadPoint({ x: shape.x, y: shape.y }, dx, dy);
+      return { ...shape, x: next.x, y: next.y };
+    }
   }
 }
 
 export function rotatePoint(point: CadPoint, origin: CadPoint, angleDeg: number): CadPoint {
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-  return {
-    x: round(origin.x + dx * cos - dy * sin),
-    y: round(origin.y + dx * sin + dy * cos),
-  };
+  return rotateCadPoint(point, origin, angleDeg);
 }
 
 export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint): SketchShape {
@@ -50,7 +51,7 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
         x: shape.x + shape.width / 2,
         y: shape.y + shape.height / 2,
       };
-      const nextCenter = rotatePoint(center, origin, angle);
+      const nextCenter = rotateCadPoint(center, origin, angle);
 
       return {
         ...shape,
@@ -61,29 +62,32 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
     }
 
     case "circle": {
-      const p = rotatePoint({ x: shape.cx, y: shape.cy }, origin, angle);
-      return { ...shape, cx: p.x, cy: p.y };
+      const next = rotateCadPoint({ x: shape.cx, y: shape.cy }, origin, angle);
+      return { ...shape, cx: next.x, cy: next.y };
     }
 
     case "polyline":
       return {
         ...shape,
-        points: shape.points.map((p) => rotatePoint(p, origin, angle)),
+        points: shape.points.map((point) => rotateCadPoint(point, origin, angle)),
       };
 
-    case "text":
+    case "text": {
+      const next = rotateCadPoint({ x: shape.x, y: shape.y }, origin, angle);
       return {
         ...shape,
-        ...rotatePoint({ x: shape.x, y: shape.y }, origin, angle),
+        x: next.x,
+        y: next.y,
         rotation: round((shape.rotation ?? 0) + angle),
       };
+    }
 
     case "svg": {
       const center = {
         x: shape.x + shape.width / 2,
         y: shape.y + shape.height / 2,
       };
-      const nextCenter = rotatePoint(center, origin, angle);
+      const nextCenter = rotateCadPoint(center, origin, angle);
 
       return {
         ...shape,
@@ -103,7 +107,7 @@ export function scaleShape(
 ): SketchShape {
   switch (shape.type) {
     case "rectangle": {
-      const topLeft = scalePoint({ x: shape.x, y: shape.y }, origin, sx, sy);
+      const topLeft = scaleCadPoint({ x: shape.x, y: shape.y }, origin, sx, sy);
 
       return {
         ...shape,
@@ -115,35 +119,38 @@ export function scaleShape(
     }
 
     case "circle": {
-      const p = scalePoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
+      const next = scaleCadPoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
       return {
         ...shape,
-        cx: p.x,
-        cy: p.y,
+        cx: next.x,
+        cy: next.y,
         radius: round(shape.radius * Math.max(sx, sy)),
       };
     }
 
     case "polyline":
-      return { ...shape, points: shape.points.map((p) => scalePoint(p, origin, sx, sy)) };
-
-    case "text": {
-      const p = scalePoint({ x: shape.x, y: shape.y }, origin, sx, sy);
       return {
         ...shape,
-        x: p.x,
-        y: p.y,
+        points: shape.points.map((point) => scaleCadPoint(point, origin, sx, sy)),
+      };
+
+    case "text": {
+      const next = scaleCadPoint({ x: shape.x, y: shape.y }, origin, sx, sy);
+      return {
+        ...shape,
+        x: next.x,
+        y: next.y,
         height: round(shape.height * sy),
         letterSpacing: round(shape.letterSpacing * sx),
       };
     }
 
     case "svg": {
-      const p = scalePoint({ x: shape.x, y: shape.y }, origin, sx, sy);
+      const next = scaleCadPoint({ x: shape.x, y: shape.y }, origin, sx, sy);
       return {
         ...shape,
-        x: p.x,
-        y: p.y,
+        x: next.x,
+        y: next.y,
         width: round(shape.width * sx),
         height: round(shape.height * sy),
       };

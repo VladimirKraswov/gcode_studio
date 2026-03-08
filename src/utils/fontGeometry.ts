@@ -1,5 +1,6 @@
 import opentype from "opentype.js";
 import type { SketchText } from "../modules/cad/model/types";
+import { rotateCadPoint } from "../modules/geometry/geometryEngine";
 
 export type CadPoint = {
   x: number;
@@ -147,24 +148,6 @@ export function pathCommandsToPolylines(
   return result;
 }
 
-function rotatePoint(point: CadPoint, origin: CadPoint, angleDeg: number): CadPoint {
-  if (!angleDeg) {
-    return point;
-  }
-
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-
-  return {
-    x: round(origin.x + dx * cos - dy * sin),
-    y: round(origin.y + dx * sin + dy * cos),
-  };
-}
-
 function getTextWidthApprox(polylines: CadPoint[][]): number {
   if (polylines.length === 0) {
     return 0;
@@ -190,7 +173,6 @@ export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]>
     return [];
   }
 
-  // Инверсия Y из font-space -> CAD-space
   polylines = polylines.map((polyline) =>
     polyline.map((point) => ({
       x: point.x,
@@ -202,10 +184,8 @@ export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]>
   const ys = polylines.flat().map((p) => p.y);
 
   const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
-
-  const width = maxX - minX;
+  const width = getTextWidthApprox(polylines);
 
   let shiftX = 0;
   const align = shape.align ?? "left";
@@ -226,7 +206,7 @@ export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]>
   if ((shape.rotation ?? 0) !== 0) {
     const origin = { x: shape.x, y: shape.y };
     polylines = polylines.map((polyline) =>
-      polyline.map((point) => rotatePoint(point, origin, shape.rotation ?? 0)),
+      polyline.map((point) => rotateCadPoint(point, origin, shape.rotation ?? 0)),
     );
   }
 

@@ -1,4 +1,3 @@
-// path: /src/modules/cam/gcode/shapeToToolpath.ts
 import type {
   SketchCircle,
   SketchDocument,
@@ -9,6 +8,7 @@ import type {
   SketchText,
 } from "../../cad/model/types";
 import { getTextPolylines } from "../../cad/geometry/textGeometry";
+import { rotateCadPoint } from "../../geometry/geometryEngine";
 import type { Toolpath, ToolpathPoint } from "../types";
 
 function round(value: number): number {
@@ -28,16 +28,7 @@ function rotatePoint(
   origin: ToolpathPoint,
   angleDeg: number,
 ): ToolpathPoint {
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-
-  return {
-    x: round(origin.x + dx * cos - dy * sin),
-    y: round(origin.y + dx * sin + dy * cos),
-  };
+  return rotateCadPoint(point, origin, angleDeg);
 }
 
 function buildBandOffsets(
@@ -294,12 +285,12 @@ export function svgToToolpaths(
   const baseContours = shape.contours
     .map((contour) =>
       contour.map((point) => {
-        const p = {
+        const next = {
           x: round(shape.x + point.x * scaleX),
           y: round(shape.y + point.y * scaleY),
         };
 
-        return rotation ? rotatePoint(p, center, rotation) : p;
+        return rotation ? rotatePoint(next, center, rotation) : next;
       }),
     )
     .filter((contour) => contour.length >= 2);

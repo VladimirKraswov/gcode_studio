@@ -1,4 +1,7 @@
-// path: /src/modules/cad/model/shapeBounds.ts
+import {
+  boundsFromPoints,
+  rotateCadPoint,
+} from "../../geometry/geometryEngine";
 import type { SketchDocument, SketchShape } from "./types";
 
 export type Bounds2D = {
@@ -7,32 +10,6 @@ export type Bounds2D = {
   maxX: number;
   maxY: number;
 };
-
-function rotatePoint(
-  point: { x: number; y: number },
-  origin: { x: number; y: number },
-  angleDeg: number,
-) {
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-
-  return {
-    x: origin.x + dx * cos - dy * sin,
-    y: origin.y + dx * sin + dy * cos,
-  };
-}
-
-function boundsFromPoints(points: Array<{ x: number; y: number }>): Bounds2D {
-  return {
-    minX: Math.min(...points.map((p) => p.x)),
-    minY: Math.min(...points.map((p) => p.y)),
-    maxX: Math.max(...points.map((p) => p.x)),
-    maxY: Math.max(...points.map((p) => p.y)),
-  };
-}
 
 export function shapeBounds(shape: SketchShape): Bounds2D {
   switch (shape.type) {
@@ -56,7 +33,7 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         { x: shape.x + shape.width, y: shape.y },
         { x: shape.x + shape.width, y: shape.y + shape.height },
         { x: shape.x, y: shape.y + shape.height },
-      ].map((point) => rotatePoint(point, { x: cx, y: cy }, rotation));
+      ].map((point) => rotateCadPoint(point, { x: cx, y: cy }, rotation));
 
       return boundsFromPoints(points);
     }
@@ -69,16 +46,8 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         maxY: shape.cy + shape.radius,
       };
 
-    case "polyline": {
-      const xs = shape.points.map((p) => p.x);
-      const ys = shape.points.map((p) => p.y);
-      return {
-        minX: Math.min(...xs),
-        minY: Math.min(...ys),
-        maxX: Math.max(...xs),
-        maxY: Math.max(...ys),
-      };
-    }
+    case "polyline":
+      return boundsFromPoints(shape.points);
 
     case "text": {
       const widthApprox =
@@ -111,7 +80,7 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         { x: baseBounds.maxX, y: baseBounds.minY },
         { x: baseBounds.maxX, y: baseBounds.maxY },
         { x: baseBounds.minX, y: baseBounds.maxY },
-      ].map((point) => rotatePoint(point, { x: shape.x, y: shape.y }, rotation));
+      ].map((point) => rotateCadPoint(point, { x: shape.x, y: shape.y }, rotation));
 
       return boundsFromPoints(corners);
     }
@@ -136,7 +105,7 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         { x: shape.x + shape.width, y: shape.y },
         { x: shape.x + shape.width, y: shape.y + shape.height },
         { x: shape.x, y: shape.y + shape.height },
-      ].map((point) => rotatePoint(point, { x: cx, y: cy }, rotation));
+      ].map((point) => rotateCadPoint(point, { x: cx, y: cy }, rotation));
 
       return boundsFromPoints(corners);
     }
@@ -158,10 +127,10 @@ export function selectionBounds(shapes: SketchShape[]): Bounds2D {
 
   const bounds = shapes.map(shapeBounds);
   return {
-    minX: Math.min(...bounds.map((b) => b.minX)),
-    minY: Math.min(...bounds.map((b) => b.minY)),
-    maxX: Math.max(...bounds.map((b) => b.maxX)),
-    maxY: Math.max(...bounds.map((b) => b.maxY)),
+    minX: Math.min(...bounds.map((item) => item.minX)),
+    minY: Math.min(...bounds.map((item) => item.minY)),
+    maxX: Math.max(...bounds.map((item) => item.maxX)),
+    maxY: Math.max(...bounds.map((item) => item.maxY)),
   };
 }
 
