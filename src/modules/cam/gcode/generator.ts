@@ -57,38 +57,6 @@ function emitLinearPath(points: ToolpathPoint[], feed: number): string[] {
   return lines;
 }
 
-function normalizeVec(dx: number, dy: number) {
-  const len = Math.hypot(dx, dy);
-  if (len <= EPS) return { x: 0, y: 0 };
-  return { x: dx / len, y: dy / len };
-}
-
-function buildLeadInStart(points: ToolpathPoint[], length: number): ToolpathPoint | null {
-  if (points.length < 2 || length <= EPS) return null;
-
-  const p0 = points[0];
-  const p1 = points[1];
-  const dir = normalizeVec(p1.x - p0.x, p1.y - p0.y);
-
-  return {
-    x: Number((p0.x - dir.x * length).toFixed(3)),
-    y: Number((p0.y - dir.y * length).toFixed(3)),
-  };
-}
-
-function buildLeadOutEnd(points: ToolpathPoint[], length: number): ToolpathPoint | null {
-  if (points.length < 2 || length <= EPS) return null;
-
-  const pn1 = points[points.length - 2];
-  const pn = points[points.length - 1];
-  const dir = normalizeVec(pn.x - pn1.x, pn.y - pn1.y);
-
-  return {
-    x: Number((pn.x + dir.x * length).toFixed(3)),
-    y: Number((pn.y + dir.y * length).toFixed(3)),
-  };
-}
-
 function emitClosedPathWithTabs(
   doc: SketchDocument,
   contour: ToolpathPoint[],
@@ -142,25 +110,10 @@ function emitContourPass(
   const base2D = to2D(path);
   if (base2D.length < 2) return lines;
 
-  const leadInStart =
-    toolpath.leadIn?.enabled && toolpath.closed
-      ? buildLeadInStart(path, toolpath.leadIn.length)
-      : null;
-
-  const leadOutEnd =
-    toolpath.leadOut?.enabled && toolpath.closed
-      ? buildLeadOutEnd(path, toolpath.leadOut.length)
-      : null;
-
-  const rapidStart = leadInStart ?? base2D[0];
-  lines.push(...emitMoveTo(rapidStart.x, rapidStart.y, doc.feedRapid));
+  lines.push(...emitMoveTo(base2D[0].x, base2D[0].y));
 
   if (toolpath.useRamping && toolpath.closed && doc.toolType !== "laser") {
     lines.push(...emitToolStart(doc));
-
-    if (leadInStart) {
-      lines.push(`G1 X${fmt(base2D[0].x)} Y${fmt(base2D[0].y)} F${fmt(doc.feedCut)}`);
-    }
 
     const ramp = generateRampingPass(
       base2D,
@@ -170,16 +123,7 @@ function emitContourPass(
     );
     lines.push(...emitLinearPath(ramp, doc.feedCut));
   } else {
-    if (doc.toolType !== "laser") {
-      lines.push(...emitToolStart(doc));
-    }
-
-    if (leadInStart) {
-      lines.push(`G1 Z${fmt(passZ)} F${fmt(doc.feedPlunge)}`);
-      lines.push(`G1 X${fmt(base2D[0].x)} Y${fmt(base2D[0].y)} F${fmt(doc.feedCut)}`);
-    } else {
-      lines.push(...emitCutStart(doc, passZ));
-    }
+    lines.push(...emitCutStart(doc, passZ));
   }
 
   if (
@@ -216,10 +160,6 @@ function emitContourPass(
     }
   }
 
-  if (leadOutEnd) {
-    lines.push(`G1 X${fmt(leadOutEnd.x)} Y${fmt(leadOutEnd.y)} F${fmt(doc.feedCut)}`);
-  }
-
   lines.push(...emitCutEnd(doc));
   return lines;
 }
@@ -229,7 +169,7 @@ function emitPrebuilt3DPath(doc: SketchDocument, toolpath: Toolpath): string[] {
   const points = toolpath.points;
   if (points.length < 2) return lines;
 
-  lines.push(...emitMoveTo(points[0].x, points[0].y, doc.feedRapid));
+  lines.push(...emitMoveTo(points[0].x, points[0].y));
   lines.push(...emitToolStart(doc));
   lines.push(...emitLinearPath(points, doc.feedCut));
   lines.push(...emitToolEnd(doc));

@@ -64,10 +64,7 @@ export async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpa
 
     return {
       ...source,
-      points: source.points.map((p, idx) => {
-        const nextPoint = item.points[idx];
-        return nextPoint ? { ...p, x: nextPoint.x, y: nextPoint.y } : p;
-      }),
+      points: item.points.map((p) => ({ x: p.x, y: p.y })),
     };
   });
 

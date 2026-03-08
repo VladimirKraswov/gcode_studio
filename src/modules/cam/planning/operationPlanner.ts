@@ -148,12 +148,12 @@ function makeToolpath(
     rampTurns: options.allowRamping ? cam.ramping.turns : 0,
     stepdown: cam.stepdown ?? doc.passDepth,
     leadIn: {
-      enabled: options.kind === "contour" && options.closed,
-      length: Math.max(doc.toolDiameter, 1),
+      enabled: false,
+      length: 0,
     },
     leadOut: {
-      enabled: options.kind === "contour" && options.closed,
-      length: Math.max(doc.toolDiameter * 0.5, 0.5),
+      enabled: false,
+      length: 0,
     },
   };
 }

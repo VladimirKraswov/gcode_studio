@@ -31,8 +31,8 @@ export function emitProgramPostamble(doc: SketchDocument): string[] {
   return lines;
 }
 
-export function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
-  return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
+export function emitMoveTo(x: number, y: number): string[] {
+  return [`G0 X${fmt(x)} Y${fmt(y)}`];
 }
 
 export function emitToolStart(doc: SketchDocument): string[] {

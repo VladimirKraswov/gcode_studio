@@ -89,7 +89,6 @@ function generateParallelPocketForRegion(
 ): CadPoint[][] {
   if (outer.length < 3 || step <= EPS) return [];
 
-  // angle пока оставлен в API, но без поворота системы координат
   void angle;
 
   const bounds = boundsOf(outer);
@@ -137,28 +136,6 @@ function generateParallelPocketForRegion(
   }
 
   return connectZigzagSegments(segments);
-}
-
-/**
- * Старый API — для совместимости.
- */
-export function generateParallelPocket(
-  polygon: CadPoint[],
-  step: number,
-  angle = 0
-): CadPoint[][] {
-  return generateParallelPocketForRegion(normalizeClosed(polygon), [], step, angle);
-}
-
-/**
- * Старый API — для совместимости.
- */
-export function generateOffsetPocket(
-  polygon: CadPoint[],
-  step: number
-): CadPoint[][] {
-  const toolRadius = step / 2;
-  return buildPocketOffsets(normalizeClosed(polygon), toolRadius, step, "round", 4, true);
 }
 
 export function generateOffsetPocketWithHoles(
@@ -214,7 +191,6 @@ export function generateBestPocket(
   const classified = classifyContours(normalized);
   const hasHoles = Array.from(classified.holes.values()).some((items) => items.length > 0);
 
-  // Для контуров с отверстиями zigzag обычно безопаснее.
   if (hasHoles) {
     const parallel = generateParallelPocketWithHoles(normalized, step, angle);
     if (parallel.length > 0) return parallel;
