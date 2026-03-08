@@ -111,6 +111,7 @@ export type UnitsMode = "mm" | "inch";
 export type SpindleDirection = "cw" | "ccw";
 
 export type ConstraintEdge = "left" | "right" | "top" | "bottom";
+export type MirrorAxis = "x" | "y";
 
 export type SketchDistanceConstraintTarget =
   | {

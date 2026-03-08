@@ -25,6 +25,7 @@ import {
 } from "../geometry/draftGeometry";
 import { addShape } from "../model/document";
 import {
+  cloneShape,
   createArcShape,
   createCircleShape,
   createLineShape,
@@ -33,9 +34,10 @@ import {
   createSvgShape,
   createTextShape,
 } from "../model/shapeFactory";
-import { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
+import { mirrorShape, moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
 import type {
   ConstraintEdge,
+  MirrorAxis,
   SketchDocument,
   SketchPolylinePoint,
   SketchShape,
@@ -72,6 +74,7 @@ import {
   upsertConstraintForEdge,
 } from "../model/constraints";
 import { distance } from "../geometry/distance";
+import { createId } from "../model/ids";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -90,10 +93,13 @@ type UseCadEditorParams = {
 
 type PanState = {
   pointerId: number;
+  button: number;
   startClientX: number;
   startClientY: number;
   startOffsetX: number;
   startOffsetY: number;
+  clearSelectionOnPointerUp: boolean;
+  moved: boolean;
 } | null;
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
@@ -276,7 +282,7 @@ export function useCadEditor({
 }: UseCadEditorParams) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const [tool, setTool] = useState<SketchTool>("select");
+  const [tool, setToolState] = useState<SketchTool>("select");
   const [draft, setDraft] = useState<DraftShape>(null);
   const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
   const [polylineHoverPoint, setPolylineHoverPoint] =
@@ -293,6 +299,24 @@ export function useCadEditor({
     useState<ConstraintLabelDragState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  function setTool(nextTool: SketchTool) {
+    setToolState(nextTool);
+
+    if (nextTool !== "select") {
+      onSelectionChangeSilently(clearSelection());
+      setIsSelectionHover(false);
+    }
+  }
+
+  function focusCreatedShape(shapeId: string) {
+    setToolState("select");
+    onSelectionChange(selectOnly(shapeId));
+    setDraft(null);
+    setPolylineDraft([]);
+    setPolylineHoverPoint(null);
+    setIsSelectionHover(false);
+  }
 
   useEffect(() => {
     if (tool !== "polyline") {
@@ -330,10 +354,7 @@ export function useCadEditor({
           );
 
           setDocument((prev) => addShape(prev, shape));
-          onSelectionChange(selectOnly(shape.id));
-          setPolylineDraft([]);
-          setPolylineHoverPoint(null);
-          setIsSelectionHover(false);
+          focusCreatedShape(shape.id);
         }
         return;
       }
@@ -371,7 +392,10 @@ export function useCadEditor({
     return button === 1 || button === 2;
   }
 
-  function startPan(event: React.PointerEvent<SVGElement | SVGSVGElement>) {
+  function startPan(
+    event: React.PointerEvent<SVGElement | SVGSVGElement>,
+    options?: { clearSelectionOnPointerUp?: boolean },
+  ) {
     event.preventDefault();
     setIsSelectionHover(false);
 
@@ -379,10 +403,13 @@ export function useCadEditor({
 
     setPanState({
       pointerId: event.pointerId,
+      button: event.button,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startOffsetX: view.offsetX,
       startOffsetY: view.offsetY,
+      clearSelectionOnPointerUp: options?.clearSelectionOnPointerUp ?? false,
+      moved: false,
     });
   }
 
@@ -422,8 +449,7 @@ export function useCadEditor({
 
       checkpointHistory();
       setDocument((prev) => addShape(prev, shape));
-      onSelectionChange(selectOnly(shape.id));
-      setIsSelectionHover(false);
+      focusCreatedShape(shape.id);
     },
   });
 
@@ -443,6 +469,17 @@ export function useCadEditor({
     setIsSelectionHover(false);
   }
 
+  function cancelCurrentDraft() {
+    setDraft(null);
+    setPolylineDraft([]);
+    setPolylineHoverPoint(null);
+    setConstraintCreateState(null);
+    setConstraintLabelDragState(null);
+    setTransformState(null);
+    setDragState(null);
+    setIsSelectionHover(false);
+  }
+
   function addRectangle(x: number, y: number, width: number, height: number) {
     if (width < 1 || height < 1) return;
 
@@ -455,8 +492,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addCircle(cx: number, cy: number, radius: number) {
@@ -470,8 +506,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addLine(x1: number, y1: number, x2: number, y2: number) {
@@ -486,8 +521,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addArc(
@@ -511,8 +545,7 @@ export function useCadEditor({
     });
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addText(x: number, y: number) {
@@ -530,8 +563,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function commitPolyline() {
@@ -548,9 +580,74 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setPolylineDraft([]);
-    setPolylineHoverPoint(null);
+    focusCreatedShape(shape.id);
+  }
+
+  function cloneSelected() {
+    const selectedIds = getSelectionShapeIds(document, selection);
+    if (selectedIds.length === 0) return;
+
+    const selectedSet = new Set(selectedIds);
+    const groupIds = Array.from(
+      new Set(
+        document.shapes
+          .filter((shape) => selectedSet.has(shape.id))
+          .map((shape) => shape.groupId)
+          .filter(Boolean),
+      ),
+    ) as string[];
+
+    const groupMap = new Map<string, string>();
+    groupIds.forEach((groupId) => groupMap.set(groupId, createId("group")));
+
+    const newGroups = document.groups
+      .filter((group) => groupMap.has(group.id))
+      .map((group) => ({
+        ...group,
+        id: groupMap.get(group.id)!,
+        name: `${group.name} копия`,
+      }));
+
+    const clones = document.shapes
+      .filter((shape) => selectedSet.has(shape.id))
+      .map((shape) => {
+        const clone = cloneShape(shape);
+        const moved = moveShape(clone, 10, 10);
+        return {
+          ...moved,
+          name: `${shape.name} копия`,
+          groupId: shape.groupId ? (groupMap.get(shape.groupId) ?? null) : null,
+        };
+      });
+
+    checkpointHistory();
+    setDocument((prev) => ({
+      ...prev,
+      groups: [...prev.groups, ...newGroups],
+      shapes: [...prev.shapes, ...clones],
+    }));
+    onSelectionChange(selectOnly(clones[0]?.id ?? null));
+  }
+
+  function mirrorSelected(axis: MirrorAxis) {
+    const selectionIds = getSelectionShapeIds(document, selection);
+    if (selectionIds.length === 0) return;
+
+    const bounds = getSelectionBox(document, selection);
+    const origin = {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+
+    const idSet = new Set(selectionIds);
+
+    checkpointHistory();
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        idSet.has(shape.id) ? mirrorShape(shape, axis, origin) : shape,
+      ),
+    }));
     setIsSelectionHover(false);
   }
 
@@ -623,8 +720,21 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
+    if (event.button === 2 && (draft || polylineDraft.length > 0)) {
+      event.preventDefault();
+      cancelCurrentDraft();
+      return;
+    }
+
     if (isPanMouseButton(event.button)) {
-      startPan(event);
+      const shouldClearSelectionOnPointerUp =
+        tool === "select" &&
+        event.button === 2 &&
+        selection.ids.length > 0;
+
+      startPan(event, {
+        clearSelectionOnPointerUp: shouldClearSelectionOnPointerUp,
+      });
       return;
     }
 
@@ -735,11 +845,19 @@ export function useCadEditor({
 
   function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (panState && panState.pointerId === event.pointerId) {
+      const moved =
+        Math.abs(event.clientX - panState.startClientX) > 3 ||
+        Math.abs(event.clientY - panState.startClientY) > 3;
+
       onViewChangeSilently((prev) => ({
         ...prev,
         offsetX: panState.startOffsetX + (event.clientX - panState.startClientX),
         offsetY: panState.startOffsetY + (event.clientY - panState.startClientY),
       }));
+
+      if (moved && !panState.moved) {
+        setPanState((prev) => (prev ? { ...prev, moved: true } : prev));
+      }
       return;
     }
 
@@ -937,6 +1055,23 @@ export function useCadEditor({
       setDraft(null);
     }
 
+    if (panState && panState.pointerId === event.pointerId) {
+      const shouldClearSelection =
+        panState.clearSelectionOnPointerUp &&
+        !panState.moved &&
+        tool === "select";
+
+      setDragState(finishDrag());
+      setPanState(null);
+      setTransformState(null);
+      setIsSelectionHover(false);
+
+      if (shouldClearSelection) {
+        onSelectionChangeSilently(clearSelection());
+      }
+      return;
+    }
+
     setDragState(finishDrag());
     setPanState(null);
     setTransformState(null);
@@ -954,6 +1089,13 @@ export function useCadEditor({
     }
 
     handleCanvasPointerUp(event);
+  }
+
+  function handleCanvasContextMenu(event: React.MouseEvent<SVGSVGElement>) {
+    if (draft || polylineDraft.length > 0) {
+      event.preventDefault();
+      cancelCurrentDraft();
+    }
   }
 
   function handleCanvasDoubleClick(event: React.MouseEvent<SVGSVGElement>) {
@@ -1069,12 +1211,17 @@ export function useCadEditor({
   }
 
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
-    event.stopPropagation();
+    if (tool !== "select") {
+      return;
+    }
 
     if (isPanMouseButton(event.button)) {
+      event.stopPropagation();
       startPan(event);
       return;
     }
+
+    event.stopPropagation();
 
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
@@ -1094,7 +1241,7 @@ export function useCadEditor({
       onSelectionChangeSilently(nextSelection);
     }
 
-    if (tool !== "select" || event.button !== 0) {
+    if (event.button !== 0) {
       return;
     }
 
@@ -1296,6 +1443,9 @@ export function useCadEditor({
     view,
     resetView,
     commitPolyline,
+    cancelCurrentDraft,
+    cloneSelected,
+    mirrorSelected,
     deleteSelected,
     deleteShape,
     renameShape,
@@ -1307,6 +1457,7 @@ export function useCadEditor({
     handleCanvasPointerMove,
     handleCanvasPointerUp,
     handleCanvasPointerLeave,
+    handleCanvasContextMenu,
     handleCanvasDoubleClick,
     handleCanvasWheel,
     bindSelectStart,

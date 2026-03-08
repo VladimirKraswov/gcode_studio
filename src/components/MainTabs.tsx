@@ -8,9 +8,9 @@ type MainTabsProps = {
 };
 
 const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
-  { id: "view", label: "3D Preview", icon: <FiEye size={16} /> },
+  { id: "view", label: "3D-превью", icon: <FiEye size={16} /> },
   { id: "gcode", label: "G-code", icon: <FiCode size={16} /> },
-  { id: "edit", label: "Editor", icon: <FiEdit3 size={16} /> },
+  { id: "edit", label: "Редактор", icon: <FiEdit3 size={16} /> },
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {

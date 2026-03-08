@@ -7,6 +7,7 @@ type EditStatusBarProps = {
   isDragging: boolean;
   isPanning: boolean;
   isTransforming: boolean;
+  hasDraft: boolean;
 };
 
 export function EditStatusBar({
@@ -15,6 +16,7 @@ export function EditStatusBar({
   isDragging,
   isPanning,
   isTransforming,
+  hasDraft,
 }: EditStatusBarProps) {
   const interactionLabel = isTransforming
     ? "Трансформация / ограничение"
@@ -38,12 +40,15 @@ export function EditStatusBar({
                       ? "Рисование дуги"
                       : "Редактирование";
 
-  const hint =
-    tool === "arc"
+  const hint = hasDraft
+    ? "ПКМ — отменить текущее рисование."
+    : tool === "arc"
       ? "Дуга: 1-й клик — центр, 2-й — старт/радиус, 3-й — конец дуги."
       : tool === "polyline"
         ? "Полилиния: кликай по точкам, Enter или двойной клик — завершить, Escape — отменить."
-        : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
+        : tool === "select"
+          ? "Выделение доступно только в режиме выбора. Во время рисования клик проходит сквозь существующие объекты."
+          : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
 
   return (
     <div

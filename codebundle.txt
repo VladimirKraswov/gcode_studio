@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-08T10:34:07.303Z
+generated: 2026-03-08T11:42:59.147Z
 
 
 
@@ -1458,6 +1458,7 @@ export function EditTab({
 
   const canGroupSelected = selection.ids.length > 1;
   const canUngroupSelected = Boolean(primaryShape?.groupId);
+  const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
 
   return (
     <>
@@ -1478,6 +1479,7 @@ export function EditTab({
           tool={editor.tool}
           onToolChange={editor.setTool}
           onCommitPolyline={editor.commitPolyline}
+          onCancelDraft={editor.cancelCurrentDraft}
           onDeleteSelected={editor.deleteSelected}
           onResetView={editor.resetView}
           onGenerate={editor.handleGenerateClick}
@@ -1489,8 +1491,12 @@ export function EditTab({
           onImportSvg={editor.startSvgImport}
           onGroupSelected={editor.groupSelected}
           onUngroupSelected={editor.ungroupSelected}
+          onCloneSelected={editor.cloneSelected}
+          onMirrorSelected={editor.mirrorSelected}
           canGroupSelected={canGroupSelected}
           canUngroupSelected={canUngroupSelected}
+          hasSelection={selection.ids.length > 0}
+          hasDraft={hasDraft}
         />
 
         {editor.tool === "text" && (
@@ -1542,6 +1548,7 @@ export function EditTab({
                 view={editor.view}
                 draft={editor.draft}
                 polylineDraft={editor.polylineDraft}
+                polylineHoverPoint={editor.polylineHoverPoint}
                 textPreviewMap={editor.textPreviewMap}
                 tool={editor.tool}
                 isDragging={editor.isDragging}
@@ -1553,7 +1560,9 @@ export function EditTab({
                 onPointerMove={editor.handleCanvasPointerMove}
                 onPointerUp={editor.handleCanvasPointerUp}
                 onPointerLeave={editor.handleCanvasPointerLeave}
+                onDoubleClick={editor.handleCanvasDoubleClick}
                 onWheel={editor.handleCanvasWheel}
+                onContextMenu={editor.handleCanvasContextMenu}
                 onShapePointerDown={editor.bindSelectStart}
                 onSelectionPointerDown={editor.bindSelectionDragStart}
                 onScaleHandlePointerDown={editor.bindScaleHandleStart}
@@ -1572,6 +1581,7 @@ export function EditTab({
           isDragging={editor.isDragging}
           isPanning={editor.isPanning}
           isTransforming={editor.isTransforming}
+          hasDraft={hasDraft}
         />
       </div>
 
@@ -2880,9 +2890,9 @@ type MainTabsProps = {
 };
 
 const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
-  { id: "view", label: "3D Preview", icon: <FiEye size={16} /> },
+  { id: "view", label: "3D-превью", icon: <FiEye size={16} /> },
   { id: "gcode", label: "G-code", icon: <FiCode size={16} /> },
-  { id: "edit", label: "Editor", icon: <FiEdit3 size={16} /> },
+  { id: "edit", label: "Редактор", icon: <FiEdit3 size={16} /> },
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
@@ -4769,6 +4779,7 @@ type CadCanvasProps = {
   view: ViewTransform;
   draft: DraftShape;
   polylineDraft: SketchPolylinePoint[];
+  polylineHoverPoint: SketchPolylinePoint | null;
   textPreviewMap: Record<string, CadPoint[][]>;
   tool: SketchTool;
   isDragging: boolean;
@@ -4781,7 +4792,9 @@ type CadCanvasProps = {
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerLeave: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onDoubleClick?: (event: React.MouseEvent<SVGSVGElement>) => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
+  onContextMenu?: (event: React.MouseEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
   onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
   onScaleHandlePointerDown?: (
@@ -4806,6 +4819,7 @@ export function CadCanvas({
   view,
   draft,
   polylineDraft,
+  polylineHoverPoint,
   textPreviewMap,
   tool,
   isDragging,
@@ -4818,7 +4832,9 @@ export function CadCanvas({
   onPointerMove,
   onPointerUp,
   onPointerLeave,
+  onDoubleClick,
   onWheel,
+  onContextMenu,
   onShapePointerDown,
   onSelectionPointerDown,
   onScaleHandlePointerDown,
@@ -4827,13 +4843,16 @@ export function CadCanvas({
   onConstraintLabelPointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+  const showSelection = tool === "select";
 
   const selectedIds = new Set(
-    primary?.groupId
-      ? document.shapes
-          .filter((shape) => shape.groupId === primary.groupId)
-          .map((shape) => shape.id)
-      : selection.ids,
+    showSelection
+      ? primary?.groupId
+        ? document.shapes
+            .filter((shape) => shape.groupId === primary.groupId)
+            .map((shape) => shape.id)
+        : selection.ids
+      : [],
   );
 
   function resolveCanvasCursor() {
@@ -4855,8 +4874,12 @@ export function CadCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
+      onDoubleClick={onDoubleClick}
       onWheel={onWheel}
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu?.(event);
+      }}
       style={{
         display: "block",
         width: "100%",
@@ -4882,34 +4905,40 @@ export function CadCanvas({
         />
       ))}
 
-      <SelectionOverlay
-        document={document}
-        selection={selection}
-        documentHeight={document.height}
-        view={view}
-        onPointerDown={onSelectionPointerDown}
-        onScaleHandlePointerDown={onScaleHandlePointerDown}
-        onRotateHandlePointerDown={onRotateHandlePointerDown}
-        isDragging={isDragging || isTransforming}
-        isHover={isSelectionHover}
-        onHoverChange={onSelectionHoverChange}
-      />
-
-      {tool === "select" && selection.primaryId && onConstraintEdgeHandlePointerDown && onConstraintLabelPointerDown && (
-        <CadConstraintOverlay
+      {showSelection && (
+        <SelectionOverlay
           document={document}
           selection={selection}
           documentHeight={document.height}
           view={view}
-          constraintDraft={constraintDraft}
-          onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
-          onConstraintLabelPointerDown={onConstraintLabelPointerDown}
+          onPointerDown={onSelectionPointerDown}
+          onScaleHandlePointerDown={onScaleHandlePointerDown}
+          onRotateHandlePointerDown={onRotateHandlePointerDown}
+          isDragging={isDragging || isTransforming}
+          isHover={isSelectionHover}
+          onHoverChange={onSelectionHoverChange}
         />
       )}
+
+      {tool === "select" &&
+        selection.primaryId &&
+        onConstraintEdgeHandlePointerDown &&
+        onConstraintLabelPointerDown && (
+          <CadConstraintOverlay
+            document={document}
+            selection={selection}
+            documentHeight={document.height}
+            view={view}
+            constraintDraft={constraintDraft}
+            onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
+            onConstraintLabelPointerDown={onConstraintLabelPointerDown}
+          />
+        )}
 
       <DraftOverlay
         draft={draft}
         polylineDraft={polylineDraft}
+        polylineHoverPoint={polylineHoverPoint}
         documentHeight={document.height}
         view={view}
       />
@@ -5476,12 +5505,14 @@ import {
   getArcPreviewPoints,
   getCircleFromDraft,
   getLineFromDraft,
+  getPolylinePreviewPoints,
   getRectangleFromDraft,
 } from "../geometry/draftGeometry";
 
 type DraftOverlayProps = {
   draft: DraftShape;
   polylineDraft: SketchPolylinePoint[];
+  polylineHoverPoint: SketchPolylinePoint | null;
   documentHeight: number;
   view: ViewTransform;
 };
@@ -5489,26 +5520,64 @@ type DraftOverlayProps = {
 export function DraftOverlay({
   draft,
   polylineDraft,
+  polylineHoverPoint,
   documentHeight,
   view,
 }: DraftOverlayProps) {
+  const polylinePreview = getPolylinePreviewPoints(
+    polylineDraft,
+    polylineHoverPoint,
+  );
+
   return (
     <>
-      {polylineDraft.length > 1 && (
-        <polyline
-          points={polylineDraft
-            .map((point) => {
-              const p = cadToScreenPoint(point, documentHeight, view);
-              return `${p.x},${p.y}`;
-            })
-            .join(" ")}
-          fill="none"
-          stroke="#ef4444"
-          strokeWidth={1.5}
-          strokeDasharray="6 4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      {polylinePreview.length > 0 && (
+        <>
+          {polylinePreview.length > 1 && (
+            <polyline
+              points={polylinePreview
+                .map((point) => {
+                  const p = cadToScreenPoint(point, documentHeight, view);
+                  return `${p.x},${p.y}`;
+                })
+                .join(" ")}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {polylineDraft.map((point, index) => {
+            const p = cadToScreenPoint(point, documentHeight, view);
+            return (
+              <circle
+                key={`poly-draft-${index}`}
+                cx={p.x}
+                cy={p.y}
+                r={3.5}
+                fill="#ffffff"
+                stroke="#ef4444"
+                strokeWidth={1.5}
+              />
+            );
+          })}
+
+          {polylineHoverPoint && polylineDraft.length > 0 && (() => {
+            const p = cadToScreenPoint(polylineHoverPoint, documentHeight, view);
+            return (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={3}
+                fill="#ef4444"
+                opacity={0.85}
+              />
+            );
+          })()}
+        </>
       )}
 
       {draft?.type === "rectangle" && (() => {
@@ -6495,6 +6564,7 @@ import {
   angleDegFromCenter,
   sampleArcPoints,
 } from "../../geometry/geometryEngine";
+import type { SketchPolylinePoint } from "../model/types";
 
 export type RectangleDraft = {
   type: "rectangle";
@@ -6625,6 +6695,29 @@ export function getArcPreviewPoints(draft: ArcDraft) {
     arc.clockwise,
     48,
   );
+}
+
+export function getPolylinePreviewPoints(
+  points: SketchPolylinePoint[],
+  hoverPoint: SketchPolylinePoint | null,
+): SketchPolylinePoint[] {
+  if (points.length === 0) {
+    return [];
+  }
+
+  if (!hoverPoint) {
+    return points;
+  }
+
+  const last = points[points.length - 1];
+  if (
+    Math.abs(last.x - hoverPoint.x) < 0.001 &&
+    Math.abs(last.y - hoverPoint.y) < 0.001
+  ) {
+    return points;
+  }
+
+  return [...points, hoverPoint];
 }
 
 
@@ -7224,7 +7317,7 @@ export { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
 
 path: /src/modules/cad/hooks/useCadEditor.ts
 ----------------------------------------
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   appendPolylinePoint,
   finishDrag,
@@ -7251,6 +7344,7 @@ import {
 } from "../geometry/draftGeometry";
 import { addShape } from "../model/document";
 import {
+  cloneShape,
   createArcShape,
   createCircleShape,
   createLineShape,
@@ -7259,9 +7353,10 @@ import {
   createSvgShape,
   createTextShape,
 } from "../model/shapeFactory";
-import { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
+import { mirrorShape, moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
 import type {
   ConstraintEdge,
+  MirrorAxis,
   SketchDocument,
   SketchPolylinePoint,
   SketchShape,
@@ -7292,13 +7387,13 @@ import { selectionBounds, groupBounds, shapeBounds, type Bounds2D } from "../mod
 import type { CadPanButtonMode } from "../../../utils/settings";
 import {
   edgeAxis,
-  getConstraintTargetBounds,
   getDistanceBetweenEdges,
   getSheetBounds,
   updateConstraint,
   upsertConstraintForEdge,
 } from "../model/constraints";
 import { distance } from "../geometry/distance";
+import { createId } from "../model/ids";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -7317,10 +7412,13 @@ type UseCadEditorParams = {
 
 type PanState = {
   pointerId: number;
+  button: number;
   startClientX: number;
   startClientY: number;
   startOffsetX: number;
   startOffsetY: number;
+  clearSelectionOnPointerUp: boolean;
+  moved: boolean;
 } | null;
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
@@ -7379,6 +7477,15 @@ type ConstraintLabelDragState = {
 
 function angleBetween(center: SketchPolylinePoint, point: SketchPolylinePoint): number {
   return Math.atan2(point.y - center.y, point.x - center.x);
+}
+
+function isSamePoint(
+  a: SketchPolylinePoint | null | undefined,
+  b: SketchPolylinePoint | null | undefined,
+  epsilon = 0.001,
+): boolean {
+  if (!a || !b) return false;
+  return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
 }
 
 function getSelectionShapeIds(
@@ -7494,9 +7601,11 @@ export function useCadEditor({
 }: UseCadEditorParams) {
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const [tool, setTool] = useState<SketchTool>("select");
+  const [tool, setToolState] = useState<SketchTool>("select");
   const [draft, setDraft] = useState<DraftShape>(null);
   const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
+  const [polylineHoverPoint, setPolylineHoverPoint] =
+    useState<SketchPolylinePoint | null>(null);
   const [textTool, setTextTool] = useState(createDefaultTextToolState());
   const [isGenerating, setIsGenerating] = useState(false);
   const [dragState, setDragState] = useState<DragState>(null);
@@ -7510,6 +7619,86 @@ export function useCadEditor({
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
 
+  function setTool(nextTool: SketchTool) {
+    setToolState(nextTool);
+
+    if (nextTool !== "select") {
+      onSelectionChangeSilently(clearSelection());
+      setIsSelectionHover(false);
+    }
+  }
+
+  function focusCreatedShape(shapeId: string) {
+    setToolState("select");
+    onSelectionChange(selectOnly(shapeId));
+    setDraft(null);
+    setPolylineDraft([]);
+    setPolylineHoverPoint(null);
+    setIsSelectionHover(false);
+  }
+
+  useEffect(() => {
+    if (tool !== "polyline") {
+      setPolylineHoverPoint(null);
+    }
+  }, [tool]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+
+      const isTypingTarget =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target?.isContentEditable;
+
+      if (isTypingTarget) {
+        return;
+      }
+
+      if (tool !== "polyline") {
+        return;
+      }
+
+      if (event.key === "Enter") {
+        if (polylineDraft.length >= 2) {
+          event.preventDefault();
+          checkpointHistory();
+          const shape = createPolylineShape(
+            `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
+            polylineDraft,
+            false,
+          );
+
+          setDocument((prev) => addShape(prev, shape));
+          focusCreatedShape(shape.id);
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (polylineDraft.length > 0) {
+          event.preventDefault();
+          setPolylineDraft([]);
+          setPolylineHoverPoint(null);
+          setIsSelectionHover(false);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    checkpointHistory,
+    document.shapes,
+    onSelectionChange,
+    polylineDraft,
+    setDocument,
+    tool,
+  ]);
+
   function isPanMouseButton(button: number): boolean {
     if (panButtonMode === "middle") {
       return button === 1;
@@ -7522,7 +7711,10 @@ export function useCadEditor({
     return button === 1 || button === 2;
   }
 
-  function startPan(event: React.PointerEvent<SVGElement | SVGSVGElement>) {
+  function startPan(
+    event: React.PointerEvent<SVGElement | SVGSVGElement>,
+    options?: { clearSelectionOnPointerUp?: boolean },
+  ) {
     event.preventDefault();
     setIsSelectionHover(false);
 
@@ -7530,10 +7722,13 @@ export function useCadEditor({
 
     setPanState({
       pointerId: event.pointerId,
+      button: event.button,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startOffsetX: view.offsetX,
       startOffsetY: view.offsetY,
+      clearSelectionOnPointerUp: options?.clearSelectionOnPointerUp ?? false,
+      moved: false,
     });
   }
 
@@ -7573,8 +7768,7 @@ export function useCadEditor({
 
       checkpointHistory();
       setDocument((prev) => addShape(prev, shape));
-      onSelectionChange(selectOnly(shape.id));
-      setIsSelectionHover(false);
+      focusCreatedShape(shape.id);
     },
   });
 
@@ -7594,6 +7788,17 @@ export function useCadEditor({
     setIsSelectionHover(false);
   }
 
+  function cancelCurrentDraft() {
+    setDraft(null);
+    setPolylineDraft([]);
+    setPolylineHoverPoint(null);
+    setConstraintCreateState(null);
+    setConstraintLabelDragState(null);
+    setTransformState(null);
+    setDragState(null);
+    setIsSelectionHover(false);
+  }
+
   function addRectangle(x: number, y: number, width: number, height: number) {
     if (width < 1 || height < 1) return;
 
@@ -7606,8 +7811,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addCircle(cx: number, cy: number, radius: number) {
@@ -7621,8 +7825,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addLine(x1: number, y1: number, x2: number, y2: number) {
@@ -7637,8 +7840,7 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addArc(
@@ -7662,8 +7864,7 @@ export function useCadEditor({
     });
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function addText(x: number, y: number) {
@@ -7681,13 +7882,13 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setIsSelectionHover(false);
+    focusCreatedShape(shape.id);
   }
 
   function commitPolyline() {
     if (polylineDraft.length < 2) {
       setPolylineDraft([]);
+      setPolylineHoverPoint(null);
       return;
     }
 
@@ -7698,8 +7899,74 @@ export function useCadEditor({
     );
 
     setDocument((prev) => addShape(prev, shape));
-    onSelectionChange(selectOnly(shape.id));
-    setPolylineDraft([]);
+    focusCreatedShape(shape.id);
+  }
+
+  function cloneSelected() {
+    const selectedIds = getSelectionShapeIds(document, selection);
+    if (selectedIds.length === 0) return;
+
+    const selectedSet = new Set(selectedIds);
+    const groupIds = Array.from(
+      new Set(
+        document.shapes
+          .filter((shape) => selectedSet.has(shape.id))
+          .map((shape) => shape.groupId)
+          .filter(Boolean),
+      ),
+    ) as string[];
+
+    const groupMap = new Map<string, string>();
+    groupIds.forEach((groupId) => groupMap.set(groupId, createId("group")));
+
+    const newGroups = document.groups
+      .filter((group) => groupMap.has(group.id))
+      .map((group) => ({
+        ...group,
+        id: groupMap.get(group.id)!,
+        name: `${group.name} копия`,
+      }));
+
+    const clones = document.shapes
+      .filter((shape) => selectedSet.has(shape.id))
+      .map((shape) => {
+        const clone = cloneShape(shape);
+        const moved = moveShape(clone, 10, 10);
+        return {
+          ...moved,
+          name: `${shape.name} копия`,
+          groupId: shape.groupId ? (groupMap.get(shape.groupId) ?? null) : null,
+        };
+      });
+
+    checkpointHistory();
+    setDocument((prev) => ({
+      ...prev,
+      groups: [...prev.groups, ...newGroups],
+      shapes: [...prev.shapes, ...clones],
+    }));
+    onSelectionChange(selectOnly(clones[0]?.id ?? null));
+  }
+
+  function mirrorSelected(axis: MirrorAxis) {
+    const selectionIds = getSelectionShapeIds(document, selection);
+    if (selectionIds.length === 0) return;
+
+    const bounds = getSelectionBox(document, selection);
+    const origin = {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+
+    const idSet = new Set(selectionIds);
+
+    checkpointHistory();
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        idSet.has(shape.id) ? mirrorShape(shape, axis, origin) : shape,
+      ),
+    }));
     setIsSelectionHover(false);
   }
 
@@ -7734,9 +8001,9 @@ export function useCadEditor({
 
     const sheetBounds = getSheetBounds(document);
     for (const edge of compatibleEdges) {
-      const distance = edgeDistanceToPoint(point, sheetBounds, edge);
-      if (distance <= tolerance) {
-        const score = distance;
+      const dist = edgeDistanceToPoint(point, sheetBounds, edge);
+      if (dist <= tolerance) {
+        const score = dist;
         if (!best || score < best.score) {
           best = {
             target: { kind: "sheet", edge },
@@ -7751,9 +8018,9 @@ export function useCadEditor({
 
       const bounds = shapeBounds(shape);
       for (const edge of compatibleEdges) {
-        const distance = edgeDistanceToPoint(point, bounds, edge);
-        if (distance <= tolerance) {
-          const score = distance;
+        const dist = edgeDistanceToPoint(point, bounds, edge);
+        if (dist <= tolerance) {
+          const score = dist;
           if (!best || score < best.score) {
             best = {
               target: {
@@ -7772,8 +8039,21 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
+    if (event.button === 2 && (draft || polylineDraft.length > 0)) {
+      event.preventDefault();
+      cancelCurrentDraft();
+      return;
+    }
+
     if (isPanMouseButton(event.button)) {
-      startPan(event);
+      const shouldClearSelectionOnPointerUp =
+        tool === "select" &&
+        event.button === 2 &&
+        selection.ids.length > 0;
+
+      startPan(event, {
+        clearSelectionOnPointerUp: shouldClearSelectionOnPointerUp,
+      });
       return;
     }
 
@@ -7858,7 +8138,14 @@ export function useCadEditor({
     }
 
     if (tool === "polyline") {
-      setPolylineDraft((prev) => appendPolylinePoint(prev, { x: cad.x, y: cad.y }));
+      setPolylineDraft((prev) => {
+        const last = prev[prev.length - 1];
+        if (isSamePoint(last, cad)) {
+          return prev;
+        }
+        return appendPolylinePoint(prev, { x: cad.x, y: cad.y });
+      });
+      setPolylineHoverPoint(cad);
       setIsSelectionHover(false);
       return;
     }
@@ -7877,17 +8164,29 @@ export function useCadEditor({
 
   function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
     if (panState && panState.pointerId === event.pointerId) {
+      const moved =
+        Math.abs(event.clientX - panState.startClientX) > 3 ||
+        Math.abs(event.clientY - panState.startClientY) > 3;
+
       onViewChangeSilently((prev) => ({
         ...prev,
         offsetX: panState.startOffsetX + (event.clientX - panState.startClientX),
         offsetY: panState.startOffsetY + (event.clientY - panState.startClientY),
       }));
+
+      if (moved && !panState.moved) {
+        setPanState((prev) => (prev ? { ...prev, moved: true } : prev));
+      }
       return;
     }
 
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
     const cad = normalizePoint(rawCad);
+
+    if (tool === "polyline") {
+      setPolylineHoverPoint(cad);
+    }
 
     if (
       constraintCreateState &&
@@ -8020,7 +8319,7 @@ export function useCadEditor({
             document.shapes.find((item) => item.id === target.shapeId)!,
           );
 
-    const distance = getDistanceBetweenEdges(
+    const dist = getDistanceBetweenEdges(
       sourceBounds,
       constraintCreateState.edge,
       targetBounds,
@@ -8037,7 +8336,7 @@ export function useCadEditor({
             ? { kind: "sheet" }
             : { kind: "shape", shapeId: target.shapeId },
         targetEdge: target.edge,
-        distance,
+        distance: dist,
       }),
     );
 
@@ -8075,6 +8374,23 @@ export function useCadEditor({
       setDraft(null);
     }
 
+    if (panState && panState.pointerId === event.pointerId) {
+      const shouldClearSelection =
+        panState.clearSelectionOnPointerUp &&
+        !panState.moved &&
+        tool === "select";
+
+      setDragState(finishDrag());
+      setPanState(null);
+      setTransformState(null);
+      setIsSelectionHover(false);
+
+      if (shouldClearSelection) {
+        onSelectionChangeSilently(clearSelection());
+      }
+      return;
+    }
+
     setDragState(finishDrag());
     setPanState(null);
     setTransformState(null);
@@ -8082,12 +8398,39 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerLeave(event: React.PointerEvent<SVGSVGElement>) {
+    if (tool === "polyline") {
+      setPolylineHoverPoint(null);
+    }
+
     if (draft?.type === "arc") {
       setPanState(null);
       return;
     }
 
     handleCanvasPointerUp(event);
+  }
+
+  function handleCanvasContextMenu(event: React.MouseEvent<SVGSVGElement>) {
+    if (draft || polylineDraft.length > 0) {
+      event.preventDefault();
+      cancelCurrentDraft();
+    }
+  }
+
+  function handleCanvasDoubleClick(event: React.MouseEvent<SVGSVGElement>) {
+    if (tool !== "polyline") {
+      return;
+    }
+
+    if (polylineDraft.length < 2) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    checkpointHistory();
+    commitPolyline();
   }
 
   function handleCanvasWheel(event: React.WheelEvent<SVGSVGElement>) {
@@ -8187,12 +8530,17 @@ export function useCadEditor({
   }
 
   function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
-    event.stopPropagation();
+    if (tool !== "select") {
+      return;
+    }
 
     if (isPanMouseButton(event.button)) {
+      event.stopPropagation();
       startPan(event);
       return;
     }
+
+    event.stopPropagation();
 
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
@@ -8212,7 +8560,7 @@ export function useCadEditor({
       onSelectionChangeSilently(nextSelection);
     }
 
-    if (tool !== "select" || event.button !== 0) {
+    if (event.button !== 0) {
       return;
     }
 
@@ -8406,6 +8754,7 @@ export function useCadEditor({
     setTool,
     draft,
     polylineDraft,
+    polylineHoverPoint,
     textTool,
     setTextTool,
     textPreviewMap,
@@ -8413,6 +8762,9 @@ export function useCadEditor({
     view,
     resetView,
     commitPolyline,
+    cancelCurrentDraft,
+    cloneSelected,
+    mirrorSelected,
     deleteSelected,
     deleteShape,
     renameShape,
@@ -8424,6 +8776,8 @@ export function useCadEditor({
     handleCanvasPointerMove,
     handleCanvasPointerUp,
     handleCanvasPointerLeave,
+    handleCanvasContextMenu,
+    handleCanvasDoubleClick,
     handleCanvasWheel,
     bindSelectStart,
     bindSelectionDragStart,
@@ -9644,6 +9998,7 @@ import type {
   SketchPolyline,
   SketchPolylinePoint,
   SketchRectangle,
+  SketchShape,
   SketchSvg,
   SketchText,
 } from "./types";
@@ -9816,6 +10171,41 @@ export function createSvgShape(params: {
   };
 }
 
+export function cloneShape(shape: SketchShape): SketchShape {
+  switch (shape.type) {
+    case "rectangle":
+      return { ...shape, id: createId("rect") };
+
+    case "circle":
+      return { ...shape, id: createId("circle") };
+
+    case "line":
+      return { ...shape, id: createId("line") };
+
+    case "arc":
+      return { ...shape, id: createId("arc") };
+
+    case "polyline":
+      return {
+        ...shape,
+        id: createId("poly"),
+        points: shape.points.map((point) => ({ ...point })),
+      };
+
+    case "text":
+      return { ...shape, id: createId("text") };
+
+    case "svg":
+      return {
+        ...shape,
+        id: createId("svg"),
+        contours: shape.contours.map((polyline) =>
+          polyline.map((point) => ({ ...point }))
+        ),
+      };
+  }
+}
+
 
 path: /src/modules/cad/model/shapes.ts
 ----------------------------------------
@@ -9839,7 +10229,7 @@ import {
   scaleCadPoint,
   translateCadPoint,
 } from "../../geometry/geometryEngine";
-import type { SketchShape } from "./types";
+import type { MirrorAxis, SketchShape } from "./types";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
@@ -10059,6 +10449,96 @@ export function scaleShape(
   }
 }
 
+function mirrorPoint(point: CadPoint, axis: MirrorAxis, origin: CadPoint): CadPoint {
+  return axis === "x"
+    ? { x: round(point.x), y: round(origin.y - (point.y - origin.y)) }
+    : { x: round(origin.x - (point.x - origin.x)), y: round(point.y) };
+}
+
+function mirrorAngle(angleDeg: number, axis: MirrorAxis): number {
+  return round(axis === "x" ? -angleDeg : 180 - angleDeg);
+}
+
+export function mirrorShape(
+  shape: SketchShape,
+  axis: MirrorAxis,
+  origin: CadPoint,
+): SketchShape {
+  switch (shape.type) {
+    case "rectangle": {
+      const center = {
+        x: shape.x + shape.width / 2,
+        y: shape.y + shape.height / 2,
+      };
+      const nextCenter = mirrorPoint(center, axis, origin);
+      const nextRotation =
+        axis === "x"
+          ? round(-(shape.rotation ?? 0))
+          : round(180 - (shape.rotation ?? 0));
+
+      return {
+        ...shape,
+        x: round(nextCenter.x - shape.width / 2),
+        y: round(nextCenter.y - shape.height / 2),
+        rotation: nextRotation,
+      };
+    }
+
+    case "circle": {
+      const next = mirrorPoint({ x: shape.cx, y: shape.cy }, axis, origin);
+      return { ...shape, cx: next.x, cy: next.y };
+    }
+
+    case "line": {
+      const p1 = mirrorPoint({ x: shape.x1, y: shape.y1 }, axis, origin);
+      const p2 = mirrorPoint({ x: shape.x2, y: shape.y2 }, axis, origin);
+      return { ...shape, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+    }
+
+    case "arc": {
+      const center = mirrorPoint({ x: shape.cx, y: shape.cy }, axis, origin);
+      return {
+        ...shape,
+        cx: center.x,
+        cy: center.y,
+        startAngle: mirrorAngle(shape.startAngle, axis),
+        endAngle: mirrorAngle(shape.endAngle, axis),
+        clockwise: !shape.clockwise,
+      };
+    }
+
+    case "polyline":
+      return {
+        ...shape,
+        points: shape.points.map((point) => mirrorPoint(point, axis, origin)),
+      };
+
+    case "text": {
+      const next = mirrorPoint({ x: shape.x, y: shape.y }, axis, origin);
+      return {
+        ...shape,
+        x: next.x,
+        y: next.y,
+        rotation: mirrorAngle(shape.rotation ?? 0, axis),
+      };
+    }
+
+    case "svg": {
+      const center = {
+        x: shape.x + shape.width / 2,
+        y: shape.y + shape.height / 2,
+      };
+      const nextCenter = mirrorPoint(center, axis, origin);
+      return {
+        ...shape,
+        x: round(nextCenter.x - shape.width / 2),
+        y: round(nextCenter.y - shape.height / 2),
+        rotation: mirrorAngle(shape.rotation ?? 0, axis),
+      };
+    }
+  }
+}
+
 
 path: /src/modules/cad/model/types.ts
 ----------------------------------------
@@ -10175,6 +10655,7 @@ export type UnitsMode = "mm" | "inch";
 export type SpindleDirection = "cw" | "ccw";
 
 export type ConstraintEdge = "left" | "right" | "top" | "bottom";
+export type MirrorAxis = "x" | "y";
 
 export type SketchDistanceConstraintTarget =
   | {
@@ -10776,6 +11257,7 @@ type EditStatusBarProps = {
   isDragging: boolean;
   isPanning: boolean;
   isTransforming: boolean;
+  hasDraft: boolean;
 };
 
 export function EditStatusBar({
@@ -10784,6 +11266,7 @@ export function EditStatusBar({
   isDragging,
   isPanning,
   isTransforming,
+  hasDraft,
 }: EditStatusBarProps) {
   const interactionLabel = isTransforming
     ? "Трансформация / ограничение"
@@ -10807,10 +11290,15 @@ export function EditStatusBar({
                       ? "Рисование дуги"
                       : "Редактирование";
 
-  const hint =
-    tool === "arc"
+  const hint = hasDraft
+    ? "ПКМ — отменить текущее рисование."
+    : tool === "arc"
       ? "Дуга: 1-й клик — центр, 2-й — старт/радиус, 3-й — конец дуги."
-      : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
+      : tool === "polyline"
+        ? "Полилиния: кликай по точкам, Enter или двойной клик — завершить, Escape — отменить."
+        : tool === "select"
+          ? "Выделение доступно только в режиме выбора. Во время рисования клик проходит сквозь существующие объекты."
+          : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
 
   return (
     <div
@@ -10840,6 +11328,7 @@ import { useRef } from "react";
 import {
   FiCheck,
   FiCircle,
+  FiCopy,
   FiCornerUpLeft,
   FiCornerUpRight,
   FiGitCommit,
@@ -10850,18 +11339,20 @@ import {
   FiMousePointer,
   FiPenTool,
   FiPlay,
+  FiRefreshCw,
   FiSquare,
   FiTrash2,
   FiType,
   FiX,
 } from "react-icons/fi";
 import { ui } from "../../../styles/ui";
-import type { SketchTool } from "../model/types";
+import type { MirrorAxis, SketchTool } from "../model/types";
 
 type EditToolbarProps = {
   tool: SketchTool;
   onToolChange: (tool: SketchTool) => void;
   onCommitPolyline: () => void;
+  onCancelDraft: () => void;
   onDeleteSelected: () => void;
   onResetView: () => void;
   onGenerate: () => void;
@@ -10873,24 +11364,64 @@ type EditToolbarProps = {
   onImportSvg: (file: File) => void;
   onGroupSelected: () => void;
   onUngroupSelected: () => void;
+  onCloneSelected: () => void;
+  onMirrorSelected: (axis: MirrorAxis) => void;
   canGroupSelected: boolean;
   canUngroupSelected: boolean;
+  hasSelection: boolean;
+  hasDraft: boolean;
 };
 
 const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
-  { id: "select", label: "Select", hint: "Выделение и перетаскивание объектов", icon: <FiMousePointer size={16} /> },
-  { id: "rectangle", label: "Rectangle", hint: "Нарисовать прямоугольник", icon: <FiSquare size={16} /> },
-  { id: "circle", label: "Circle", hint: "Нарисовать окружность", icon: <FiCircle size={16} /> },
-  { id: "line", label: "Line", hint: "Нарисовать линию", icon: <FiMinus size={16} /> },
-  { id: "arc", label: "Arc", hint: "Дуга: центр → старт → конец", icon: <FiGitCommit size={16} /> },
-  { id: "polyline", label: "Polyline", hint: "Добавление точек полилинии", icon: <FiPenTool size={16} /> },
-  { id: "text", label: "Text", hint: "Вставка текстового объекта", icon: <FiType size={16} /> },
+  {
+    id: "select",
+    label: "Выбор",
+    hint: "Выделение и перетаскивание объектов",
+    icon: <FiMousePointer size={16} />,
+  },
+  {
+    id: "rectangle",
+    label: "Прямоуг.",
+    hint: "Нарисовать прямоугольник",
+    icon: <FiSquare size={16} />,
+  },
+  {
+    id: "circle",
+    label: "Окружн.",
+    hint: "Нарисовать окружность",
+    icon: <FiCircle size={16} />,
+  },
+  {
+    id: "line",
+    label: "Линия",
+    hint: "Нарисовать линию",
+    icon: <FiMinus size={16} />,
+  },
+  {
+    id: "arc",
+    label: "Дуга",
+    hint: "Дуга: центр → старт → конец",
+    icon: <FiGitCommit size={16} />,
+  },
+  {
+    id: "polyline",
+    label: "Ломаная",
+    hint: "Добавление точек полилинии",
+    icon: <FiPenTool size={16} />,
+  },
+  {
+    id: "text",
+    label: "Текст",
+    hint: "Вставка текстового объекта",
+    icon: <FiType size={16} />,
+  },
 ];
 
 export function EditToolbar({
   tool,
   onToolChange,
   onCommitPolyline,
+  onCancelDraft,
   onDeleteSelected,
   onResetView,
   onGenerate,
@@ -10902,8 +11433,12 @@ export function EditToolbar({
   onImportSvg,
   onGroupSelected,
   onUngroupSelected,
+  onCloneSelected,
+  onMirrorSelected,
   canGroupSelected,
   canUngroupSelected,
+  hasSelection,
+  hasDraft,
 }: EditToolbarProps) {
   const svgInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -10921,7 +11456,7 @@ export function EditToolbar({
         flexShrink: 0,
       }}
     >
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {tools.map((item) => {
           const active = tool === item.id;
           return (
@@ -10930,26 +11465,36 @@ export function EditToolbar({
               type="button"
               title={`${item.label} — ${item.hint}`}
               onClick={() => onToolChange(item.id)}
-              style={{
-                ...(active ? ui.buttonPrimary : ui.buttonGhost),
-                width: 38,
-                height: 38,
-                padding: 0,
-              }}
+              style={active ? ui.buttonPrimary : ui.buttonGhost}
             >
               {item.icon}
+              <span>{item.label}</span>
             </button>
           );
         })}
 
-        {tool === "polyline" && (
+        {(tool === "polyline" || hasDraft) && (
           <button
             type="button"
-            title="Завершить текущую полилинию"
+            title="Завершить текущий объект"
             onClick={onCommitPolyline}
-            style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+            style={ui.buttonGhost}
+            disabled={tool !== "polyline"}
           >
             <FiCheck size={16} />
+            <span>Завершить</span>
+          </button>
+        )}
+
+        {hasDraft && (
+          <button
+            type="button"
+            title="Отменить текущее рисование"
+            onClick={onCancelDraft}
+            style={ui.buttonGhost}
+          >
+            <FiX size={16} />
+            <span>Отменить</span>
           </button>
         )}
 
@@ -10957,9 +11502,10 @@ export function EditToolbar({
           type="button"
           title="Импортировать SVG"
           onClick={() => svgInputRef.current?.click()}
-          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+          style={ui.buttonGhost}
         >
           <FiImage size={16} />
+          <span>SVG</span>
         </button>
 
         <input
@@ -10981,9 +11527,10 @@ export function EditToolbar({
             type="button"
             title="Сгруппировать выбранные объекты"
             onClick={onGroupSelected}
-            style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+            style={ui.buttonGhost}
           >
             <FiLayers size={16} />
+            <span>Группа</span>
           </button>
         )}
 
@@ -10992,28 +11539,76 @@ export function EditToolbar({
             type="button"
             title="Разгруппировать выбранную группу"
             onClick={onUngroupSelected}
-            style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+            style={ui.buttonGhost}
           >
             <FiX size={16} />
+            <span>Разгруппа</span>
           </button>
         )}
 
         <button
           type="button"
+          title="Клонировать выбранные объекты"
+          onClick={onCloneSelected}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiCopy size={16} />
+          <span>Клон</span>
+        </button>
+
+        <button
+          type="button"
+          title="Отзеркалить по оси X относительно центра выделения"
+          onClick={() => onMirrorSelected("x")}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiRefreshCw size={16} />
+          <span>Зеркало X</span>
+        </button>
+
+        <button
+          type="button"
+          title="Отзеркалить по оси Y относительно центра выделения"
+          onClick={() => onMirrorSelected("y")}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiRefreshCw size={16} />
+          <span>Зеркало Y</span>
+        </button>
+
+        <button
+          type="button"
           title="Удалить выбранный объект"
           onClick={onDeleteSelected}
-          style={{ ...ui.buttonDanger, width: 38, height: 38, padding: 0 }}
+          style={ui.buttonDanger}
         >
           <FiTrash2 size={16} />
+          <span>Удалить</span>
         </button>
 
         <button
           type="button"
           title="Сбросить масштаб и позицию холста"
           onClick={onResetView}
-          style={{ ...ui.buttonGhost, width: 38, height: 38, padding: 0 }}
+          style={ui.buttonGhost}
         >
           <FiMaximize size={16} />
+          <span>Вид</span>
         </button>
 
         <button
@@ -11023,14 +11618,12 @@ export function EditToolbar({
           disabled={!canUndo}
           style={{
             ...ui.buttonGhost,
-            width: 38,
-            height: 38,
-            padding: 0,
             opacity: canUndo ? 1 : 0.45,
             cursor: canUndo ? "pointer" : "not-allowed",
           }}
         >
           <FiCornerUpLeft size={16} />
+          <span>Назад</span>
         </button>
 
         <button
@@ -11040,14 +11633,12 @@ export function EditToolbar({
           disabled={!canRedo}
           style={{
             ...ui.buttonGhost,
-            width: 38,
-            height: 38,
-            padding: 0,
             opacity: canRedo ? 1 : 0.45,
             cursor: canRedo ? "pointer" : "not-allowed",
           }}
         >
           <FiCornerUpRight size={16} />
+          <span>Вперёд</span>
         </button>
       </div>
 
@@ -14601,4 +15192,4 @@ included: 106
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 385944
+totalBytes(approx): 401414

@@ -5,6 +5,7 @@ import type {
   SketchPolyline,
   SketchPolylinePoint,
   SketchRectangle,
+  SketchShape,
   SketchSvg,
   SketchText,
 } from "./types";
@@ -175,4 +176,39 @@ export function createSvgShape(params: {
     strokeWidth: 1,
     ...baseShapeFields,
   };
+}
+
+export function cloneShape(shape: SketchShape): SketchShape {
+  switch (shape.type) {
+    case "rectangle":
+      return { ...shape, id: createId("rect") };
+
+    case "circle":
+      return { ...shape, id: createId("circle") };
+
+    case "line":
+      return { ...shape, id: createId("line") };
+
+    case "arc":
+      return { ...shape, id: createId("arc") };
+
+    case "polyline":
+      return {
+        ...shape,
+        id: createId("poly"),
+        points: shape.points.map((point) => ({ ...point })),
+      };
+
+    case "text":
+      return { ...shape, id: createId("text") };
+
+    case "svg":
+      return {
+        ...shape,
+        id: createId("svg"),
+        contours: shape.contours.map((polyline) =>
+          polyline.map((point) => ({ ...point }))
+        ),
+      };
+  }
 }

@@ -4,7 +4,7 @@ import {
   scaleCadPoint,
   translateCadPoint,
 } from "../../geometry/geometryEngine";
-import type { SketchShape } from "./types";
+import type { MirrorAxis, SketchShape } from "./types";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
@@ -219,6 +219,96 @@ export function scaleShape(
         y: next.y,
         width: round(shape.width * sx),
         height: round(shape.height * sy),
+      };
+    }
+  }
+}
+
+function mirrorPoint(point: CadPoint, axis: MirrorAxis, origin: CadPoint): CadPoint {
+  return axis === "x"
+    ? { x: round(point.x), y: round(origin.y - (point.y - origin.y)) }
+    : { x: round(origin.x - (point.x - origin.x)), y: round(point.y) };
+}
+
+function mirrorAngle(angleDeg: number, axis: MirrorAxis): number {
+  return round(axis === "x" ? -angleDeg : 180 - angleDeg);
+}
+
+export function mirrorShape(
+  shape: SketchShape,
+  axis: MirrorAxis,
+  origin: CadPoint,
+): SketchShape {
+  switch (shape.type) {
+    case "rectangle": {
+      const center = {
+        x: shape.x + shape.width / 2,
+        y: shape.y + shape.height / 2,
+      };
+      const nextCenter = mirrorPoint(center, axis, origin);
+      const nextRotation =
+        axis === "x"
+          ? round(-(shape.rotation ?? 0))
+          : round(180 - (shape.rotation ?? 0));
+
+      return {
+        ...shape,
+        x: round(nextCenter.x - shape.width / 2),
+        y: round(nextCenter.y - shape.height / 2),
+        rotation: nextRotation,
+      };
+    }
+
+    case "circle": {
+      const next = mirrorPoint({ x: shape.cx, y: shape.cy }, axis, origin);
+      return { ...shape, cx: next.x, cy: next.y };
+    }
+
+    case "line": {
+      const p1 = mirrorPoint({ x: shape.x1, y: shape.y1 }, axis, origin);
+      const p2 = mirrorPoint({ x: shape.x2, y: shape.y2 }, axis, origin);
+      return { ...shape, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+    }
+
+    case "arc": {
+      const center = mirrorPoint({ x: shape.cx, y: shape.cy }, axis, origin);
+      return {
+        ...shape,
+        cx: center.x,
+        cy: center.y,
+        startAngle: mirrorAngle(shape.startAngle, axis),
+        endAngle: mirrorAngle(shape.endAngle, axis),
+        clockwise: !shape.clockwise,
+      };
+    }
+
+    case "polyline":
+      return {
+        ...shape,
+        points: shape.points.map((point) => mirrorPoint(point, axis, origin)),
+      };
+
+    case "text": {
+      const next = mirrorPoint({ x: shape.x, y: shape.y }, axis, origin);
+      return {
+        ...shape,
+        x: next.x,
+        y: next.y,
+        rotation: mirrorAngle(shape.rotation ?? 0, axis),
+      };
+    }
+
+    case "svg": {
+      const center = {
+        x: shape.x + shape.width / 2,
+        y: shape.y + shape.height / 2,
+      };
+      const nextCenter = mirrorPoint(center, axis, origin);
+      return {
+        ...shape,
+        x: round(nextCenter.x - shape.width / 2),
+        y: round(nextCenter.y - shape.height / 2),
+        rotation: mirrorAngle(shape.rotation ?? 0, axis),
       };
     }
   }

@@ -67,6 +67,7 @@ export function EditTab({
 
   const canGroupSelected = selection.ids.length > 1;
   const canUngroupSelected = Boolean(primaryShape?.groupId);
+  const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
 
   return (
     <>
@@ -87,6 +88,7 @@ export function EditTab({
           tool={editor.tool}
           onToolChange={editor.setTool}
           onCommitPolyline={editor.commitPolyline}
+          onCancelDraft={editor.cancelCurrentDraft}
           onDeleteSelected={editor.deleteSelected}
           onResetView={editor.resetView}
           onGenerate={editor.handleGenerateClick}
@@ -98,8 +100,12 @@ export function EditTab({
           onImportSvg={editor.startSvgImport}
           onGroupSelected={editor.groupSelected}
           onUngroupSelected={editor.ungroupSelected}
+          onCloneSelected={editor.cloneSelected}
+          onMirrorSelected={editor.mirrorSelected}
           canGroupSelected={canGroupSelected}
           canUngroupSelected={canUngroupSelected}
+          hasSelection={selection.ids.length > 0}
+          hasDraft={hasDraft}
         />
 
         {editor.tool === "text" && (
@@ -165,6 +171,7 @@ export function EditTab({
                 onPointerLeave={editor.handleCanvasPointerLeave}
                 onDoubleClick={editor.handleCanvasDoubleClick}
                 onWheel={editor.handleCanvasWheel}
+                onContextMenu={editor.handleCanvasContextMenu}
                 onShapePointerDown={editor.bindSelectStart}
                 onSelectionPointerDown={editor.bindSelectionDragStart}
                 onScaleHandlePointerDown={editor.bindScaleHandleStart}
@@ -183,6 +190,7 @@ export function EditTab({
           isDragging={editor.isDragging}
           isPanning={editor.isPanning}
           isTransforming={editor.isTransforming}
+          hasDraft={hasDraft}
         />
       </div>
 

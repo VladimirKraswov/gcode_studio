@@ -38,6 +38,16 @@ function buildAxisLine(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] 
   return [from.clone(), to.clone()];
 }
 
+function chooseTickStep(length: number): number {
+  const candidates = [10, 20, 25, 50, 100, 200, 250, 500, 1000];
+  for (const step of candidates) {
+    if ((length * 2) / step <= 12) {
+      return step;
+    }
+  }
+  return candidates[candidates.length - 1];
+}
+
 export function PathScene({
   parsed,
   currentState,
@@ -69,33 +79,187 @@ export function PathScene({
   );
 
   const axesHelper = useMemo(() => {
-    const length = Math.max(stock.width, stock.height, stock.thickness) * 1.2;
+    const length = Math.max(
+      stock.width,
+      stock.height,
+      stock.thickness,
+      Math.abs(parsed.bounds.minX),
+      Math.abs(parsed.bounds.maxX),
+      Math.abs(parsed.bounds.minY),
+      Math.abs(parsed.bounds.maxY),
+      Math.abs(parsed.bounds.minZ),
+      Math.abs(parsed.bounds.maxZ),
+      100,
+    ) * 1.15;
+
     if (length <= 0) return null;
 
+    const tickStep = chooseTickStep(length);
+    const tickHalf = Math.max(1.5, length * 0.015);
+    const labelOffset = Math.max(4, length * 0.03);
+
     const origin = toScenePoint({ x: 0, y: 0, z: 0 });
-    const xEnd = toScenePoint({ x: length, y: 0, z: 0 });
-    const yEnd = toScenePoint({ x: 0, y: length, z: 0 });
-    const zEnd = toScenePoint({ x: 0, y: 0, z: length });
+
+    const xNeg = toScenePoint({ x: -length, y: 0, z: 0 });
+    const xPos = toScenePoint({ x: length, y: 0, z: 0 });
+
+    const yNeg = toScenePoint({ x: 0, y: -length, z: 0 });
+    const yPos = toScenePoint({ x: 0, y: length, z: 0 });
+
+    const zNeg = toScenePoint({ x: 0, y: 0, z: -length });
+    const zPos = toScenePoint({ x: 0, y: 0, z: length });
+
+    const xTicks: React.ReactNode[] = [];
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+      if (value === 0) continue;
+
+      const from = toScenePoint({ x: value, y: 0, z: -tickHalf });
+      const to = toScenePoint({ x: value, y: 0, z: tickHalf });
+      const labelPos = toScenePoint({ x: value, y: 0, z: -labelOffset });
+
+      xTicks.push(
+        <group key={`x-tick-${value}`}>
+          <Line points={[from, to]} color="#ef4444" lineWidth={1} />
+          <Text
+            position={labelPos}
+            color="#7f1d1d"
+            fontSize={Math.max(3.2, length * 0.02)}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {value}
+          </Text>
+        </group>,
+      );
+    }
+
+    const yTicks: React.ReactNode[] = [];
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+      if (value === 0) continue;
+
+      const from = toScenePoint({ x: -tickHalf, y: value, z: 0 });
+      const to = toScenePoint({ x: tickHalf, y: value, z: 0 });
+      const labelPos = toScenePoint({ x: -labelOffset, y: value, z: 0 });
+
+      yTicks.push(
+        <group key={`y-tick-${value}`}>
+          <Line points={[from, to]} color="#16a34a" lineWidth={1} />
+          <Text
+            position={labelPos}
+            color="#14532d"
+            fontSize={Math.max(3.2, length * 0.02)}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {value}
+          </Text>
+        </group>,
+      );
+    }
+
+    const zTicks: React.ReactNode[] = [];
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+      if (value === 0) continue;
+
+      const from = toScenePoint({ x: -tickHalf, y: 0, z: value });
+      const to = toScenePoint({ x: tickHalf, y: 0, z: value });
+      const labelPos = toScenePoint({ x: labelOffset, y: 0, z: value });
+
+      zTicks.push(
+        <group key={`z-tick-${value}`}>
+          <Line points={[from, to]} color="#2563eb" lineWidth={1} />
+          <Text
+            position={labelPos}
+            color="#1e3a8a"
+            fontSize={Math.max(3.2, length * 0.02)}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {value}
+          </Text>
+        </group>,
+      );
+    }
 
     return (
       <group>
-        <Line points={buildAxisLine(origin, xEnd)} color="red" lineWidth={2} />
-        <Text position={xEnd} color="red" fontSize={5} anchorX="left" anchorY="middle">
-          X
+        <Line points={buildAxisLine(xNeg, xPos)} color="red" lineWidth={2} />
+        <Line points={buildAxisLine(yNeg, yPos)} color="green" lineWidth={2} />
+        <Line points={buildAxisLine(zNeg, zPos)} color="blue" lineWidth={2} />
+
+        {xTicks}
+        {yTicks}
+        {zTicks}
+
+        <Text
+          position={toScenePoint({ x: length + labelOffset, y: 0, z: 0 })}
+          color="red"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="left"
+          anchorY="middle"
+        >
+          +X
+        </Text>
+        <Text
+          position={toScenePoint({ x: -length - labelOffset, y: 0, z: 0 })}
+          color="red"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="right"
+          anchorY="middle"
+        >
+          -X
         </Text>
 
-        <Line points={buildAxisLine(origin, yEnd)} color="green" lineWidth={2} />
-        <Text position={yEnd} color="green" fontSize={5} anchorX="left" anchorY="middle">
-          Y
+        <Text
+          position={toScenePoint({ x: 0, y: length + labelOffset, z: 0 })}
+          color="green"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          +Y
+        </Text>
+        <Text
+          position={toScenePoint({ x: 0, y: -length - labelOffset, z: 0 })}
+          color="green"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          -Y
         </Text>
 
-        <Line points={buildAxisLine(origin, zEnd)} color="blue" lineWidth={2} />
-        <Text position={zEnd} color="blue" fontSize={5} anchorX="left" anchorY="middle">
-          Z
+        <Text
+          position={toScenePoint({ x: 0, y: 0, z: length + labelOffset })}
+          color="blue"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          +Z
+        </Text>
+        <Text
+          position={toScenePoint({ x: 0, y: 0, z: -length - labelOffset })}
+          color="blue"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          -Z
+        </Text>
+
+        <Text
+          position={origin}
+          color="#0f172a"
+          fontSize={Math.max(3.8, length * 0.02)}
+          anchorX="left"
+          anchorY="bottom"
+        >
+          0
         </Text>
       </group>
     );
-  }, [stock]);
+  }, [parsed.bounds, stock]);
 
   const rulers = useMemo(() => {
     const { minX, maxX, minY, maxY, minZ, maxZ } = parsed.bounds;

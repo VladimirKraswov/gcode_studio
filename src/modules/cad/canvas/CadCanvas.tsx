@@ -59,6 +59,7 @@ type CadCanvasProps = {
   onPointerLeave: (event: React.PointerEvent<SVGSVGElement>) => void;
   onDoubleClick?: (event: React.MouseEvent<SVGSVGElement>) => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
+  onContextMenu?: (event: React.MouseEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
   onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
   onScaleHandlePointerDown?: (
@@ -98,6 +99,7 @@ export function CadCanvas({
   onPointerLeave,
   onDoubleClick,
   onWheel,
+  onContextMenu,
   onShapePointerDown,
   onSelectionPointerDown,
   onScaleHandlePointerDown,
@@ -106,13 +108,16 @@ export function CadCanvas({
   onConstraintLabelPointerDown,
 }: CadCanvasProps) {
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+  const showSelection = tool === "select";
 
   const selectedIds = new Set(
-    primary?.groupId
-      ? document.shapes
-          .filter((shape) => shape.groupId === primary.groupId)
-          .map((shape) => shape.id)
-      : selection.ids,
+    showSelection
+      ? primary?.groupId
+        ? document.shapes
+            .filter((shape) => shape.groupId === primary.groupId)
+            .map((shape) => shape.id)
+        : selection.ids
+      : [],
   );
 
   function resolveCanvasCursor() {
@@ -136,7 +141,10 @@ export function CadCanvas({
       onPointerLeave={onPointerLeave}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
-      onContextMenu={(event) => event.preventDefault()}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu?.(event);
+      }}
       style={{
         display: "block",
         width: "100%",
@@ -162,18 +170,20 @@ export function CadCanvas({
         />
       ))}
 
-      <SelectionOverlay
-        document={document}
-        selection={selection}
-        documentHeight={document.height}
-        view={view}
-        onPointerDown={onSelectionPointerDown}
-        onScaleHandlePointerDown={onScaleHandlePointerDown}
-        onRotateHandlePointerDown={onRotateHandlePointerDown}
-        isDragging={isDragging || isTransforming}
-        isHover={isSelectionHover}
-        onHoverChange={onSelectionHoverChange}
-      />
+      {showSelection && (
+        <SelectionOverlay
+          document={document}
+          selection={selection}
+          documentHeight={document.height}
+          view={view}
+          onPointerDown={onSelectionPointerDown}
+          onScaleHandlePointerDown={onScaleHandlePointerDown}
+          onRotateHandlePointerDown={onRotateHandlePointerDown}
+          isDragging={isDragging || isTransforming}
+          isHover={isSelectionHover}
+          onHoverChange={onSelectionHoverChange}
+        />
+      )}
 
       {tool === "select" &&
         selection.primaryId &&
