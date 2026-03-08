@@ -11,10 +11,39 @@ export type SketchShapeType =
   | "text"
   | "svg";
 
+export type SketchLinearArrayParams = {
+  count: number;
+  spacing: number;
+  axis: "x" | "y";
+  direction: "positive" | "negative";
+};
+
+export type SketchCircularArrayParams = {
+  count: number;
+  centerX: number;
+  centerY: number;
+  radius: number;
+  totalAngle: number;
+  rotateItems: boolean;
+};
+
+export type SketchArrayDefinition =
+  | {
+      type: "linear";
+      sourceShapeIds: string[];
+      params: SketchLinearArrayParams;
+    }
+  | {
+      type: "circular";
+      sourceShapeIds: string[];
+      params: SketchCircularArrayParams;
+    };
+
 export type SketchGroup = {
   id: string;
   name: string;
   collapsed?: boolean;
+  array?: SketchArrayDefinition | null;
 };
 
 export type SketchBase = {

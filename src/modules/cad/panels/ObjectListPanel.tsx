@@ -4,6 +4,7 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiCircle,
+  FiEdit3,
   FiEye,
   FiEyeOff,
   FiImage,
@@ -16,7 +17,7 @@ import {
 import { theme, ui } from "../../../styles/ui";
 import type { SelectionState } from "../model/selection";
 import { selectOnly } from "../model/selection";
-import type { SketchDocument, SketchShape } from "../model/types";
+import type { SketchArrayDefinition, SketchDocument, SketchShape } from "../model/types";
 import { getGroupById } from "../model/grouping";
 
 type ObjectListPanelProps = {
@@ -35,6 +36,8 @@ type ListItem =
   | { kind: "group"; groupId: string; shapes: SketchShape[] }
   | { kind: "shape"; shape: SketchShape };
 
+const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
+
 function getShapeIcon(shape: SketchShape) {
   switch (shape.type) {
     case "rectangle":
@@ -52,6 +55,34 @@ function getShapeIcon(shape: SketchShape) {
     case "svg":
       return <FiImage size={14} />;
   }
+}
+
+function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined) {
+  if (!array) return null;
+
+  if (array.type === "linear") {
+    return {
+      label: "Linear array",
+      background: "#ecfeff",
+      border: "#a5f3fc",
+      color: "#155e75",
+    };
+  }
+
+  return {
+    label: "Circular array",
+    background: "#f5f3ff",
+    border: "#c4b5fd",
+    color: "#5b21b6",
+  };
+}
+
+function openArrayEditor(groupId: string) {
+  window.dispatchEvent(
+    new CustomEvent(EDIT_ARRAY_GROUP_EVENT, {
+      detail: { groupId },
+    }),
+  );
 }
 
 export function ObjectListPanel({
@@ -154,6 +185,7 @@ export function ObjectListPanel({
             const collapsed = group?.collapsed ?? false;
             const allVisible = item.shapes.every((shape) => shape.visible !== false);
             const selected = item.shapes.every((shape) => selection.ids.includes(shape.id));
+            const arrayBadge = getArrayBadgeMeta(group?.array);
 
             return (
               <div
@@ -176,7 +208,15 @@ export function ObjectListPanel({
                     borderBottom: collapsed ? "none" : `1px solid ${theme.border}`,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => onToggleGroupCollapsed(item.groupId)}
@@ -228,6 +268,45 @@ export function ObjectListPanel({
                     onChange={(e) => onRenameGroup(item.groupId, e.target.value)}
                     style={ui.input}
                   />
+
+                  {arrayBadge && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        padding: 10,
+                        borderRadius: 12,
+                        background: "#fff",
+                        border: `1px solid ${theme.border}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: arrayBadge.color,
+                          background: arrayBadge.background,
+                          border: `1px solid ${arrayBadge.border}`,
+                          borderRadius: 999,
+                          padding: "4px 10px",
+                        }}
+                      >
+                        {arrayBadge.label}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => openArrayEditor(item.groupId)}
+                        style={ui.buttonGhost}
+                      >
+                        <FiEdit3 size={14} />
+                        Изменить массив
+                      </button>
+                    </div>
+                  )}
 
                   {!collapsed && item.shapes.map((shape) => {
                     const active = selection.ids.includes(shape.id);

@@ -6,6 +6,7 @@ import {
   FiImage,
   FiMinus,
   FiMove,
+  FiRefreshCw,
   FiType,
 } from "react-icons/fi";
 import { clamp } from "../../../utils";
@@ -30,6 +31,8 @@ type ShapePropertiesPanelProps = {
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   selectedShape: SketchShape;
 };
+
+const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
 function CardBlock({
   children,
@@ -120,6 +123,14 @@ function edgeTitle(edge: ConstraintEdge): string {
   }
 }
 
+function openArrayEditor(groupId: string) {
+  window.dispatchEvent(
+    new CustomEvent(EDIT_ARRAY_GROUP_EVENT, {
+      detail: { groupId },
+    }),
+  );
+}
+
 export function ShapePropertiesPanel({
   document,
   setDocument,
@@ -128,6 +139,14 @@ export function ShapePropertiesPanel({
   const otherShapes = useMemo(
     () => document.shapes.filter((shape) => shape.id !== selectedShape.id),
     [document.shapes, selectedShape.id],
+  );
+
+  const selectedGroup = useMemo(
+    () =>
+      selectedShape.groupId
+        ? document.groups.find((group) => group.id === selectedShape.groupId) ?? null
+        : null,
+    [document.groups, selectedShape.groupId],
   );
 
   const [newConstraintEdge, setNewConstraintEdge] = useState<ConstraintEdge>("left");
@@ -205,6 +224,109 @@ export function ShapePropertiesPanel({
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
+        {selectedGroup?.array && (
+          <CardBlock title="Параметры массива">
+            <div style={{ display: "grid", gap: 10 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "fit-content",
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  border:
+                    selectedGroup.array.type === "linear"
+                      ? "1px solid #a5f3fc"
+                      : "1px solid #c4b5fd",
+                  background:
+                    selectedGroup.array.type === "linear" ? "#ecfeff" : "#f5f3ff",
+                  color:
+                    selectedGroup.array.type === "linear" ? "#155e75" : "#5b21b6",
+                }}
+              >
+                <FiRefreshCw size={12} />
+                {selectedGroup.array.type === "linear"
+                  ? "Linear array"
+                  : "Circular array"}
+              </div>
+
+              {selectedGroup.array.type === "linear" ? (
+                <div style={twoColumnGrid}>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Count</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.count}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Spacing</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.spacing}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Axis</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.axis.toUpperCase()}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Direction</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.direction === "positive" ? "+" : "-"}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={twoColumnGrid}>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Count</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.count}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Total angle</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.totalAngle}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Center X</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.centerX}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Center Y</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.centerY}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Radius</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.radius}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => openArrayEditor(selectedGroup.id)}
+                style={ui.buttonPrimary}
+              >
+                <FiEdit3 size={15} />
+                Редактировать
+              </button>
+            </div>
+          </CardBlock>
+        )}
+
         <CardBlock>
           <label style={fieldLabel}>
             Имя

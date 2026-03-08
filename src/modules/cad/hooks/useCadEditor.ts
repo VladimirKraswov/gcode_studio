@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   appendPolylinePoint,
   finishDrag,
@@ -75,6 +75,13 @@ import {
 } from "../model/constraints";
 import { distance } from "../geometry/distance";
 import { createId } from "../model/ids";
+import {
+  applyCircularArray,
+  applyLinearArray,
+  rebuildArrayGroup,
+  type CircularArrayParams,
+  type LinearArrayParams,
+} from "../model/array";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -155,6 +162,10 @@ type ConstraintLabelDragState = {
   startPoint: SketchPolylinePoint;
   initialDistance: number;
 } | null;
+
+type ArrayToolMode = "linear" | "circular" | null;
+
+const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
 function angleBetween(center: SketchPolylinePoint, point: SketchPolylinePoint): number {
   return Math.atan2(point.y - center.y, point.x - center.x);
@@ -266,6 +277,34 @@ function getCompatibleEdges(axis: "x" | "y"): ConstraintEdge[] {
   return axis === "x" ? ["left", "right"] : ["bottom", "top"];
 }
 
+function getDefaultCircularRadius(
+  document: SketchDocument,
+  selection: SelectionState,
+  center: { x: number; y: number },
+): number {
+  const bounds = getSelectionBox(document, selection);
+  const sourceCenter = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+
+  return Math.max(
+    0,
+    distance(sourceCenter, center),
+  );
+}
+
+function getDefaultCircularCenter(
+  document: SketchDocument,
+  selection: SelectionState,
+): { x: number; y: number } {
+  const bounds = getSelectionBox(document, selection);
+  return {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+}
+
 export function useCadEditor({
   document,
   setDocument,
@@ -298,6 +337,25 @@ export function useCadEditor({
   const [constraintLabelDragState, setConstraintLabelDragState] =
     useState<ConstraintLabelDragState>(null);
 
+  const [arrayToolMode, setArrayToolMode] = useState<ArrayToolMode>(null);
+  const [editingArrayGroupId, setEditingArrayGroupId] = useState<string | null>(null);
+
+  const [linearArrayParams, setLinearArrayParams] = useState<LinearArrayParams>({
+    count: 3,
+    spacing: 20,
+    axis: "x",
+    direction: "positive",
+  });
+
+  const [circularArrayParams, setCircularArrayParams] = useState<CircularArrayParams>({
+    count: 6,
+    centerX: 0,
+    centerY: 0,
+    radius: 30,
+    totalAngle: 360,
+    rotateItems: true,
+  });
+
   const textPreviewMap = useTextPreviewMap(document.shapes);
 
   function setTool(nextTool: SketchTool) {
@@ -317,6 +375,172 @@ export function useCadEditor({
     setPolylineHoverPoint(null);
     setIsSelectionHover(false);
   }
+
+  function closeArrayTool() {
+    setArrayToolMode(null);
+    setEditingArrayGroupId(null);
+  }
+
+  function startLinearArray() {
+    if (selection.ids.length === 0) return;
+    setEditingArrayGroupId(null);
+    setArrayToolMode("linear");
+  }
+
+  function startCircularArray() {
+    if (selection.ids.length === 0) return;
+
+    const center = getDefaultCircularCenter(document, selection);
+    const radius = getDefaultCircularRadius(document, selection, center);
+
+    setCircularArrayParams((prev) => ({
+      ...prev,
+      centerX: center.x,
+      centerY: center.y,
+      radius,
+    }));
+    setEditingArrayGroupId(null);
+    setArrayToolMode("circular");
+  }
+
+  function updateLinearArrayParams(patch: Partial<LinearArrayParams>) {
+    setLinearArrayParams((prev) => ({ ...prev, ...patch }));
+  }
+
+  function updateCircularArrayParams(patch: Partial<CircularArrayParams>) {
+    setCircularArrayParams((prev) => ({ ...prev, ...patch }));
+  }
+
+  function editArrayGroupById(groupId: string) {
+    const group = document.groups.find((item) => item.id === groupId);
+    if (!group?.array) return;
+
+    const sourceIds = group.array.sourceShapeIds.filter((id) =>
+      document.shapes.some((shape) => shape.id === id),
+    );
+
+    if (sourceIds.length === 0) return;
+
+    onSelectionChange({
+      ids: sourceIds,
+      primaryId: sourceIds[0] ?? null,
+    });
+
+    setEditingArrayGroupId(groupId);
+
+    if (group.array.type === "linear") {
+      setLinearArrayParams(group.array.params);
+      setArrayToolMode("linear");
+      return;
+    }
+
+    setCircularArrayParams(group.array.params);
+    setArrayToolMode("circular");
+  }
+
+  function applyArray() {
+    if (selection.ids.length === 0 || !arrayToolMode) return;
+
+    checkpointHistory();
+
+    if (editingArrayGroupId) {
+      const group = document.groups.find((item) => item.id === editingArrayGroupId);
+      if (!group?.array) {
+        setEditingArrayGroupId(null);
+        setArrayToolMode(null);
+        return;
+      }
+
+      const nextDefinition =
+        arrayToolMode === "linear"
+          ? {
+              type: "linear" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: linearArrayParams,
+            }
+          : {
+              type: "circular" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: circularArrayParams,
+            };
+
+      const result = rebuildArrayGroup(document, editingArrayGroupId, nextDefinition);
+      setDocument(result.document);
+
+      const nextSelectionIds = [
+        ...nextDefinition.sourceShapeIds,
+        ...result.createdShapeIds,
+      ];
+
+      onSelectionChange({
+        ids: nextSelectionIds,
+        primaryId: nextDefinition.sourceShapeIds[0] ?? result.createdShapeIds[0] ?? null,
+      });
+
+      setEditingArrayGroupId(null);
+      setArrayToolMode(null);
+      return;
+    }
+
+    if (arrayToolMode === "linear") {
+      const result = applyLinearArray(document, selection, linearArrayParams);
+      setDocument(result.document);
+
+      const primaryShapeId =
+        selection.primaryId &&
+        result.document.shapes.some((shape) => shape.id === selection.primaryId)
+          ? selection.primaryId
+          : result.createdShapeIds[0] ?? null;
+
+      onSelectionChange({
+        ids: getSelectionShapeIds(result.document, {
+          ids: selection.ids,
+          primaryId: primaryShapeId,
+        }),
+        primaryId: primaryShapeId,
+      });
+
+      setEditingArrayGroupId(null);
+      setArrayToolMode(null);
+      return;
+    }
+
+    const result = applyCircularArray(document, selection, circularArrayParams);
+    setDocument(result.document);
+
+    const primaryShapeId =
+      selection.primaryId &&
+      result.document.shapes.some((shape) => shape.id === selection.primaryId)
+        ? selection.primaryId
+        : result.createdShapeIds[0] ?? null;
+
+    onSelectionChange({
+      ids: getSelectionShapeIds(result.document, {
+        ids: selection.ids,
+        primaryId: primaryShapeId,
+      }),
+      primaryId: primaryShapeId,
+    });
+
+    setEditingArrayGroupId(null);
+    setArrayToolMode(null);
+    
+  }
+
+  useEffect(() => {
+    const handleEditArrayGroup = (event: Event) => {
+      const customEvent = event as CustomEvent<{ groupId?: string }>;
+      const groupId = customEvent.detail?.groupId;
+      if (!groupId) return;
+      editArrayGroupById(groupId);
+    };
+
+    window.addEventListener(EDIT_ARRAY_GROUP_EVENT, handleEditArrayGroup);
+
+    return () => {
+      window.removeEventListener(EDIT_ARRAY_GROUP_EVENT, handleEditArrayGroup);
+    };
+  }, [document, selection]);
 
   useEffect(() => {
     if (tool !== "polyline") {
@@ -1422,6 +1646,54 @@ export function useCadEditor({
     }
   }
 
+  const arrayPreviewShapes = useMemo(() => {
+    if (!arrayToolMode || selection.ids.length === 0) {
+      return [];
+    }
+
+    if (editingArrayGroupId) {
+      const group = document.groups.find((item) => item.id === editingArrayGroupId);
+      if (!group?.array) {
+        return [];
+      }
+
+      const nextDefinition =
+        arrayToolMode === "linear"
+          ? {
+              type: "linear" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: linearArrayParams,
+            }
+          : {
+              type: "circular" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: circularArrayParams,
+            };
+
+      const result = rebuildArrayGroup(document, editingArrayGroupId, nextDefinition);
+
+      return result.document.shapes.filter((shape) =>
+        result.createdShapeIds.includes(shape.id),
+      );
+    }
+
+    const result =
+      arrayToolMode === "linear"
+        ? applyLinearArray(document, selection, linearArrayParams)
+        : applyCircularArray(document, selection, circularArrayParams);
+
+    return result.document.shapes.filter((shape) =>
+      result.createdShapeIds.includes(shape.id),
+    );
+  }, [
+    arrayToolMode,
+    editingArrayGroupId,
+    document,
+    selection,
+    linearArrayParams,
+    circularArrayParams,
+  ]);
+
   const isDragging = dragState !== null;
   const isPanning = panState !== null;
   const isTransforming =
@@ -1479,6 +1751,20 @@ export function useCadEditor({
     toggleGroupCollapsed: toggleGroupCollapsedById,
     reorderDocumentShapes,
 
+    startLinearArray,
+    startCircularArray,
+    applyArray,
+    closeArrayTool,
+    updateLinearArrayParams,
+    updateCircularArrayParams,
+    editArrayGroupById,
+    arrayTool: {
+      mode: arrayToolMode,
+      linear: linearArrayParams,
+      circular: circularArrayParams,
+      editingGroupId: editingArrayGroupId,
+    },
+
     isDragging,
     isPanning,
     isTransforming,
@@ -1493,5 +1779,7 @@ export function useCadEditor({
             pointer: constraintCreateState.pointer,
             hoverTarget: constraintCreateState.hoverTarget,
           },
+
+    arrayPreviewShapes,
   };
 }

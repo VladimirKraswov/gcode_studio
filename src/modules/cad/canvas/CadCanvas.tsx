@@ -1,3 +1,4 @@
+import { cadToScreenPoint } from "../../../utils/coordinates";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
@@ -10,11 +11,13 @@ import type {
   ConstraintEdge,
   SketchDocument,
   SketchPolylinePoint,
+  SketchShape,
   SketchTool,
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
+import { shapeBounds } from "../model/shapeBounds";
 import type { CadPoint } from "../geometry/textGeometry";
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
@@ -52,6 +55,7 @@ type CadCanvasProps = {
   isSelectionHover: boolean;
   isTransforming: boolean;
   constraintDraft: ConstraintDraftState;
+  arrayPreviewShapes: SketchShape[];
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
@@ -77,6 +81,69 @@ type CadCanvasProps = {
   ) => void;
 };
 
+function ArrayPreviewOverlay({
+  shapes,
+  documentHeight,
+  view,
+}: {
+  shapes: SketchShape[];
+  documentHeight: number;
+  view: ViewTransform;
+}) {
+  if (shapes.length === 0) return null;
+
+  return (
+    <g pointerEvents="none">
+      {shapes.map((shape) => {
+        const bounds = shapeBounds(shape);
+        const topLeft = cadToScreenPoint(
+          { x: bounds.minX, y: bounds.maxY },
+          documentHeight,
+          view,
+        );
+
+        const width = Math.max(1, (bounds.maxX - bounds.minX) * view.scale);
+        const height = Math.max(1, (bounds.maxY - bounds.minY) * view.scale);
+
+        return (
+          <g key={`array-preview-${shape.id}`}>
+            <rect
+              x={topLeft.x}
+              y={topLeft.y}
+              width={width}
+              height={height}
+              rx={8}
+              fill="rgba(34,197,94,0.08)"
+              stroke="#22c55e"
+              strokeWidth={1.5}
+              strokeDasharray="8 4"
+            />
+
+            <line
+              x1={topLeft.x}
+              y1={topLeft.y}
+              x2={topLeft.x + width}
+              y2={topLeft.y + height}
+              stroke="rgba(34,197,94,0.35)"
+              strokeWidth={1}
+              strokeDasharray="4 6"
+            />
+            <line
+              x1={topLeft.x + width}
+              y1={topLeft.y}
+              x2={topLeft.x}
+              y2={topLeft.y + height}
+              stroke="rgba(34,197,94,0.35)"
+              strokeWidth={1}
+              strokeDasharray="4 6"
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 export function CadCanvas({
   svgRef,
   document,
@@ -92,6 +159,7 @@ export function CadCanvas({
   isSelectionHover,
   isTransforming,
   constraintDraft,
+  arrayPreviewShapes,
   onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
@@ -169,6 +237,12 @@ export function CadCanvas({
           onPointerDown={onShapePointerDown}
         />
       ))}
+
+      <ArrayPreviewOverlay
+        shapes={arrayPreviewShapes}
+        documentHeight={document.height}
+        view={view}
+      />
 
       {showSelection && (
         <SelectionOverlay

@@ -25,6 +25,8 @@ import type { MirrorAxis, SketchTool } from "../model/types";
 type EditToolbarProps = {
   tool: SketchTool;
   onToolChange: (tool: SketchTool) => void;
+  onStartLinearArray: () => void;
+  onStartCircularArray: () => void;
   onCommitPolyline: () => void;
   onCancelDraft: () => void;
   onDeleteSelected: () => void;
@@ -94,6 +96,8 @@ const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.Re
 export function EditToolbar({
   tool,
   onToolChange,
+  onStartLinearArray,
+  onStartCircularArray,
   onCommitPolyline,
   onCancelDraft,
   onDeleteSelected,
@@ -233,6 +237,36 @@ export function EditToolbar({
         >
           <FiCopy size={16} />
           <span>Клон</span>
+        </button>
+
+        <button
+          type="button"
+          title="Линейный массив выбранных объектов"
+          onClick={onStartLinearArray}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiCopy size={16} />
+          <span>Массив X/Y</span>
+        </button>
+
+        <button
+          type="button"
+          title="Круговой массив выбранных объектов"
+          onClick={onStartCircularArray}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiRefreshCw size={16} />
+          <span>Массив круг</span>
         </button>
 
         <button

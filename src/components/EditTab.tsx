@@ -3,6 +3,7 @@ import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
 import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
 import { EditStatusBar } from "../modules/cad/panels/EditStatusBar";
 import { EditToolbar } from "../modules/cad/panels/EditToolbar";
+import { ArrayToolPanel } from "../modules/cad/panels/ArrayToolPanel";
 import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
@@ -87,6 +88,8 @@ export function EditTab({
         <EditToolbar
           tool={editor.tool}
           onToolChange={editor.setTool}
+          onStartLinearArray={editor.startLinearArray}
+          onStartCircularArray={editor.startCircularArray}
           onCommitPolyline={editor.commitPolyline}
           onCancelDraft={editor.cancelCurrentDraft}
           onDeleteSelected={editor.deleteSelected}
@@ -107,6 +110,18 @@ export function EditTab({
           hasSelection={selection.ids.length > 0}
           hasDraft={hasDraft}
         />
+
+        {editor.arrayTool.mode && (
+          <ArrayToolPanel
+            mode={editor.arrayTool.mode}
+            linear={editor.arrayTool.linear}
+            circular={editor.arrayTool.circular}
+            onLinearChange={editor.updateLinearArrayParams}
+            onCircularChange={editor.updateCircularArrayParams}
+            onApply={editor.applyArray}
+            onClose={editor.closeArrayTool}
+          />
+        )}
 
         {editor.tool === "text" && (
           <TextToolPanel
@@ -164,6 +179,7 @@ export function EditTab({
                 isPanning={editor.isPanning}
                 isSelectionHover={editor.isSelectionHover}
                 constraintDraft={editor.constraintDraft}
+                arrayPreviewShapes={editor.arrayPreviewShapes}
                 onSelectionHoverChange={editor.setIsSelectionHover}
                 onPointerDown={editor.handleCanvasPointerDown}
                 onPointerMove={editor.handleCanvasPointerMove}

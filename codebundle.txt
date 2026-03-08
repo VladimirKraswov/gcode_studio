@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-08T11:42:59.147Z
+generated: 2026-03-08T13:07:55.013Z
 
 
 
@@ -49,43 +49,6 @@ path: /.vite/deps/package.json
 ----------------------------------------
 {
   "type": "module"
-}
-
-
-path: /.vscode/c_cpp_properties.json
-----------------------------------------
-{
-  "configurations": [
-    {
-      "name": "STM32",
-      "includePath": [
-        "${workspaceFolder}/Core/Inc",
-        "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
-        "${workspaceFolder}/Drivers/CMSIS/Include",
-        "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
-        "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy"
-      ],
-      "defines": [
-        "USE_HAL_DRIVER",
-        "STM32F407xx"
-      ],
-      "compilerPath": "/Applications/STM32CubeIDE.app/Contents/Eclipse/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.macos64_1.0.100.202509120712/tools/bin/arm-none-eabi-gcc",
-      "cStandard": "c11",
-      "cppStandard": "c++17",
-      "intelliSenseMode": "gcc-arm",
-      "browse": {
-        "path": [
-          "${workspaceFolder}/Core/Inc",
-          "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc",
-          "${workspaceFolder}/Drivers/CMSIS/Include",
-          "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
-          "${workspaceFolder}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy"
-        ],
-        "limitSymbolsToIncludedHeaders": true
-      }
-    }
-  ],
-  "version": 4
 }
 
 
@@ -1394,6 +1357,7 @@ import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
 import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
 import { EditStatusBar } from "../modules/cad/panels/EditStatusBar";
 import { EditToolbar } from "../modules/cad/panels/EditToolbar";
+import { ArrayToolPanel } from "../modules/cad/panels/ArrayToolPanel";
 import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
@@ -1478,6 +1442,8 @@ export function EditTab({
         <EditToolbar
           tool={editor.tool}
           onToolChange={editor.setTool}
+          onStartLinearArray={editor.startLinearArray}
+          onStartCircularArray={editor.startCircularArray}
           onCommitPolyline={editor.commitPolyline}
           onCancelDraft={editor.cancelCurrentDraft}
           onDeleteSelected={editor.deleteSelected}
@@ -1498,6 +1464,18 @@ export function EditTab({
           hasSelection={selection.ids.length > 0}
           hasDraft={hasDraft}
         />
+
+        {editor.arrayTool.mode && (
+          <ArrayToolPanel
+            mode={editor.arrayTool.mode}
+            linear={editor.arrayTool.linear}
+            circular={editor.arrayTool.circular}
+            onLinearChange={editor.updateLinearArrayParams}
+            onCircularChange={editor.updateCircularArrayParams}
+            onApply={editor.applyArray}
+            onClose={editor.closeArrayTool}
+          />
+        )}
 
         {editor.tool === "text" && (
           <TextToolPanel
@@ -1555,6 +1533,7 @@ export function EditTab({
                 isPanning={editor.isPanning}
                 isSelectionHover={editor.isSelectionHover}
                 constraintDraft={editor.constraintDraft}
+                arrayPreviewShapes={editor.arrayPreviewShapes}
                 onSelectionHoverChange={editor.setIsSelectionHover}
                 onPointerDown={editor.handleCanvasPointerDown}
                 onPointerMove={editor.handleCanvasPointerMove}
@@ -3203,6 +3182,16 @@ function buildAxisLine(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] 
   return [from.clone(), to.clone()];
 }
 
+function chooseTickStep(length: number): number {
+  const candidates = [10, 20, 25, 50, 100, 200, 250, 500, 1000];
+  for (const step of candidates) {
+    if ((length * 2) / step <= 12) {
+      return step;
+    }
+  }
+  return candidates[candidates.length - 1];
+}
+
 export function PathScene({
   parsed,
   currentState,
@@ -3234,33 +3223,187 @@ export function PathScene({
   );
 
   const axesHelper = useMemo(() => {
-    const length = Math.max(stock.width, stock.height, stock.thickness) * 1.2;
+    const length = Math.max(
+      stock.width,
+      stock.height,
+      stock.thickness,
+      Math.abs(parsed.bounds.minX),
+      Math.abs(parsed.bounds.maxX),
+      Math.abs(parsed.bounds.minY),
+      Math.abs(parsed.bounds.maxY),
+      Math.abs(parsed.bounds.minZ),
+      Math.abs(parsed.bounds.maxZ),
+      100,
+    ) * 1.15;
+
     if (length <= 0) return null;
 
+    const tickStep = chooseTickStep(length);
+    const tickHalf = Math.max(1.5, length * 0.015);
+    const labelOffset = Math.max(4, length * 0.03);
+
     const origin = toScenePoint({ x: 0, y: 0, z: 0 });
-    const xEnd = toScenePoint({ x: length, y: 0, z: 0 });
-    const yEnd = toScenePoint({ x: 0, y: length, z: 0 });
-    const zEnd = toScenePoint({ x: 0, y: 0, z: length });
+
+    const xNeg = toScenePoint({ x: -length, y: 0, z: 0 });
+    const xPos = toScenePoint({ x: length, y: 0, z: 0 });
+
+    const yNeg = toScenePoint({ x: 0, y: -length, z: 0 });
+    const yPos = toScenePoint({ x: 0, y: length, z: 0 });
+
+    const zNeg = toScenePoint({ x: 0, y: 0, z: -length });
+    const zPos = toScenePoint({ x: 0, y: 0, z: length });
+
+    const xTicks: React.ReactNode[] = [];
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+      if (value === 0) continue;
+
+      const from = toScenePoint({ x: value, y: 0, z: -tickHalf });
+      const to = toScenePoint({ x: value, y: 0, z: tickHalf });
+      const labelPos = toScenePoint({ x: value, y: 0, z: -labelOffset });
+
+      xTicks.push(
+        <group key={`x-tick-${value}`}>
+          <Line points={[from, to]} color="#ef4444" lineWidth={1} />
+          <Text
+            position={labelPos}
+            color="#7f1d1d"
+            fontSize={Math.max(3.2, length * 0.02)}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {value}
+          </Text>
+        </group>,
+      );
+    }
+
+    const yTicks: React.ReactNode[] = [];
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+      if (value === 0) continue;
+
+      const from = toScenePoint({ x: -tickHalf, y: value, z: 0 });
+      const to = toScenePoint({ x: tickHalf, y: value, z: 0 });
+      const labelPos = toScenePoint({ x: -labelOffset, y: value, z: 0 });
+
+      yTicks.push(
+        <group key={`y-tick-${value}`}>
+          <Line points={[from, to]} color="#16a34a" lineWidth={1} />
+          <Text
+            position={labelPos}
+            color="#14532d"
+            fontSize={Math.max(3.2, length * 0.02)}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {value}
+          </Text>
+        </group>,
+      );
+    }
+
+    const zTicks: React.ReactNode[] = [];
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+      if (value === 0) continue;
+
+      const from = toScenePoint({ x: -tickHalf, y: 0, z: value });
+      const to = toScenePoint({ x: tickHalf, y: 0, z: value });
+      const labelPos = toScenePoint({ x: labelOffset, y: 0, z: value });
+
+      zTicks.push(
+        <group key={`z-tick-${value}`}>
+          <Line points={[from, to]} color="#2563eb" lineWidth={1} />
+          <Text
+            position={labelPos}
+            color="#1e3a8a"
+            fontSize={Math.max(3.2, length * 0.02)}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {value}
+          </Text>
+        </group>,
+      );
+    }
 
     return (
       <group>
-        <Line points={buildAxisLine(origin, xEnd)} color="red" lineWidth={2} />
-        <Text position={xEnd} color="red" fontSize={5} anchorX="left" anchorY="middle">
-          X
+        <Line points={buildAxisLine(xNeg, xPos)} color="red" lineWidth={2} />
+        <Line points={buildAxisLine(yNeg, yPos)} color="green" lineWidth={2} />
+        <Line points={buildAxisLine(zNeg, zPos)} color="blue" lineWidth={2} />
+
+        {xTicks}
+        {yTicks}
+        {zTicks}
+
+        <Text
+          position={toScenePoint({ x: length + labelOffset, y: 0, z: 0 })}
+          color="red"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="left"
+          anchorY="middle"
+        >
+          +X
+        </Text>
+        <Text
+          position={toScenePoint({ x: -length - labelOffset, y: 0, z: 0 })}
+          color="red"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="right"
+          anchorY="middle"
+        >
+          -X
         </Text>
 
-        <Line points={buildAxisLine(origin, yEnd)} color="green" lineWidth={2} />
-        <Text position={yEnd} color="green" fontSize={5} anchorX="left" anchorY="middle">
-          Y
+        <Text
+          position={toScenePoint({ x: 0, y: length + labelOffset, z: 0 })}
+          color="green"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          +Y
+        </Text>
+        <Text
+          position={toScenePoint({ x: 0, y: -length - labelOffset, z: 0 })}
+          color="green"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          -Y
         </Text>
 
-        <Line points={buildAxisLine(origin, zEnd)} color="blue" lineWidth={2} />
-        <Text position={zEnd} color="blue" fontSize={5} anchorX="left" anchorY="middle">
-          Z
+        <Text
+          position={toScenePoint({ x: 0, y: 0, z: length + labelOffset })}
+          color="blue"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          +Z
+        </Text>
+        <Text
+          position={toScenePoint({ x: 0, y: 0, z: -length - labelOffset })}
+          color="blue"
+          fontSize={Math.max(4.4, length * 0.024)}
+          anchorX="center"
+          anchorY="middle"
+        >
+          -Z
+        </Text>
+
+        <Text
+          position={origin}
+          color="#0f172a"
+          fontSize={Math.max(3.8, length * 0.02)}
+          anchorX="left"
+          anchorY="bottom"
+        >
+          0
         </Text>
       </group>
     );
-  }, [stock]);
+  }, [parsed.bounds, stock]);
 
   const rulers = useMemo(() => {
     const { minX, maxX, minY, maxY, minZ, maxZ } = parsed.bounds;
@@ -4733,6 +4876,7 @@ export function ArcShapeView({
 
 path: /src/modules/cad/canvas/CadCanvas.tsx
 ----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
@@ -4745,11 +4889,13 @@ import type {
   ConstraintEdge,
   SketchDocument,
   SketchPolylinePoint,
+  SketchShape,
   SketchTool,
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
+import { shapeBounds } from "../model/shapeBounds";
 import type { CadPoint } from "../geometry/textGeometry";
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
@@ -4787,6 +4933,7 @@ type CadCanvasProps = {
   isSelectionHover: boolean;
   isTransforming: boolean;
   constraintDraft: ConstraintDraftState;
+  arrayPreviewShapes: SketchShape[];
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
@@ -4812,6 +4959,69 @@ type CadCanvasProps = {
   ) => void;
 };
 
+function ArrayPreviewOverlay({
+  shapes,
+  documentHeight,
+  view,
+}: {
+  shapes: SketchShape[];
+  documentHeight: number;
+  view: ViewTransform;
+}) {
+  if (shapes.length === 0) return null;
+
+  return (
+    <g pointerEvents="none">
+      {shapes.map((shape) => {
+        const bounds = shapeBounds(shape);
+        const topLeft = cadToScreenPoint(
+          { x: bounds.minX, y: bounds.maxY },
+          documentHeight,
+          view,
+        );
+
+        const width = Math.max(1, (bounds.maxX - bounds.minX) * view.scale);
+        const height = Math.max(1, (bounds.maxY - bounds.minY) * view.scale);
+
+        return (
+          <g key={`array-preview-${shape.id}`}>
+            <rect
+              x={topLeft.x}
+              y={topLeft.y}
+              width={width}
+              height={height}
+              rx={8}
+              fill="rgba(34,197,94,0.08)"
+              stroke="#22c55e"
+              strokeWidth={1.5}
+              strokeDasharray="8 4"
+            />
+
+            <line
+              x1={topLeft.x}
+              y1={topLeft.y}
+              x2={topLeft.x + width}
+              y2={topLeft.y + height}
+              stroke="rgba(34,197,94,0.35)"
+              strokeWidth={1}
+              strokeDasharray="4 6"
+            />
+            <line
+              x1={topLeft.x + width}
+              y1={topLeft.y}
+              x2={topLeft.x}
+              y2={topLeft.y + height}
+              stroke="rgba(34,197,94,0.35)"
+              strokeWidth={1}
+              strokeDasharray="4 6"
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 export function CadCanvas({
   svgRef,
   document,
@@ -4827,6 +5037,7 @@ export function CadCanvas({
   isSelectionHover,
   isTransforming,
   constraintDraft,
+  arrayPreviewShapes,
   onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
@@ -4904,6 +5115,12 @@ export function CadCanvas({
           onPointerDown={onShapePointerDown}
         />
       ))}
+
+      <ArrayPreviewOverlay
+        shapes={arrayPreviewShapes}
+        documentHeight={document.height}
+        view={view}
+      />
 
       {showSelection && (
         <SelectionOverlay
@@ -5331,13 +5548,131 @@ type CadGridProps = {
   view: ViewTransform;
 };
 
+function chooseMajorCadStep(baseStep: number, scale: number): number {
+  const candidates = [
+    baseStep,
+    baseStep * 2,
+    baseStep * 5,
+    baseStep * 10,
+    baseStep * 20,
+    baseStep * 50,
+    baseStep * 100,
+  ].filter((value, index, arr) => arr.indexOf(value) === index);
+
+  for (const candidate of candidates) {
+    if (candidate * scale >= 56) {
+      return candidate;
+    }
+  }
+
+  return candidates[candidates.length - 1];
+}
+
 export function CadGrid({ document, view }: CadGridProps) {
   const baseStep = Math.max(1, document.snapStep || 1);
-  const minorStep = baseStep * view.scale;
-  const majorStep = minorStep * 5;
+  const minorCadStep = baseStep;
+  const majorCadStep = chooseMajorCadStep(baseStep, view.scale);
+
+  const minorStep = minorCadStep * view.scale;
+  const majorStep = majorCadStep * view.scale;
 
   const width = document.width * view.scale;
   const height = document.height * view.scale;
+
+  const left = view.offsetX;
+  const top = view.offsetY;
+  const right = left + width;
+  const bottom = top + height;
+
+  const rulerOffset = 18;
+  const tickMinor = 5;
+  const tickMajor = 10;
+
+  const xTicks: React.ReactNode[] = [];
+  for (let x = 0; x <= document.width; x += majorCadStep) {
+    const sx = left + x * view.scale;
+    xTicks.push(
+      <g key={`x-tick-${x}`}>
+        <line
+          x1={sx}
+          y1={bottom}
+          x2={sx}
+          y2={bottom + tickMajor}
+          stroke="#64748b"
+          strokeWidth={1}
+        />
+        <text
+          x={sx}
+          y={bottom + rulerOffset}
+          fontSize="11"
+          fill="#475569"
+          textAnchor="middle"
+        >
+          {x}
+        </text>
+      </g>,
+    );
+  }
+
+  const yTicks: React.ReactNode[] = [];
+  for (let y = 0; y <= document.height; y += majorCadStep) {
+    const sy = bottom - y * view.scale;
+    yTicks.push(
+      <g key={`y-tick-${y}`}>
+        <line
+          x1={left - tickMajor}
+          y1={sy}
+          x2={left}
+          y2={sy}
+          stroke="#64748b"
+          strokeWidth={1}
+        />
+        <text
+          x={left - rulerOffset}
+          y={sy + 4}
+          fontSize="11"
+          fill="#475569"
+          textAnchor="end"
+        >
+          {y}
+        </text>
+      </g>,
+    );
+  }
+
+  const xMinorTicks: React.ReactNode[] = [];
+  for (let x = 0; x <= document.width; x += minorCadStep) {
+    if (x % majorCadStep === 0) continue;
+    const sx = left + x * view.scale;
+    xMinorTicks.push(
+      <line
+        key={`x-minor-${x}`}
+        x1={sx}
+        y1={bottom}
+        x2={sx}
+        y2={bottom + tickMinor}
+        stroke="#94a3b8"
+        strokeWidth={1}
+      />,
+    );
+  }
+
+  const yMinorTicks: React.ReactNode[] = [];
+  for (let y = 0; y <= document.height; y += minorCadStep) {
+    if (y % majorCadStep === 0) continue;
+    const sy = bottom - y * view.scale;
+    yMinorTicks.push(
+      <line
+        key={`y-minor-${y}`}
+        x1={left - tickMinor}
+        y1={sy}
+        x2={left}
+        y2={sy}
+        stroke="#94a3b8"
+        strokeWidth={1}
+      />,
+    );
+  }
 
   return (
     <>
@@ -5377,12 +5712,140 @@ export function CadGrid({ document, view }: CadGridProps) {
       </defs>
 
       <rect
-        x={view.offsetX}
-        y={view.offsetY}
+        x={left}
+        y={top}
         width={width}
         height={height}
         fill="url(#cad-grid-major)"
       />
+
+      {/* Оси листа */}
+      <line
+        x1={left}
+        y1={bottom}
+        x2={right}
+        y2={bottom}
+        stroke="#ef4444"
+        strokeWidth={1.5}
+      />
+      <line
+        x1={left}
+        y1={bottom}
+        x2={left}
+        y2={top}
+        stroke="#2563eb"
+        strokeWidth={1.5}
+      />
+
+      {/* Стрелки направлений */}
+      <polygon
+        points={`${right + 10},${bottom} ${right + 2},${bottom - 4} ${right + 2},${bottom + 4}`}
+        fill="#ef4444"
+      />
+      <polygon
+        points={`${left},${top - 10} ${left - 4},${top - 2} ${left + 4},${top - 2}`}
+        fill="#2563eb"
+      />
+
+      {/* Линейка X */}
+      <line
+        x1={left}
+        y1={bottom + 14}
+        x2={right}
+        y2={bottom + 14}
+        stroke="#cbd5e1"
+        strokeWidth={1}
+      />
+      {xMinorTicks}
+      {xTicks}
+
+      {/* Линейка Y */}
+      <line
+        x1={left - 14}
+        y1={bottom}
+        x2={left - 14}
+        y2={top}
+        stroke="#cbd5e1"
+        strokeWidth={1}
+      />
+      {yMinorTicks}
+      {yTicks}
+
+      {/* Подписи направлений */}
+      <text
+        x={right + 18}
+        y={bottom + 4}
+        fontSize="12"
+        fontWeight="700"
+        fill="#ef4444"
+      >
+        +X
+      </text>
+
+      <text
+        x={left - 28}
+        y={bottom + 4}
+        fontSize="12"
+        fontWeight="700"
+        fill="#ef4444"
+        textAnchor="end"
+      >
+        -X
+      </text>
+
+      <text
+        x={left + 6}
+        y={top - 14}
+        fontSize="12"
+        fontWeight="700"
+        fill="#2563eb"
+      >
+        +Y
+      </text>
+
+      <text
+        x={left + 6}
+        y={bottom + 28}
+        fontSize="12"
+        fontWeight="700"
+        fill="#2563eb"
+      >
+        -Y
+      </text>
+
+      {/* Подписи осей */}
+      <text
+        x={right + 18}
+        y={bottom + 22}
+        fontSize="11"
+        fontWeight="700"
+        fill="#0f172a"
+      >
+        X
+      </text>
+
+      <text
+        x={left - 14}
+        y={top - 18}
+        fontSize="11"
+        fontWeight="700"
+        fill="#0f172a"
+        textAnchor="middle"
+      >
+        Y
+      </text>
+
+      {/* Ноль */}
+      <circle cx={left} cy={bottom} r={3.5} fill="#0f172a" />
+      <text
+        x={left + 8}
+        y={bottom - 8}
+        fontSize="11"
+        fontWeight="700"
+        fill="#0f172a"
+      >
+        0,0
+      </text>
     </>
   );
 }
@@ -7317,7 +7780,7 @@ export { moveShape, rotateShape, scaleShape } from "../model/shapeTransforms";
 
 path: /src/modules/cad/hooks/useCadEditor.ts
 ----------------------------------------
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import {
   appendPolylinePoint,
   finishDrag,
@@ -7394,6 +7857,13 @@ import {
 } from "../model/constraints";
 import { distance } from "../geometry/distance";
 import { createId } from "../model/ids";
+import {
+  applyCircularArray,
+  applyLinearArray,
+  rebuildArrayGroup,
+  type CircularArrayParams,
+  type LinearArrayParams,
+} from "../model/array";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -7474,6 +7944,10 @@ type ConstraintLabelDragState = {
   startPoint: SketchPolylinePoint;
   initialDistance: number;
 } | null;
+
+type ArrayToolMode = "linear" | "circular" | null;
+
+const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
 function angleBetween(center: SketchPolylinePoint, point: SketchPolylinePoint): number {
   return Math.atan2(point.y - center.y, point.x - center.x);
@@ -7585,6 +8059,17 @@ function getCompatibleEdges(axis: "x" | "y"): ConstraintEdge[] {
   return axis === "x" ? ["left", "right"] : ["bottom", "top"];
 }
 
+function getDefaultCircularCenter(
+  document: SketchDocument,
+  selection: SelectionState,
+): { x: number; y: number } {
+  const bounds = getSelectionBox(document, selection);
+  return {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+}
+
 export function useCadEditor({
   document,
   setDocument,
@@ -7617,6 +8102,22 @@ export function useCadEditor({
   const [constraintLabelDragState, setConstraintLabelDragState] =
     useState<ConstraintLabelDragState>(null);
 
+  const [arrayToolMode, setArrayToolMode] = useState<ArrayToolMode>(null);
+  const [editingArrayGroupId, setEditingArrayGroupId] = useState<string | null>(null);
+  const [linearArrayParams, setLinearArrayParams] = useState<LinearArrayParams>({
+    rows: 1,
+    columns: 3,
+    stepX: 20,
+    stepY: 0,
+  });
+  const [circularArrayParams, setCircularArrayParams] = useState<CircularArrayParams>({
+    count: 6,
+    centerX: 0,
+    centerY: 0,
+    totalAngle: 360,
+    rotateItems: true,
+  });
+
   const textPreviewMap = useTextPreviewMap(document.shapes);
 
   function setTool(nextTool: SketchTool) {
@@ -7636,6 +8137,169 @@ export function useCadEditor({
     setPolylineHoverPoint(null);
     setIsSelectionHover(false);
   }
+
+  function closeArrayTool() {
+    setArrayToolMode(null);
+    setEditingArrayGroupId(null);
+  }
+
+  function startLinearArray() {
+    if (selection.ids.length === 0) return;
+    setEditingArrayGroupId(null);
+    setArrayToolMode("linear");
+  }
+
+  function startCircularArray() {
+    if (selection.ids.length === 0) return;
+
+    const center = getDefaultCircularCenter(document, selection);
+    setCircularArrayParams((prev) => ({
+      ...prev,
+      centerX: center.x,
+      centerY: center.y,
+    }));
+    setEditingArrayGroupId(null);
+    setArrayToolMode("circular");
+  }
+
+  function updateLinearArrayParams(patch: Partial<LinearArrayParams>) {
+    setLinearArrayParams((prev) => ({ ...prev, ...patch }));
+  }
+
+  function updateCircularArrayParams(patch: Partial<CircularArrayParams>) {
+    setCircularArrayParams((prev) => ({ ...prev, ...patch }));
+  }
+
+  function editArrayGroupById(groupId: string) {
+    const group = document.groups.find((item) => item.id === groupId);
+    if (!group?.array) return;
+
+    const sourceIds = group.array.sourceShapeIds.filter((id) =>
+      document.shapes.some((shape) => shape.id === id),
+    );
+
+    if (sourceIds.length === 0) return;
+
+    onSelectionChange({
+      ids: sourceIds,
+      primaryId: sourceIds[0] ?? null,
+    });
+
+    setEditingArrayGroupId(groupId);
+
+    if (group.array.type === "linear") {
+      setLinearArrayParams(group.array.params);
+      setArrayToolMode("linear");
+      return;
+    }
+
+    setCircularArrayParams(group.array.params);
+    setArrayToolMode("circular");
+  }
+
+  function applyArray() {
+    if (selection.ids.length === 0 || !arrayToolMode) return;
+
+    checkpointHistory();
+
+    if (editingArrayGroupId) {
+      const group = document.groups.find((item) => item.id === editingArrayGroupId);
+      if (!group?.array) {
+        setEditingArrayGroupId(null);
+        setArrayToolMode(null);
+        return;
+      }
+
+      const nextDefinition =
+        arrayToolMode === "linear"
+          ? {
+              type: "linear" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: linearArrayParams,
+            }
+          : {
+              type: "circular" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: circularArrayParams,
+            };
+
+      const result = rebuildArrayGroup(document, editingArrayGroupId, nextDefinition);
+      setDocument(result.document);
+
+      const nextSelectionIds = [
+        ...nextDefinition.sourceShapeIds,
+        ...result.createdShapeIds,
+      ];
+
+      onSelectionChange({
+        ids: nextSelectionIds,
+        primaryId: nextDefinition.sourceShapeIds[0] ?? result.createdShapeIds[0] ?? null,
+      });
+
+      setEditingArrayGroupId(null);
+      setArrayToolMode(null);
+      return;
+    }
+
+    if (arrayToolMode === "linear") {
+      const result = applyLinearArray(document, selection, linearArrayParams);
+      setDocument(result.document);
+
+      const primaryShapeId =
+        selection.primaryId &&
+        result.document.shapes.some((shape) => shape.id === selection.primaryId)
+          ? selection.primaryId
+          : result.createdShapeIds[0] ?? null;
+
+      onSelectionChange({
+        ids: getSelectionShapeIds(result.document, {
+          ids: selection.ids,
+          primaryId: primaryShapeId,
+        }),
+        primaryId: primaryShapeId,
+      });
+
+      setEditingArrayGroupId(null);
+      setArrayToolMode(null);
+      return;
+    }
+
+    const result = applyCircularArray(document, selection, circularArrayParams);
+    setDocument(result.document);
+
+    const primaryShapeId =
+      selection.primaryId &&
+      result.document.shapes.some((shape) => shape.id === selection.primaryId)
+        ? selection.primaryId
+        : result.createdShapeIds[0] ?? null;
+
+    onSelectionChange({
+      ids: getSelectionShapeIds(result.document, {
+        ids: selection.ids,
+        primaryId: primaryShapeId,
+      }),
+      primaryId: primaryShapeId,
+    });
+
+    setEditingArrayGroupId(null);
+    setArrayToolMode(null);
+    
+  }
+
+  useEffect(() => {
+    const handleEditArrayGroup = (event: Event) => {
+      const customEvent = event as CustomEvent<{ groupId?: string }>;
+      const groupId = customEvent.detail?.groupId;
+      if (!groupId) return;
+      editArrayGroupById(groupId);
+    };
+
+    window.addEventListener(EDIT_ARRAY_GROUP_EVENT, handleEditArrayGroup);
+
+    return () => {
+      window.removeEventListener(EDIT_ARRAY_GROUP_EVENT, handleEditArrayGroup);
+    };
+  }, [document, selection]);
 
   useEffect(() => {
     if (tool !== "polyline") {
@@ -8741,6 +9405,54 @@ export function useCadEditor({
     }
   }
 
+  const arrayPreviewShapes = useMemo(() => {
+    if (!arrayToolMode || selection.ids.length === 0) {
+      return [];
+    }
+
+    if (editingArrayGroupId) {
+      const group = document.groups.find((item) => item.id === editingArrayGroupId);
+      if (!group?.array) {
+        return [];
+      }
+
+      const nextDefinition =
+        arrayToolMode === "linear"
+          ? {
+              type: "linear" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: linearArrayParams,
+            }
+          : {
+              type: "circular" as const,
+              sourceShapeIds: group.array.sourceShapeIds,
+              params: circularArrayParams,
+            };
+
+      const result = rebuildArrayGroup(document, editingArrayGroupId, nextDefinition);
+
+      return result.document.shapes.filter((shape) =>
+        result.createdShapeIds.includes(shape.id),
+      );
+    }
+
+    const result =
+      arrayToolMode === "linear"
+        ? applyLinearArray(document, selection, linearArrayParams)
+        : applyCircularArray(document, selection, circularArrayParams);
+
+    return result.document.shapes.filter((shape) =>
+      result.createdShapeIds.includes(shape.id),
+    );
+  }, [
+    arrayToolMode,
+    editingArrayGroupId,
+    document,
+    selection,
+    linearArrayParams,
+    circularArrayParams,
+  ]);
+
   const isDragging = dragState !== null;
   const isPanning = panState !== null;
   const isTransforming =
@@ -8798,6 +9510,20 @@ export function useCadEditor({
     toggleGroupCollapsed: toggleGroupCollapsedById,
     reorderDocumentShapes,
 
+    startLinearArray,
+    startCircularArray,
+    applyArray,
+    closeArrayTool,
+    updateLinearArrayParams,
+    updateCircularArrayParams,
+    editArrayGroupById,
+    arrayTool: {
+      mode: arrayToolMode,
+      linear: linearArrayParams,
+      circular: circularArrayParams,
+      editingGroupId: editingArrayGroupId,
+    },
+
     isDragging,
     isPanning,
     isTransforming,
@@ -8812,6 +9538,8 @@ export function useCadEditor({
             pointer: constraintCreateState.pointer,
             hoverTarget: constraintCreateState.hoverTarget,
           },
+
+    arrayPreviewShapes,
   };
 }
 
@@ -9118,6 +9846,399 @@ export function useTextPreviewMap(shapes: SketchShape[]) {
   }, [shapes]);
 
   return textPreviewMap;
+}
+
+
+path: /src/modules/cad/model/array.ts
+----------------------------------------
+import { cloneShape } from "./shapeFactory";
+import { moveShape, rotateShape } from "./shapeTransforms";
+import type { SelectionState } from "./selection";
+import type {
+  SketchArrayDefinition,
+  SketchCircularArrayParams,
+  SketchDocument,
+  SketchGroup,
+  SketchLinearArrayParams,
+  SketchShape,
+} from "./types";
+import { createId } from "./ids";
+
+export type LinearArrayParams = SketchLinearArrayParams;
+export type CircularArrayParams = SketchCircularArrayParams;
+
+type ArrayResult = {
+  document: SketchDocument;
+  createdShapeIds: string[];
+  groupId: string | null;
+};
+
+function uniqueIds(ids: string[]): string[] {
+  return Array.from(new Set(ids));
+}
+
+function getSelectedShapes(
+  document: SketchDocument,
+  selection: SelectionState,
+): SketchShape[] {
+  const ids = new Set(uniqueIds(selection.ids));
+  return document.shapes.filter((shape) => ids.has(shape.id));
+}
+
+function getShapesByIds(document: SketchDocument, ids: string[]): SketchShape[] {
+  const idSet = new Set(ids);
+  return document.shapes.filter((shape) => idSet.has(shape.id));
+}
+
+function buildArrayBadgeName(sourceName: string, suffix: string): string {
+  return `${sourceName} ${suffix}`;
+}
+
+function ensureArrayGroup(
+  document: SketchDocument,
+  selectedShapes: SketchShape[],
+): {
+  groupId: string;
+  groupsToAdd: SketchGroup[];
+  normalizedSources: SketchShape[];
+} {
+  const selectedGroupIds = Array.from(
+    new Set(
+      selectedShapes
+        .map((shape) => shape.groupId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  if (selectedGroupIds.length === 1) {
+    const existingGroup = document.groups.find(
+      (group) => group.id === selectedGroupIds[0],
+    );
+
+    if (existingGroup) {
+      return {
+        groupId: existingGroup.id,
+        groupsToAdd: [],
+        normalizedSources: selectedShapes.map((shape) => ({
+          ...shape,
+          groupId: existingGroup.id,
+        })),
+      };
+    }
+  }
+
+  const groupId = createId("group");
+
+  return {
+    groupId,
+    groupsToAdd: [
+      {
+        id: groupId,
+        name: `Группа ${document.groups.length + 1}`,
+        collapsed: false,
+        array: null,
+      },
+    ],
+    normalizedSources: selectedShapes.map((shape) => ({
+      ...shape,
+      groupId,
+    })),
+  };
+}
+
+function buildLinearCopies(
+  sourceShapes: SketchShape[],
+  groupId: string,
+  params: LinearArrayParams,
+): { shapes: SketchShape[]; ids: string[] } {
+  const rows = Math.max(1, Math.floor(params.rows));
+  const columns = Math.max(1, Math.floor(params.columns));
+
+  const createdShapes: SketchShape[] = [];
+  const createdIds: string[] = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < columns; col += 1) {
+      if (row === 0 && col === 0) continue;
+
+      const dx = col * params.stepX;
+      const dy = row * params.stepY;
+
+      for (const shape of sourceShapes) {
+        const clone = cloneShape(shape);
+        const moved = moveShape(clone, dx, dy);
+
+        const nextShape: SketchShape = {
+          ...moved,
+          name: buildArrayBadgeName(shape.name, `${row + 1}-${col + 1}`),
+          groupId,
+        };
+
+        createdShapes.push(nextShape);
+        createdIds.push(nextShape.id);
+      }
+    }
+  }
+
+  return {
+    shapes: createdShapes,
+    ids: createdIds,
+  };
+}
+
+function buildCircularCopies(
+  sourceShapes: SketchShape[],
+  groupId: string,
+  params: CircularArrayParams,
+): { shapes: SketchShape[]; ids: string[] } {
+  const count = Math.max(1, Math.floor(params.count));
+  const center = { x: params.centerX, y: params.centerY };
+
+  const createdShapes: SketchShape[] = [];
+  const createdIds: string[] = [];
+  const stepAngle = count <= 1 ? 0 : params.totalAngle / count;
+
+  for (let index = 1; index < count; index += 1) {
+    const angle = stepAngle * index;
+
+    for (const shape of sourceShapes) {
+      const clone = cloneShape(shape);
+      const rotated = rotateShape(clone, angle, center);
+      const nextShape = params.rotateItems
+        ? rotated
+        : rotateShape(rotated, -angle, center);
+
+      const finalShape: SketchShape = {
+        ...nextShape,
+        name: buildArrayBadgeName(shape.name, String(index + 1)),
+        groupId,
+      };
+
+      createdShapes.push(finalShape);
+      createdIds.push(finalShape.id);
+    }
+  }
+
+  return {
+    shapes: createdShapes,
+    ids: createdIds,
+  };
+}
+
+function replaceShapesById(
+  document: SketchDocument,
+  replacements: SketchShape[],
+): SketchShape[] {
+  const replacementMap = new Map(replacements.map((shape) => [shape.id, shape]));
+
+  return document.shapes.map((shape) => replacementMap.get(shape.id) ?? shape);
+}
+
+export function applyLinearArray(
+  document: SketchDocument,
+  selection: SelectionState,
+  params: LinearArrayParams,
+): ArrayResult {
+  const selectedShapes = getSelectedShapes(document, selection);
+
+  if (selectedShapes.length === 0) {
+    return {
+      document,
+      createdShapeIds: [],
+      groupId: null,
+    };
+  }
+
+  const { groupId, groupsToAdd, normalizedSources } = ensureArrayGroup(
+    document,
+    selectedShapes,
+  );
+
+  const { shapes: createdShapes, ids: createdIds } = buildLinearCopies(
+    normalizedSources,
+    groupId,
+    params,
+  );
+
+  const sourceIds = normalizedSources.map((shape) => shape.id);
+
+  return {
+    document: {
+      ...document,
+      groups: document.groups
+        .map((group) =>
+          group.id === groupId
+            ? {
+                ...group,
+                array: {
+                  type: "linear",
+                  sourceShapeIds: sourceIds,
+                  params,
+                } satisfies SketchArrayDefinition,
+              }
+            : group,
+        )
+        .concat(
+          groupsToAdd.map((group) => ({
+            ...group,
+            array: {
+              type: "linear",
+              sourceShapeIds: sourceIds,
+              params,
+            } satisfies SketchArrayDefinition,
+          })),
+        ),
+      shapes: [
+        ...replaceShapesById(document, normalizedSources),
+        ...createdShapes,
+      ],
+    },
+    createdShapeIds: createdIds,
+    groupId,
+  };
+}
+
+export function applyCircularArray(
+  document: SketchDocument,
+  selection: SelectionState,
+  params: CircularArrayParams,
+): ArrayResult {
+  const selectedShapes = getSelectedShapes(document, selection);
+
+  if (selectedShapes.length === 0) {
+    return {
+      document,
+      createdShapeIds: [],
+      groupId: null,
+    };
+  }
+
+  const { groupId, groupsToAdd, normalizedSources } = ensureArrayGroup(
+    document,
+    selectedShapes,
+  );
+
+  const { shapes: createdShapes, ids: createdIds } = buildCircularCopies(
+    normalizedSources,
+    groupId,
+    params,
+  );
+
+  const sourceIds = normalizedSources.map((shape) => shape.id);
+
+  return {
+    document: {
+      ...document,
+      groups: document.groups
+        .map((group) =>
+          group.id === groupId
+            ? {
+                ...group,
+                array: {
+                  type: "circular",
+                  sourceShapeIds: sourceIds,
+                  params,
+                } satisfies SketchArrayDefinition,
+              }
+            : group,
+        )
+        .concat(
+          groupsToAdd.map((group) => ({
+            ...group,
+            array: {
+              type: "circular",
+              sourceShapeIds: sourceIds,
+              params,
+            } satisfies SketchArrayDefinition,
+          })),
+        ),
+      shapes: [
+        ...replaceShapesById(document, normalizedSources),
+        ...createdShapes,
+      ],
+    },
+    createdShapeIds: createdIds,
+    groupId,
+  };
+}
+
+export function rebuildArrayGroup(
+  document: SketchDocument,
+  groupId: string,
+  definition: SketchArrayDefinition,
+): ArrayResult {
+  const group = document.groups.find((item) => item.id === groupId);
+  if (!group) {
+    return {
+      document,
+      createdShapeIds: [],
+      groupId: null,
+    };
+  }
+
+  const sourceShapes = getShapesByIds(document, definition.sourceShapeIds).map((shape) => ({
+    ...shape,
+    groupId,
+  }));
+
+  if (sourceShapes.length === 0) {
+    return {
+      document,
+      createdShapeIds: [],
+      groupId,
+    };
+  }
+
+  const sourceIdSet = new Set(definition.sourceShapeIds);
+
+  const shapesWithoutOldCopies = document.shapes.filter((shape) => {
+    if (shape.groupId !== groupId) {
+      return true;
+    }
+
+    return sourceIdSet.has(shape.id);
+  });
+
+  const normalizedDocument: SketchDocument = {
+    ...document,
+    shapes: replaceShapesById(
+      {
+        ...document,
+        shapes: shapesWithoutOldCopies,
+      },
+      sourceShapes,
+    ),
+  };
+
+  if (definition.type === "linear") {
+    const built = buildLinearCopies(sourceShapes, groupId, definition.params);
+
+    return {
+      document: {
+        ...normalizedDocument,
+        groups: normalizedDocument.groups.map((item) =>
+          item.id === groupId ? { ...item, array: definition } : item,
+        ),
+        shapes: [...normalizedDocument.shapes, ...built.shapes],
+      },
+      createdShapeIds: built.ids,
+      groupId,
+    };
+  }
+
+  const built = buildCircularCopies(sourceShapes, groupId, definition.params);
+
+  return {
+    document: {
+      ...normalizedDocument,
+      groups: normalizedDocument.groups.map((item) =>
+        item.id === groupId ? { ...item, array: definition } : item,
+      ),
+      shapes: [...normalizedDocument.shapes, ...built.shapes],
+    },
+    createdShapeIds: built.ids,
+    groupId,
+  };
 }
 
 
@@ -10555,10 +11676,38 @@ export type SketchShapeType =
   | "text"
   | "svg";
 
+export type SketchLinearArrayParams = {
+  rows: number;
+  columns: number;
+  stepX: number;
+  stepY: number;
+};
+
+export type SketchCircularArrayParams = {
+  count: number;
+  centerX: number;
+  centerY: number;
+  totalAngle: number;
+  rotateItems: boolean;
+};
+
+export type SketchArrayDefinition =
+  | {
+      type: "linear";
+      sourceShapeIds: string[];
+      params: SketchLinearArrayParams;
+    }
+  | {
+      type: "circular";
+      sourceShapeIds: string[];
+      params: SketchCircularArrayParams;
+    };
+
 export type SketchGroup = {
   id: string;
   name: string;
   collapsed?: boolean;
+  array?: SketchArrayDefinition | null;
 };
 
 export type SketchBase = {
@@ -10740,6 +11889,253 @@ export const DEFAULT_VIEW: ViewTransform = {
 
 export function createDefaultView(): ViewTransform {
   return { ...DEFAULT_VIEW };
+}
+
+
+path: /src/modules/cad/panels/ArrayToolPanel.tsx
+----------------------------------------
+import { FiCopy, FiRefreshCw, FiX } from "react-icons/fi";
+import { theme, ui } from "../../../styles/ui";
+import type {
+  CircularArrayParams,
+  LinearArrayParams,
+} from "../model/array";
+
+type ArrayToolMode = "linear" | "circular";
+
+type ArrayToolPanelProps = {
+  mode: ArrayToolMode;
+  linear: LinearArrayParams;
+  circular: CircularArrayParams;
+  onLinearChange: (patch: Partial<LinearArrayParams>) => void;
+  onCircularChange: (patch: Partial<CircularArrayParams>) => void;
+  onApply: () => void;
+  onClose: () => void;
+};
+
+const fieldLabel: React.CSSProperties = {
+  ...ui.inputLabel,
+};
+
+export function ArrayToolPanel({
+  mode,
+  linear,
+  circular,
+  onLinearChange,
+  onCircularChange,
+  onApply,
+  onClose,
+}: ArrayToolPanelProps) {
+  return (
+    <div
+      style={{
+        ...ui.panelInset,
+        padding: 12,
+        marginBottom: 12,
+        display: "grid",
+        gap: 12,
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={ui.iconBadge}>
+            {mode === "linear" ? <FiCopy size={16} /> : <FiRefreshCw size={16} />}
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: theme.text }}>
+              {mode === "linear" ? "Линейный массив" : "Круговой массив"}
+            </div>
+            <div style={{ fontSize: 12, color: theme.textMuted }}>
+              Оператор применяется к текущему выделению
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={onClose} style={ui.buttonGhost}>
+            <FiX size={15} />
+            Закрыть
+          </button>
+          <button type="button" onClick={onApply} style={ui.buttonPrimary}>
+            Применить
+          </button>
+        </div>
+      </div>
+
+      {mode === "linear" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 10,
+          }}
+        >
+          <label style={fieldLabel}>
+            Rows
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={linear.rows}
+              onChange={(e) =>
+                onLinearChange({
+                  rows: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Columns
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={linear.columns}
+              onChange={(e) =>
+                onLinearChange({
+                  columns: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Step X
+            <input
+              type="number"
+              step="0.001"
+              value={linear.stepX}
+              onChange={(e) =>
+                onLinearChange({
+                  stepX: Number(e.target.value) || 0,
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Step Y
+            <input
+              type="number"
+              step="0.001"
+              value={linear.stepY}
+              onChange={(e) =>
+                onLinearChange({
+                  stepY: Number(e.target.value) || 0,
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+            gap: 10,
+          }}
+        >
+          <label style={fieldLabel}>
+            Count
+            <input
+              type="number"
+              min="2"
+              step="1"
+              value={circular.count}
+              onChange={(e) =>
+                onCircularChange({
+                  count: Math.max(2, Number(e.target.value) || 2),
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Center X
+            <input
+              type="number"
+              step="0.001"
+              value={circular.centerX}
+              onChange={(e) =>
+                onCircularChange({
+                  centerX: Number(e.target.value) || 0,
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Center Y
+            <input
+              type="number"
+              step="0.001"
+              value={circular.centerY}
+              onChange={(e) =>
+                onCircularChange({
+                  centerY: Number(e.target.value) || 0,
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Total angle
+            <input
+              type="number"
+              step="0.001"
+              value={circular.totalAngle}
+              onChange={(e) =>
+                onCircularChange({
+                  totalAngle: Number(e.target.value) || 0,
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              paddingBottom: 8,
+              gap: 8,
+              fontSize: 13,
+              fontWeight: 700,
+              color: theme.text,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={circular.rotateItems}
+              onChange={(e) =>
+                onCircularChange({
+                  rotateItems: e.target.checked,
+                })
+              }
+            />
+            Rotate items
+          </label>
+        </div>
+      )}
+    </div>
+  );
 }
 
 
@@ -11351,6 +12747,8 @@ import type { MirrorAxis, SketchTool } from "../model/types";
 type EditToolbarProps = {
   tool: SketchTool;
   onToolChange: (tool: SketchTool) => void;
+  onStartLinearArray: () => void;
+  onStartCircularArray: () => void;
   onCommitPolyline: () => void;
   onCancelDraft: () => void;
   onDeleteSelected: () => void;
@@ -11420,6 +12818,8 @@ const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.Re
 export function EditToolbar({
   tool,
   onToolChange,
+  onStartLinearArray,
+  onStartCircularArray,
   onCommitPolyline,
   onCancelDraft,
   onDeleteSelected,
@@ -11561,6 +12961,37 @@ export function EditToolbar({
           <span>Клон</span>
         </button>
 
+        +
+        <button
+          type="button"
+          title="Линейный массив выбранных объектов"
+          onClick={onStartLinearArray}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiCopy size={16} />
+          <span>Массив X/Y</span>
+        </button>
+
+        <button
+          type="button"
+          title="Круговой массив выбранных объектов"
+          onClick={onStartCircularArray}
+          disabled={!hasSelection}
+          style={{
+            ...ui.buttonGhost,
+            opacity: hasSelection ? 1 : 0.45,
+            cursor: hasSelection ? "pointer" : "not-allowed",
+          }}
+        >
+          <FiRefreshCw size={16} />
+          <span>Массив круг</span>
+        </button>
+
         <button
           type="button"
           title="Отзеркалить по оси X относительно центра выделения"
@@ -11665,6 +13096,7 @@ import {
   FiChevronDown,
   FiChevronRight,
   FiCircle,
+  FiEdit3,
   FiEye,
   FiEyeOff,
   FiImage,
@@ -11677,7 +13109,7 @@ import {
 import { theme, ui } from "../../../styles/ui";
 import type { SelectionState } from "../model/selection";
 import { selectOnly } from "../model/selection";
-import type { SketchDocument, SketchShape } from "../model/types";
+import type { SketchArrayDefinition, SketchDocument, SketchShape } from "../model/types";
 import { getGroupById } from "../model/grouping";
 
 type ObjectListPanelProps = {
@@ -11696,6 +13128,8 @@ type ListItem =
   | { kind: "group"; groupId: string; shapes: SketchShape[] }
   | { kind: "shape"; shape: SketchShape };
 
+const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
+
 function getShapeIcon(shape: SketchShape) {
   switch (shape.type) {
     case "rectangle":
@@ -11713,6 +13147,34 @@ function getShapeIcon(shape: SketchShape) {
     case "svg":
       return <FiImage size={14} />;
   }
+}
+
+function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined) {
+  if (!array) return null;
+
+  if (array.type === "linear") {
+    return {
+      label: "Linear array",
+      background: "#ecfeff",
+      border: "#a5f3fc",
+      color: "#155e75",
+    };
+  }
+
+  return {
+    label: "Circular array",
+    background: "#f5f3ff",
+    border: "#c4b5fd",
+    color: "#5b21b6",
+  };
+}
+
+function openArrayEditor(groupId: string) {
+  window.dispatchEvent(
+    new CustomEvent(EDIT_ARRAY_GROUP_EVENT, {
+      detail: { groupId },
+    }),
+  );
 }
 
 export function ObjectListPanel({
@@ -11815,6 +13277,7 @@ export function ObjectListPanel({
             const collapsed = group?.collapsed ?? false;
             const allVisible = item.shapes.every((shape) => shape.visible !== false);
             const selected = item.shapes.every((shape) => selection.ids.includes(shape.id));
+            const arrayBadge = getArrayBadgeMeta(group?.array);
 
             return (
               <div
@@ -11837,7 +13300,15 @@ export function ObjectListPanel({
                     borderBottom: collapsed ? "none" : `1px solid ${theme.border}`,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => onToggleGroupCollapsed(item.groupId)}
@@ -11889,6 +13360,45 @@ export function ObjectListPanel({
                     onChange={(e) => onRenameGroup(item.groupId, e.target.value)}
                     style={ui.input}
                   />
+
+                  {arrayBadge && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        padding: 10,
+                        borderRadius: 12,
+                        background: "#fff",
+                        border: `1px solid ${theme.border}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 800,
+                          color: arrayBadge.color,
+                          background: arrayBadge.background,
+                          border: `1px solid ${arrayBadge.border}`,
+                          borderRadius: 999,
+                          padding: "4px 10px",
+                        }}
+                      >
+                        {arrayBadge.label}
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => openArrayEditor(item.groupId)}
+                        style={ui.buttonGhost}
+                      >
+                        <FiEdit3 size={14} />
+                        Изменить массив
+                      </button>
+                    </div>
+                  )}
 
                   {!collapsed && item.shapes.map((shape) => {
                     const active = selection.ids.includes(shape.id);
@@ -12036,6 +13546,7 @@ import {
   FiImage,
   FiMinus,
   FiMove,
+  FiRefreshCw,
   FiType,
 } from "react-icons/fi";
 import { clamp } from "../../../utils";
@@ -12060,6 +13571,8 @@ type ShapePropertiesPanelProps = {
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   selectedShape: SketchShape;
 };
+
+const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
 function CardBlock({
   children,
@@ -12150,6 +13663,14 @@ function edgeTitle(edge: ConstraintEdge): string {
   }
 }
 
+function openArrayEditor(groupId: string) {
+  window.dispatchEvent(
+    new CustomEvent(EDIT_ARRAY_GROUP_EVENT, {
+      detail: { groupId },
+    }),
+  );
+}
+
 export function ShapePropertiesPanel({
   document,
   setDocument,
@@ -12158,6 +13679,14 @@ export function ShapePropertiesPanel({
   const otherShapes = useMemo(
     () => document.shapes.filter((shape) => shape.id !== selectedShape.id),
     [document.shapes, selectedShape.id],
+  );
+
+  const selectedGroup = useMemo(
+    () =>
+      selectedShape.groupId
+        ? document.groups.find((group) => group.id === selectedShape.groupId) ?? null
+        : null,
+    [document.groups, selectedShape.groupId],
   );
 
   const [newConstraintEdge, setNewConstraintEdge] = useState<ConstraintEdge>("left");
@@ -12235,6 +13764,103 @@ export function ShapePropertiesPanel({
       </div>
 
       <div style={{ display: "grid", gap: 12 }}>
+        {selectedGroup?.array && (
+          <CardBlock title="Параметры массива">
+            <div style={{ display: "grid", gap: 10 }}>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "fit-content",
+                  padding: "6px 10px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  border:
+                    selectedGroup.array.type === "linear"
+                      ? "1px solid #a5f3fc"
+                      : "1px solid #c4b5fd",
+                  background:
+                    selectedGroup.array.type === "linear" ? "#ecfeff" : "#f5f3ff",
+                  color:
+                    selectedGroup.array.type === "linear" ? "#155e75" : "#5b21b6",
+                }}
+              >
+                <FiRefreshCw size={12} />
+                {selectedGroup.array.type === "linear"
+                  ? "Linear array"
+                  : "Circular array"}
+              </div>
+
+              {selectedGroup.array.type === "linear" ? (
+                <div style={twoColumnGrid}>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Rows</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.rows}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Columns</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.columns}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Step X</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.stepX}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Step Y</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.stepY}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={twoColumnGrid}>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Count</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.count}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Total angle</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.totalAngle}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Center X</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.centerX}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Center Y</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.centerY}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => openArrayEditor(selectedGroup.id)}
+                style={ui.buttonPrimary}
+              >
+                <FiEdit3 size={15} />
+                Редактировать
+              </button>
+            </div>
+          </CardBlock>
+        )}
+
         <CardBlock>
           <label style={fieldLabel}>
             Имя
@@ -15188,8 +16814,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 106
+included: 107
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 401414
+totalBytes(approx): 443945
