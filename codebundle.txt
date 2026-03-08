@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-08T09:39:29.035Z
+generated: 2026-03-08T10:34:07.303Z
 
 
 
@@ -395,6 +395,8 @@ path: /package.json
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.16",
     "@lezer/highlight": "^1.2.3",
+    "@mlightcad/common": "^1.4.3",
+    "@mlightcad/geometry-engine": "^3.2.3",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@uiw/react-codemirror": "^4.25.7",
@@ -4654,6 +4656,71 @@ createRoot(document.getElementById("root")!).render(
 );
 
 
+path: /src/modules/cad/canvas/ArcShapeView.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import { sampleArcPoints } from "../../geometry/geometryEngine";
+import type { ViewTransform } from "../model/view";
+import type { SketchArc } from "../model/types";
+
+type ArcShapeViewProps = {
+  shape: SketchArc;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
+};
+
+export function ArcShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: ArcShapeViewProps) {
+  const points = sampleArcPoints(
+    { x: shape.cx, y: shape.cy },
+    shape.radius,
+    shape.startAngle,
+    shape.endAngle,
+    shape.clockwise,
+    72,
+  )
+    .map((point) => {
+      const p = cadToScreenPoint(point, documentHeight, view);
+      return `${p.x},${p.y}`;
+    })
+    .join(" ");
+
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+  const hitStrokeWidth = Math.max(16, strokeWidth + 14);
+
+  return (
+    <>
+      <polyline
+        points={points}
+        fill="none"
+        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        pointerEvents="none"
+      />
+
+      <polyline
+        points={points}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={hitStrokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        onPointerDown={onPointerDown}
+      />
+    </>
+  );
+}
+
+
 path: /src/modules/cad/canvas/CadCanvas.tsx
 ----------------------------------------
 import { CadGrid } from "./CadGrid";
@@ -5406,7 +5473,9 @@ import type { ViewTransform } from "../model/view";
 import type { SketchPolylinePoint } from "../model/types";
 import type { DraftShape } from "../geometry/draftGeometry";
 import {
+  getArcPreviewPoints,
   getCircleFromDraft,
+  getLineFromDraft,
   getRectangleFromDraft,
 } from "../geometry/draftGeometry";
 
@@ -5485,6 +5554,186 @@ export function DraftOverlay({
           />
         );
       })()}
+
+      {draft?.type === "line" && (() => {
+        const line = getLineFromDraft(draft);
+        const p1 = cadToScreenPoint(
+          { x: line.x1, y: line.y1 },
+          documentHeight,
+          view,
+        );
+        const p2 = cadToScreenPoint(
+          { x: line.x2, y: line.y2 },
+          documentHeight,
+          view,
+        );
+
+        return (
+          <line
+            x1={p1.x}
+            y1={p1.y}
+            x2={p2.x}
+            y2={p2.y}
+            stroke="#2563eb"
+            strokeDasharray="6 4"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        );
+      })()}
+
+      {draft?.type === "arc" && draft.stage === "radius" && (() => {
+        const center = cadToScreenPoint(
+          { x: draft.centerX, y: draft.centerY },
+          documentHeight,
+          view,
+        );
+        const end = cadToScreenPoint(
+          { x: draft.endX, y: draft.endY },
+          documentHeight,
+          view,
+        );
+
+        return (
+          <>
+            <circle
+              cx={center.x}
+              cy={center.y}
+              r={4}
+              fill="#2563eb"
+            />
+            <line
+              x1={center.x}
+              y1={center.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="#2563eb"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+          </>
+        );
+      })()}
+
+      {draft?.type === "arc" && draft.stage === "sweep" && (() => {
+        const preview = getArcPreviewPoints(draft);
+        const points = preview
+          .map((point) => {
+            const p = cadToScreenPoint(point, documentHeight, view);
+            return `${p.x},${p.y}`;
+          })
+          .join(" ");
+
+        const center = cadToScreenPoint(
+          { x: draft.centerX, y: draft.centerY },
+          documentHeight,
+          view,
+        );
+        const start = cadToScreenPoint(
+          { x: draft.startX, y: draft.startY },
+          documentHeight,
+          view,
+        );
+        const end = cadToScreenPoint(
+          { x: draft.endX, y: draft.endY },
+          documentHeight,
+          view,
+        );
+
+        return (
+          <>
+            <circle cx={center.x} cy={center.y} r={4} fill="#2563eb" />
+
+            <line
+              x1={center.x}
+              y1={center.y}
+              x2={start.x}
+              y2={start.y}
+              stroke="#93c5fd"
+              strokeDasharray="4 4"
+              strokeWidth={1.25}
+              strokeLinecap="round"
+            />
+
+            <line
+              x1={center.x}
+              y1={center.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="#93c5fd"
+              strokeDasharray="4 4"
+              strokeWidth={1.25}
+              strokeLinecap="round"
+            />
+
+            <polyline
+              points={points}
+              fill="none"
+              stroke="#2563eb"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
+        );
+      })()}
+    </>
+  );
+}
+
+
+path: /src/modules/cad/canvas/LineShapeView.tsx
+----------------------------------------
+import { cadToScreenPoint } from "../../../utils/coordinates";
+import type { ViewTransform } from "../model/view";
+import type { SketchLine } from "../model/types";
+
+type LineShapeViewProps = {
+  shape: SketchLine;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  onPointerDown: (event: React.PointerEvent<SVGLineElement>) => void;
+};
+
+export function LineShapeView({
+  shape,
+  documentHeight,
+  view,
+  isSelected,
+  onPointerDown,
+}: LineShapeViewProps) {
+  const p1 = cadToScreenPoint({ x: shape.x1, y: shape.y1 }, documentHeight, view);
+  const p2 = cadToScreenPoint({ x: shape.x2, y: shape.y2 }, documentHeight, view);
+
+  const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
+  const hitStrokeWidth = Math.max(14, strokeWidth + 12);
+
+  return (
+    <>
+      <line
+        x1={p1.x}
+        y1={p1.y}
+        x2={p2.x}
+        y2={p2.y}
+        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        strokeLinecap="round"
+        pointerEvents="none"
+      />
+
+      <line
+        x1={p1.x}
+        y1={p1.y}
+        x2={p2.x}
+        y2={p2.y}
+        stroke="transparent"
+        strokeWidth={hitStrokeWidth}
+        strokeLinecap="round"
+        onPointerDown={onPointerDown}
+      />
     </>
   );
 }
@@ -5800,12 +6049,13 @@ export function SelectionOverlay({
 
 path: /src/modules/cad/canvas/ShapeRenderer.tsx
 ----------------------------------------
-// path: /src/modules/cad/canvas/ShapeRenderer.tsx
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { ViewTransform } from "../model/view";
 import type { SketchShape } from "../model/types";
 import { RectangleShapeView } from "./RectangleShapeView";
 import { CircleShapeView } from "./CircleShapeView";
+import { LineShapeView } from "./LineShapeView";
+import { ArcShapeView } from "./ArcShapeView";
 import { PolylineShapeView } from "./PolylineShapeView";
 import { TextShapeView } from "./TextShapeView";
 import { SvgShapeView } from "./SvgShapeView";
@@ -5838,6 +6088,7 @@ export function ShapeRenderer({
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       );
+
     case "circle":
       return (
         <CircleShapeView
@@ -5848,6 +6099,29 @@ export function ShapeRenderer({
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       );
+
+    case "line":
+      return (
+        <LineShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
+
+    case "arc":
+      return (
+        <ArcShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      );
+
     case "polyline":
       return (
         <PolylineShapeView
@@ -5858,6 +6132,7 @@ export function ShapeRenderer({
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       );
+
     case "text":
       return (
         <TextShapeView
@@ -5869,6 +6144,7 @@ export function ShapeRenderer({
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       );
+
     case "svg":
       return (
         <SvgShapeView
@@ -6055,8 +6331,34 @@ export function startCircleDraft(x: number, y: number): DraftShape {
   return { type: "circle", startX: x, startY: y, endX: x, endY: y };
 }
 
+export function startLineDraft(x: number, y: number): DraftShape {
+  return { type: "line", startX: x, startY: y, endX: x, endY: y };
+}
+
+export function startArcRadiusDraft(x: number, y: number): DraftShape {
+  return {
+    type: "arc",
+    stage: "radius",
+    centerX: x,
+    centerY: y,
+    endX: x,
+    endY: y,
+    clockwise: false,
+  };
+}
+
 export function updateDraft(draft: DraftShape, x: number, y: number): DraftShape {
-  return draft ? { ...draft, endX: x, endY: y } : null;
+  if (!draft) return null;
+
+  if (draft.type === "arc") {
+    if (draft.stage === "radius") {
+      return { ...draft, endX: x, endY: y };
+    }
+
+    return { ...draft, endX: x, endY: y };
+  }
+
+  return { ...draft, endX: x, endY: y };
 }
 
 export function commitRectangleDraft(draft: DraftShape) {
@@ -6189,6 +6491,10 @@ export function distance(a: { x: number; y: number }, b: { x: number; y: number 
 path: /src/modules/cad/geometry/draftGeometry.ts
 ----------------------------------------
 import { distance } from "./distance";
+import {
+  angleDegFromCenter,
+  sampleArcPoints,
+} from "../../geometry/geometryEngine";
 
 export type RectangleDraft = {
   type: "rectangle";
@@ -6206,7 +6512,44 @@ export type CircleDraft = {
   endY: number;
 };
 
-export type DraftShape = RectangleDraft | CircleDraft | null;
+export type LineDraft = {
+  type: "line";
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+};
+
+export type ArcRadiusDraft = {
+  type: "arc";
+  stage: "radius";
+  centerX: number;
+  centerY: number;
+  endX: number;
+  endY: number;
+  clockwise: boolean;
+};
+
+export type ArcSweepDraft = {
+  type: "arc";
+  stage: "sweep";
+  centerX: number;
+  centerY: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  clockwise: boolean;
+};
+
+export type ArcDraft = ArcRadiusDraft | ArcSweepDraft;
+
+export type DraftShape =
+  | RectangleDraft
+  | CircleDraft
+  | LineDraft
+  | ArcDraft
+  | null;
 
 export function normalizeDraftRect(draft: RectangleDraft) {
   return {
@@ -6232,25 +6575,74 @@ export function getCircleFromDraft(draft: CircleDraft) {
   };
 }
 
+export function getLineFromDraft(draft: LineDraft) {
+  return {
+    x1: draft.startX,
+    y1: draft.startY,
+    x2: draft.endX,
+    y2: draft.endY,
+  };
+}
+
+export function getArcFromDraft(draft: ArcDraft) {
+  if (draft.stage !== "sweep") {
+    return null;
+  }
+
+  const center = { x: draft.centerX, y: draft.centerY };
+  const start = { x: draft.startX, y: draft.startY };
+  const end = { x: draft.endX, y: draft.endY };
+
+  const radius = distance(center, start);
+
+  if (radius < 0.001) {
+    return null;
+  }
+
+  return {
+    cx: draft.centerX,
+    cy: draft.centerY,
+    radius,
+    startAngle: angleDegFromCenter(center, start),
+    endAngle: angleDegFromCenter(center, end),
+    clockwise: draft.clockwise,
+  };
+}
+
+export function getArcPreviewPoints(draft: ArcDraft) {
+  if (draft.stage === "radius") {
+    return [];
+  }
+
+  const arc = getArcFromDraft(draft);
+  if (!arc) return [];
+
+  return sampleArcPoints(
+    { x: arc.cx, y: arc.cy },
+    arc.radius,
+    arc.startAngle,
+    arc.endAngle,
+    arc.clockwise,
+    48,
+  );
+}
+
 
 path: /src/modules/cad/geometry/hitTest.ts
 ----------------------------------------
 import type { SketchPolylinePoint, SketchShape } from "../model/types";
-import { distance } from "./distance";
+import {
+  pointDistance,
+  pointToArcDistance,
+  pointToSegmentDistance,
+} from "../../geometry/geometryEngine";
 import { shapeBounds } from "../model/shapeBounds";
 
-function pointToSegmentDistance(point: SketchPolylinePoint, a: SketchPolylinePoint, b: SketchPolylinePoint): number {
-  const abx = b.x - a.x;
-  const aby = b.y - a.y;
-  const apx = point.x - a.x;
-  const apy = point.y - a.y;
-  const ab2 = abx * abx + aby * aby;
-  if (ab2 === 0) return distance(point, a);
-  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
-  return distance(point, { x: a.x + abx * t, y: a.y + aby * t });
-}
-
-export function hitTestShape(point: SketchPolylinePoint, shape: SketchShape, tolerance = 3): boolean {
+export function hitTestShape(
+  point: SketchPolylinePoint,
+  shape: SketchShape,
+  tolerance = 3,
+): boolean {
   switch (shape.type) {
     case "rectangle":
       return (
@@ -6259,16 +6651,52 @@ export function hitTestShape(point: SketchPolylinePoint, shape: SketchShape, tol
         point.y >= shape.y - tolerance &&
         point.y <= shape.y + shape.height + tolerance
       );
+
     case "circle":
-      return distance(point, { x: shape.cx, y: shape.cy }) <= shape.radius + tolerance;
+      return pointDistance(point, { x: shape.cx, y: shape.cy }) <= shape.radius + tolerance;
+
+    case "line":
+      return (
+        pointToSegmentDistance(
+          point,
+          { x: shape.x1, y: shape.y1 },
+          { x: shape.x2, y: shape.y2 },
+        ) <= tolerance
+      );
+
+    case "arc":
+      return (
+        pointToArcDistance(
+          point,
+          { x: shape.cx, y: shape.cy },
+          shape.radius,
+          shape.startAngle,
+          shape.endAngle,
+          shape.clockwise,
+        ) <= tolerance
+      );
+
     case "polyline":
       for (let i = 1; i < shape.points.length; i += 1) {
-        if (pointToSegmentDistance(point, shape.points[i - 1], shape.points[i]) <= tolerance) {
+        if (
+          pointToSegmentDistance(point, shape.points[i - 1], shape.points[i]) <= tolerance
+        ) {
           return true;
         }
       }
       return false;
+
     case "text": {
+      const bounds = shapeBounds(shape);
+      return (
+        point.x >= bounds.minX - tolerance &&
+        point.x <= bounds.maxX + tolerance &&
+        point.y >= bounds.minY - tolerance &&
+        point.y <= bounds.maxY + tolerance
+      );
+    }
+
+    case "svg": {
       const bounds = shapeBounds(shape);
       return (
         point.x >= bounds.minX - tolerance &&
@@ -6280,7 +6708,11 @@ export function hitTestShape(point: SketchPolylinePoint, shape: SketchShape, tol
   }
 }
 
-export function hitTestShapes(point: SketchPolylinePoint, shapes: SketchShape[], tolerance = 3): SketchShape | null {
+export function hitTestShapes(
+  point: SketchPolylinePoint,
+  shapes: SketchShape[],
+  tolerance = 3,
+): SketchShape | null {
   for (let i = shapes.length - 1; i >= 0; i -= 1) {
     if (hitTestShape(point, shapes[i], tolerance)) {
       return shapes[i];
@@ -6796,8 +7228,10 @@ import { useRef, useState } from "react";
 import {
   appendPolylinePoint,
   finishDrag,
+  startArcRadiusDraft,
   startCircleDraft,
   startDrag,
+  startLineDraft,
   startRectangleDraft,
   updateDraft,
   updateDrag,
@@ -6810,12 +7244,16 @@ import {
 } from "../editor-state/textToolState";
 import type { DraftShape } from "../geometry/draftGeometry";
 import {
+  getArcFromDraft,
   getCircleFromDraft,
+  getLineFromDraft,
   getRectangleFromDraft,
 } from "../geometry/draftGeometry";
 import { addShape } from "../model/document";
 import {
+  createArcShape,
   createCircleShape,
+  createLineShape,
   createPolylineShape,
   createRectangleShape,
   createSvgShape,
@@ -6856,11 +7294,11 @@ import {
   edgeAxis,
   getConstraintTargetBounds,
   getDistanceBetweenEdges,
-  getEdgeValue,
   getSheetBounds,
   updateConstraint,
   upsertConstraintForEdge,
 } from "../model/constraints";
+import { distance } from "../geometry/distance";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -7187,6 +7625,47 @@ export function useCadEditor({
     setIsSelectionHover(false);
   }
 
+  function addLine(x1: number, y1: number, x2: number, y2: number) {
+    if (distance({ x: x1, y: y1 }, { x: x2, y: y2 }) < 0.5) return;
+
+    const shape = createLineShape(
+      `Line ${document.shapes.filter((s) => s.type === "line").length + 1}`,
+      x1,
+      y1,
+      x2,
+      y2,
+    );
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
+  }
+
+  function addArc(
+    cx: number,
+    cy: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    clockwise = false,
+  ) {
+    if (radius < 1) return;
+
+    const shape = createArcShape({
+      name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
+      cx,
+      cy,
+      radius,
+      startAngle,
+      endAngle,
+      clockwise,
+    });
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
+  }
+
   function addText(x: number, y: number) {
     const value = textTool.text.trim();
     if (!value) return;
@@ -7316,6 +7795,68 @@ export function useCadEditor({
       return;
     }
 
+    if (tool === "line") {
+      setDraft(startLineDraft(cad.x, cad.y));
+      setIsSelectionHover(false);
+      return;
+    }
+
+    if (tool === "arc") {
+      setIsSelectionHover(false);
+
+      if (!draft) {
+        setDraft(startArcRadiusDraft(cad.x, cad.y));
+        return;
+      }
+
+      if (draft.type === "arc" && draft.stage === "radius") {
+        const radius = distance(
+          { x: draft.centerX, y: draft.centerY },
+          { x: cad.x, y: cad.y },
+        );
+
+        if (radius < 0.5) {
+          return;
+        }
+
+        setDraft({
+          type: "arc",
+          stage: "sweep",
+          centerX: draft.centerX,
+          centerY: draft.centerY,
+          startX: cad.x,
+          startY: cad.y,
+          endX: cad.x,
+          endY: cad.y,
+          clockwise: false,
+        });
+        return;
+      }
+
+      if (draft.type === "arc" && draft.stage === "sweep") {
+        const committed = getArcFromDraft({
+          ...draft,
+          endX: cad.x,
+          endY: cad.y,
+        });
+
+        if (committed) {
+          checkpointHistory();
+          addArc(
+            committed.cx,
+            committed.cy,
+            committed.radius,
+            committed.startAngle,
+            committed.endAngle,
+            committed.clockwise,
+          );
+        }
+
+        setDraft(null);
+        return;
+      }
+    }
+
     if (tool === "polyline") {
       setPolylineDraft((prev) => appendPolylinePoint(prev, { x: cad.x, y: cad.y }));
       setIsSelectionHover(false);
@@ -7323,6 +7864,7 @@ export function useCadEditor({
     }
 
     if (tool === "text") {
+      checkpointHistory();
       addText(cad.x, cad.y);
       return;
     }
@@ -7518,15 +8060,21 @@ export function useCadEditor({
 
     if (draft?.type === "rectangle") {
       const rect = getRectangleFromDraft(draft);
+      checkpointHistory();
       addRectangle(rect.x, rect.y, rect.width, rect.height);
-    }
-
-    if (draft?.type === "circle") {
+      setDraft(null);
+    } else if (draft?.type === "circle") {
       const circle = getCircleFromDraft(draft);
+      checkpointHistory();
       addCircle(circle.cx, circle.cy, circle.radius);
+      setDraft(null);
+    } else if (draft?.type === "line") {
+      const line = getLineFromDraft(draft);
+      checkpointHistory();
+      addLine(line.x1, line.y1, line.x2, line.y2);
+      setDraft(null);
     }
 
-    setDraft(null);
     setDragState(finishDrag());
     setPanState(null);
     setTransformState(null);
@@ -7534,6 +8082,11 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerLeave(event: React.PointerEvent<SVGSVGElement>) {
+    if (draft?.type === "arc") {
+      setPanState(null);
+      return;
+    }
+
     handleCanvasPointerUp(event);
   }
 
@@ -8919,7 +9472,13 @@ export function setPrimary(selection: SelectionState, id: string | null): Select
 
 path: /src/modules/cad/model/shapeBounds.ts
 ----------------------------------------
-// path: /src/modules/cad/model/shapeBounds.ts
+import {
+  arcEndPoint,
+  arcStartPoint,
+  boundsFromPoints,
+  rotateCadPoint,
+  sampleArcPoints,
+} from "../../geometry/geometryEngine";
 import type { SketchDocument, SketchShape } from "./types";
 
 export type Bounds2D = {
@@ -8928,32 +9487,6 @@ export type Bounds2D = {
   maxX: number;
   maxY: number;
 };
-
-function rotatePoint(
-  point: { x: number; y: number },
-  origin: { x: number; y: number },
-  angleDeg: number,
-) {
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-
-  return {
-    x: origin.x + dx * cos - dy * sin,
-    y: origin.y + dx * sin + dy * cos,
-  };
-}
-
-function boundsFromPoints(points: Array<{ x: number; y: number }>): Bounds2D {
-  return {
-    minX: Math.min(...points.map((p) => p.x)),
-    minY: Math.min(...points.map((p) => p.y)),
-    maxX: Math.max(...points.map((p) => p.x)),
-    maxY: Math.max(...points.map((p) => p.y)),
-  };
-}
 
 export function shapeBounds(shape: SketchShape): Bounds2D {
   switch (shape.type) {
@@ -8977,7 +9510,7 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         { x: shape.x + shape.width, y: shape.y },
         { x: shape.x + shape.width, y: shape.y + shape.height },
         { x: shape.x, y: shape.y + shape.height },
-      ].map((point) => rotatePoint(point, { x: cx, y: cy }, rotation));
+      ].map((point) => rotateCadPoint(point, { x: cx, y: cy }, rotation));
 
       return boundsFromPoints(points);
     }
@@ -8990,16 +9523,27 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         maxY: shape.cy + shape.radius,
       };
 
-    case "polyline": {
-      const xs = shape.points.map((p) => p.x);
-      const ys = shape.points.map((p) => p.y);
-      return {
-        minX: Math.min(...xs),
-        minY: Math.min(...ys),
-        maxX: Math.max(...xs),
-        maxY: Math.max(...ys),
-      };
+    case "line":
+      return boundsFromPoints([
+        { x: shape.x1, y: shape.y1 },
+        { x: shape.x2, y: shape.y2 },
+      ]);
+
+    case "arc": {
+      const points = sampleArcPoints(
+        { x: shape.cx, y: shape.cy },
+        shape.radius,
+        shape.startAngle,
+        shape.endAngle,
+        shape.clockwise,
+        72,
+      );
+
+      return boundsFromPoints(points);
     }
+
+    case "polyline":
+      return boundsFromPoints(shape.points);
 
     case "text": {
       const widthApprox =
@@ -9032,7 +9576,7 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         { x: baseBounds.maxX, y: baseBounds.minY },
         { x: baseBounds.maxX, y: baseBounds.maxY },
         { x: baseBounds.minX, y: baseBounds.maxY },
-      ].map((point) => rotatePoint(point, { x: shape.x, y: shape.y }, rotation));
+      ].map((point) => rotateCadPoint(point, { x: shape.x, y: shape.y }, rotation));
 
       return boundsFromPoints(corners);
     }
@@ -9057,7 +9601,7 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         { x: shape.x + shape.width, y: shape.y },
         { x: shape.x + shape.width, y: shape.y + shape.height },
         { x: shape.x, y: shape.y + shape.height },
-      ].map((point) => rotatePoint(point, { x: cx, y: cy }, rotation));
+      ].map((point) => rotateCadPoint(point, { x: cx, y: cy }, rotation));
 
       return boundsFromPoints(corners);
     }
@@ -9094,7 +9638,9 @@ export function groupBounds(document: SketchDocument, groupId: string): Bounds2D
 path: /src/modules/cad/model/shapeFactory.ts
 ----------------------------------------
 import type {
+  SketchArc,
   SketchCircle,
+  SketchLine,
   SketchPolyline,
   SketchPolylinePoint,
   SketchRectangle,
@@ -9143,6 +9689,52 @@ export function createCircleShape(
     cx,
     cy,
     radius,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
+export function createLineShape(
+  name: string,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): SketchLine {
+  return {
+    id: createId("line"),
+    type: "line",
+    name,
+    x1,
+    y1,
+    x2,
+    y2,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
+export function createArcShape(params: {
+  name: string;
+  cx: number;
+  cy: number;
+  radius: number;
+  startAngle: number;
+  endAngle: number;
+  clockwise?: boolean;
+}): SketchArc {
+  return {
+    id: createId("arc"),
+    type: "arc",
+    name: params.name,
+    cx: params.cx,
+    cy: params.cy,
+    radius: params.radius,
+    startAngle: params.startAngle,
+    endAngle: params.endAngle,
+    clockwise: params.clockwise ?? false,
     cutZ: null,
     strokeWidth: 1,
     ...baseShapeFields,
@@ -9241,49 +9833,71 @@ export type {
 
 path: /src/modules/cad/model/shapeTransforms.ts
 ----------------------------------------
-// path: /src/modules/cad/model/shapeTransforms.ts
 import type { CadPoint } from "../../../utils/fontGeometry";
+import {
+  rotateCadPoint,
+  scaleCadPoint,
+  translateCadPoint,
+} from "../../geometry/geometryEngine";
 import type { SketchShape } from "./types";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function scalePoint(point: CadPoint, origin: CadPoint, sx: number, sy: number): CadPoint {
-  return {
-    x: round(origin.x + (point.x - origin.x) * sx),
-    y: round(origin.y + (point.y - origin.y) * sy),
-  };
-}
-
 export function moveShape(shape: SketchShape, dx: number, dy: number): SketchShape {
   switch (shape.type) {
-    case "rectangle":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
-    case "circle":
-      return { ...shape, cx: round(shape.cx + dx), cy: round(shape.cy + dy) };
+    case "rectangle": {
+      const next = translateCadPoint({ x: shape.x, y: shape.y }, dx, dy);
+      return { ...shape, x: next.x, y: next.y };
+    }
+
+    case "circle": {
+      const next = translateCadPoint({ x: shape.cx, y: shape.cy }, dx, dy);
+      return { ...shape, cx: next.x, cy: next.y };
+    }
+
+    case "line": {
+      const p1 = translateCadPoint({ x: shape.x1, y: shape.y1 }, dx, dy);
+      const p2 = translateCadPoint({ x: shape.x2, y: shape.y2 }, dx, dy);
+      return {
+        ...shape,
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+      };
+    }
+
+    case "arc": {
+      const next = translateCadPoint({ x: shape.cx, y: shape.cy }, dx, dy);
+      return {
+        ...shape,
+        cx: next.x,
+        cy: next.y,
+      };
+    }
+
     case "polyline":
       return {
         ...shape,
-        points: shape.points.map((p) => ({ x: round(p.x + dx), y: round(p.y + dy) })),
+        points: shape.points.map((point) => translateCadPoint(point, dx, dy)),
       };
-    case "text":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
-    case "svg":
-      return { ...shape, x: round(shape.x + dx), y: round(shape.y + dy) };
+
+    case "text": {
+      const next = translateCadPoint({ x: shape.x, y: shape.y }, dx, dy);
+      return { ...shape, x: next.x, y: next.y };
+    }
+
+    case "svg": {
+      const next = translateCadPoint({ x: shape.x, y: shape.y }, dx, dy);
+      return { ...shape, x: next.x, y: next.y };
+    }
   }
 }
 
 export function rotatePoint(point: CadPoint, origin: CadPoint, angleDeg: number): CadPoint {
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-  return {
-    x: round(origin.x + dx * cos - dy * sin),
-    y: round(origin.y + dx * sin + dy * cos),
-  };
+  return rotateCadPoint(point, origin, angleDeg);
 }
 
 export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint): SketchShape {
@@ -9293,7 +9907,7 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
         x: shape.x + shape.width / 2,
         y: shape.y + shape.height / 2,
       };
-      const nextCenter = rotatePoint(center, origin, angle);
+      const nextCenter = rotateCadPoint(center, origin, angle);
 
       return {
         ...shape,
@@ -9304,29 +9918,55 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
     }
 
     case "circle": {
-      const p = rotatePoint({ x: shape.cx, y: shape.cy }, origin, angle);
-      return { ...shape, cx: p.x, cy: p.y };
+      const next = rotateCadPoint({ x: shape.cx, y: shape.cy }, origin, angle);
+      return { ...shape, cx: next.x, cy: next.y };
+    }
+
+    case "line": {
+      const p1 = rotateCadPoint({ x: shape.x1, y: shape.y1 }, origin, angle);
+      const p2 = rotateCadPoint({ x: shape.x2, y: shape.y2 }, origin, angle);
+      return {
+        ...shape,
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+      };
+    }
+
+    case "arc": {
+      const nextCenter = rotateCadPoint({ x: shape.cx, y: shape.cy }, origin, angle);
+      return {
+        ...shape,
+        cx: nextCenter.x,
+        cy: nextCenter.y,
+        startAngle: round(shape.startAngle + angle),
+        endAngle: round(shape.endAngle + angle),
+      };
     }
 
     case "polyline":
       return {
         ...shape,
-        points: shape.points.map((p) => rotatePoint(p, origin, angle)),
+        points: shape.points.map((point) => rotateCadPoint(point, origin, angle)),
       };
 
-    case "text":
+    case "text": {
+      const next = rotateCadPoint({ x: shape.x, y: shape.y }, origin, angle);
       return {
         ...shape,
-        ...rotatePoint({ x: shape.x, y: shape.y }, origin, angle),
+        x: next.x,
+        y: next.y,
         rotation: round((shape.rotation ?? 0) + angle),
       };
+    }
 
     case "svg": {
       const center = {
         x: shape.x + shape.width / 2,
         y: shape.y + shape.height / 2,
       };
-      const nextCenter = rotatePoint(center, origin, angle);
+      const nextCenter = rotateCadPoint(center, origin, angle);
 
       return {
         ...shape,
@@ -9346,7 +9986,7 @@ export function scaleShape(
 ): SketchShape {
   switch (shape.type) {
     case "rectangle": {
-      const topLeft = scalePoint({ x: shape.x, y: shape.y }, origin, sx, sy);
+      const topLeft = scaleCadPoint({ x: shape.x, y: shape.y }, origin, sx, sy);
 
       return {
         ...shape,
@@ -9358,35 +9998,60 @@ export function scaleShape(
     }
 
     case "circle": {
-      const p = scalePoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
+      const next = scaleCadPoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
       return {
         ...shape,
-        cx: p.x,
-        cy: p.y,
+        cx: next.x,
+        cy: next.y,
+        radius: round(shape.radius * Math.max(sx, sy)),
+      };
+    }
+
+    case "line": {
+      const p1 = scaleCadPoint({ x: shape.x1, y: shape.y1 }, origin, sx, sy);
+      const p2 = scaleCadPoint({ x: shape.x2, y: shape.y2 }, origin, sx, sy);
+      return {
+        ...shape,
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+      };
+    }
+
+    case "arc": {
+      const next = scaleCadPoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
+      return {
+        ...shape,
+        cx: next.x,
+        cy: next.y,
         radius: round(shape.radius * Math.max(sx, sy)),
       };
     }
 
     case "polyline":
-      return { ...shape, points: shape.points.map((p) => scalePoint(p, origin, sx, sy)) };
-
-    case "text": {
-      const p = scalePoint({ x: shape.x, y: shape.y }, origin, sx, sy);
       return {
         ...shape,
-        x: p.x,
-        y: p.y,
+        points: shape.points.map((point) => scaleCadPoint(point, origin, sx, sy)),
+      };
+
+    case "text": {
+      const next = scaleCadPoint({ x: shape.x, y: shape.y }, origin, sx, sy);
+      return {
+        ...shape,
+        x: next.x,
+        y: next.y,
         height: round(shape.height * sy),
         letterSpacing: round(shape.letterSpacing * sx),
       };
     }
 
     case "svg": {
-      const p = scalePoint({ x: shape.x, y: shape.y }, origin, sx, sy);
+      const next = scaleCadPoint({ x: shape.x, y: shape.y }, origin, sx, sy);
       return {
         ...shape,
-        x: p.x,
-        y: p.y,
+        x: next.x,
+        y: next.y,
         width: round(shape.width * sx),
         height: round(shape.height * sy),
       };
@@ -9401,7 +10066,14 @@ path: /src/modules/cad/model/types.ts
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
-export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text" | "svg";
+export type SketchShapeType =
+  | "rectangle"
+  | "circle"
+  | "line"
+  | "arc"
+  | "polyline"
+  | "text"
+  | "svg";
 
 export type SketchGroup = {
   id: string;
@@ -9432,6 +10104,24 @@ export type SketchCircle = SketchBase & {
   cx: number;
   cy: number;
   radius: number;
+};
+
+export type SketchLine = SketchBase & {
+  type: "line";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+export type SketchArc = SketchBase & {
+  type: "arc";
+  cx: number;
+  cy: number;
+  radius: number;
+  startAngle: number;
+  endAngle: number;
+  clockwise: boolean;
 };
 
 export type SketchPolylinePoint = {
@@ -9474,6 +10164,8 @@ export type SketchSvg = SketchBase & {
 export type SketchShape =
   | SketchRectangle
   | SketchCircle
+  | SketchLine
+  | SketchArc
   | SketchPolyline
   | SketchText
   | SketchSvg;
@@ -9544,6 +10236,8 @@ export type SketchTool =
   | "select"
   | "rectangle"
   | "circle"
+  | "line"
+  | "arc"
   | "polyline"
   | "text"
   | "pan";
@@ -10107,7 +10801,16 @@ export function EditStatusBar({
                 ? "Рисование прямоугольника"
                 : tool === "circle"
                   ? "Рисование окружности"
-                  : "Редактирование";
+                  : tool === "line"
+                    ? "Рисование линии"
+                    : tool === "arc"
+                      ? "Рисование дуги"
+                      : "Редактирование";
+
+  const hint =
+    tool === "arc"
+      ? "Дуга: 1-й клик — центр, 2-й — старт/радиус, 3-й — конец дуги."
+      : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
 
   return (
     <div
@@ -10122,9 +10825,7 @@ export function EditStatusBar({
         flexShrink: 0,
       }}
     >
-      <span>
-        Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.
-      </span>
+      <span>{hint}</span>
       <span>
         {interactionLabel} · Объектов: {objectCount}
       </span>
@@ -10141,9 +10842,11 @@ import {
   FiCircle,
   FiCornerUpLeft,
   FiCornerUpRight,
+  FiGitCommit,
   FiImage,
   FiLayers,
   FiMaximize,
+  FiMinus,
   FiMousePointer,
   FiPenTool,
   FiPlay,
@@ -10178,6 +10881,8 @@ const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.Re
   { id: "select", label: "Select", hint: "Выделение и перетаскивание объектов", icon: <FiMousePointer size={16} /> },
   { id: "rectangle", label: "Rectangle", hint: "Нарисовать прямоугольник", icon: <FiSquare size={16} /> },
   { id: "circle", label: "Circle", hint: "Нарисовать окружность", icon: <FiCircle size={16} /> },
+  { id: "line", label: "Line", hint: "Нарисовать линию", icon: <FiMinus size={16} /> },
+  { id: "arc", label: "Arc", hint: "Дуга: центр → старт → конец", icon: <FiGitCommit size={16} /> },
   { id: "polyline", label: "Polyline", hint: "Добавление точек полилинии", icon: <FiPenTool size={16} /> },
   { id: "text", label: "Text", hint: "Вставка текстового объекта", icon: <FiType size={16} /> },
 ];
@@ -10363,11 +11068,6 @@ export function EditToolbar({
 
 path: /src/modules/cad/panels/ObjectListPanel.tsx
 ----------------------------------------
-
-// =============================
-// FILE: src/modules/cad/panels/ObjectListPanel.tsx
-// =============================
-
 import { useMemo, useState } from "react";
 import {
   FiBox,
@@ -10378,6 +11078,7 @@ import {
   FiEyeOff,
   FiImage,
   FiLayers,
+  FiMinus,
   FiMove,
   FiTrash2,
   FiType,
@@ -10409,6 +11110,10 @@ function getShapeIcon(shape: SketchShape) {
     case "rectangle":
       return <FiBox size={14} />;
     case "circle":
+      return <FiCircle size={14} />;
+    case "line":
+      return <FiMinus size={14} />;
+    case "arc":
       return <FiCircle size={14} />;
     case "polyline":
       return <FiMove size={14} />;
@@ -10732,9 +11437,16 @@ const iconButtonStyle: React.CSSProperties = {
 
 path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
 ----------------------------------------
-// path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
 import { useEffect, useMemo, useState } from "react";
-import { FiBox, FiCircle, FiEdit3, FiImage, FiMove, FiType } from "react-icons/fi";
+import {
+  FiBox,
+  FiCircle,
+  FiEdit3,
+  FiImage,
+  FiMinus,
+  FiMove,
+  FiType,
+} from "react-icons/fi";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
 import type {
@@ -10818,6 +11530,10 @@ function getShapeIcon(type: SketchShape["type"]) {
     case "rectangle":
       return <FiBox size={18} />;
     case "circle":
+      return <FiCircle size={18} />;
+    case "line":
+      return <FiMinus size={18} />;
+    case "arc":
       return <FiCircle size={18} />;
     case "polyline":
       return <FiMove size={18} />;
@@ -11076,6 +11792,129 @@ export function ShapePropertiesPanel({
                 />
               </label>
             </div>
+          </CardBlock>
+        )}
+
+        {selectedShape.type === "line" && (
+          <CardBlock>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                X1
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.x1}
+                  onChange={(e) => updateSelected({ x1: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Y1
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.y1}
+                  onChange={(e) => updateSelected({ y1: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                X2
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.x2}
+                  onChange={(e) => updateSelected({ x2: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Y2
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.y2}
+                  onChange={(e) => updateSelected({ y2: Number(e.target.value) || 0 })}
+                />
+              </label>
+            </div>
+          </CardBlock>
+        )}
+
+        {selectedShape.type === "arc" && (
+          <CardBlock>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                CX
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.cx}
+                  onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                CY
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.cy}
+                  onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Radius
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  value={selectedShape.radius}
+                  onChange={(e) =>
+                    updateSelected({
+                      radius: Math.max(0.001, Number(e.target.value) || 0.001),
+                    })
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Start angle
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.1"
+                  value={selectedShape.startAngle}
+                  onChange={(e) =>
+                    updateSelected({ startAngle: Number(e.target.value) || 0 })
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                End angle
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.1"
+                  value={selectedShape.endAngle}
+                  onChange={(e) =>
+                    updateSelected({ endAngle: Number(e.target.value) || 0 })
+                  }
+                />
+              </label>
+            </div>
+
+            <label style={{ ...checkboxRow, marginTop: 10 }}>
+              <input
+                type="checkbox"
+                checked={selectedShape.clockwise}
+                onChange={(e) => updateSelected({ clockwise: e.target.checked })}
+              />
+              <span>Clockwise</span>
+            </label>
           </CardBlock>
         )}
 
@@ -11853,10 +12692,11 @@ export async function generateSketchGCode(doc: SketchDocument): Promise<string> 
 
 path: /src/modules/cam/gcode/shapeToToolpath.ts
 ----------------------------------------
-// path: /src/modules/cam/gcode/shapeToToolpath.ts
 import type {
+  SketchArc,
   SketchCircle,
   SketchDocument,
+  SketchLine,
   SketchPolyline,
   SketchRectangle,
   SketchShape,
@@ -11864,6 +12704,7 @@ import type {
   SketchText,
 } from "../../cad/model/types";
 import { getTextPolylines } from "../../cad/geometry/textGeometry";
+import { rotateCadPoint, sampleArcPoints } from "../../geometry/geometryEngine";
 import type { Toolpath, ToolpathPoint } from "../types";
 
 function round(value: number): number {
@@ -11883,16 +12724,7 @@ function rotatePoint(
   origin: ToolpathPoint,
   angleDeg: number,
 ): ToolpathPoint {
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-
-  return {
-    x: round(origin.x + dx * cos - dy * sin),
-    y: round(origin.y + dx * sin + dy * cos),
-  };
+  return rotateCadPoint(point, origin, angleDeg);
 }
 
 function buildBandOffsets(
@@ -12028,6 +12860,29 @@ function offsetPolylinePoints(
   return result;
 }
 
+function offsetLinePoints(
+  start: ToolpathPoint,
+  end: ToolpathPoint,
+  offset: number,
+): ToolpathPoint[] {
+  if (Math.abs(offset) < 1e-9) {
+    return [{ ...start }, { ...end }];
+  }
+
+  const n = polylineNormal(start, end);
+
+  return [
+    {
+      x: round(start.x + n.x * offset),
+      y: round(start.y + n.y * offset),
+    },
+    {
+      x: round(end.x + n.x * offset),
+      y: round(end.y + n.y * offset),
+    },
+  ];
+}
+
 function isToolpath(value: Toolpath | null): value is Toolpath {
   return value !== null;
 }
@@ -12075,6 +12930,55 @@ export function circleToToolpaths(
       closed: true,
       cutZ,
       points: circleToPolylinePoints(radius, shape.cx, shape.cy, 96),
+    };
+  });
+
+  return result.filter(isToolpath);
+}
+
+export function lineToToolpaths(
+  shape: SketchLine,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const strokeWidth = resolveStrokeWidth(shape);
+  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
+
+  const start = { x: shape.x1, y: shape.y1 };
+  const end = { x: shape.x2, y: shape.y2 };
+
+  return bandOffsets.map((offset, index) => ({
+    name: `LINE ${shape.name} #${index + 1}`,
+    closed: false,
+    cutZ,
+    points: offsetLinePoints(start, end, offset),
+  }));
+}
+
+export function arcToToolpaths(
+  shape: SketchArc,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const strokeWidth = resolveStrokeWidth(shape);
+  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
+
+  const result: Array<Toolpath | null> = bandOffsets.map((offset, index) => {
+    const radius = shape.radius + offset;
+    if (radius <= 0.001) return null;
+
+    return {
+      name: `ARC ${shape.name} #${index + 1}`,
+      closed: false,
+      cutZ,
+      points: sampleArcPoints(
+        { x: shape.cx, y: shape.cy },
+        radius,
+        shape.startAngle,
+        shape.endAngle,
+        shape.clockwise,
+        72,
+      ),
     };
   });
 
@@ -12149,12 +13053,12 @@ export function svgToToolpaths(
   const baseContours = shape.contours
     .map((contour) =>
       contour.map((point) => {
-        const p = {
+        const next = {
           x: round(shape.x + point.x * scaleX),
           y: round(shape.y + point.y * scaleY),
         };
 
-        return rotation ? rotatePoint(p, center, rotation) : p;
+        return rotation ? rotatePoint(next, center, rotation) : next;
       }),
     )
     .filter((contour) => contour.length >= 2);
@@ -12187,6 +13091,10 @@ export async function shapeToToolpaths(
       return rectangleToToolpaths(shape, doc);
     case "circle":
       return circleToToolpaths(shape, doc);
+    case "line":
+      return lineToToolpaths(shape, doc);
+    case "arc":
+      return arcToToolpaths(shape, doc);
     case "polyline":
       return polylineToToolpaths(shape, doc);
     case "text":
@@ -12207,6 +13115,274 @@ export type Toolpath = {
   closed: boolean;
   cutZ: number;
 };
+
+
+path: /src/modules/geometry/geometryEngine.ts
+----------------------------------------
+import {
+  AcGeMatrix2d,
+  AcGePoint2d,
+  type AcGePoint2dLike,
+} from "@mlightcad/geometry-engine";
+
+export type CadPointLike = {
+  x: number;
+  y: number;
+};
+
+export type Bounds2DLike = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+export function toAcGePoint2d(point: AcGePoint2dLike): AcGePoint2d {
+  return new AcGePoint2d(point.x, point.y);
+}
+
+export function fromAcGePoint2d(point: AcGePoint2dLike): CadPointLike {
+  return {
+    x: round(point.x),
+    y: round(point.y),
+  };
+}
+
+export function makeTranslationMatrix(dx: number, dy: number): AcGeMatrix2d {
+  return new AcGeMatrix2d().makeTranslation(dx, dy);
+}
+
+export function makeRotationMatrix(angleDeg: number): AcGeMatrix2d {
+  const radians = (angleDeg * Math.PI) / 180;
+  return new AcGeMatrix2d().makeRotation(radians);
+}
+
+export function makeScaleMatrix(sx: number, sy: number): AcGeMatrix2d {
+  return new AcGeMatrix2d().makeScale(sx, sy);
+}
+
+export function multiplyMatrices(...matrices: AcGeMatrix2d[]): AcGeMatrix2d {
+  const result = new AcGeMatrix2d();
+
+  for (const matrix of matrices) {
+    result.multiply(matrix);
+  }
+
+  return result;
+}
+
+export function transformCadPoint(
+  point: CadPointLike,
+  matrix: AcGeMatrix2d,
+): CadPointLike {
+  const transformed = toAcGePoint2d(point).applyMatrix2d(matrix);
+  return fromAcGePoint2d(transformed);
+}
+
+export function translateCadPoint(
+  point: CadPointLike,
+  dx: number,
+  dy: number,
+): CadPointLike {
+  return transformCadPoint(point, makeTranslationMatrix(dx, dy));
+}
+
+export function rotateCadPoint(
+  point: CadPointLike,
+  origin: CadPointLike,
+  angleDeg: number,
+): CadPointLike {
+  if (!angleDeg) {
+    return {
+      x: round(point.x),
+      y: round(point.y),
+    };
+  }
+
+  const matrix = multiplyMatrices(
+    makeTranslationMatrix(origin.x, origin.y),
+    makeRotationMatrix(angleDeg),
+    makeTranslationMatrix(-origin.x, -origin.y),
+  );
+
+  return transformCadPoint(point, matrix);
+}
+
+export function scaleCadPoint(
+  point: CadPointLike,
+  origin: CadPointLike,
+  sx: number,
+  sy: number,
+): CadPointLike {
+  const matrix = multiplyMatrices(
+    makeTranslationMatrix(origin.x, origin.y),
+    makeScaleMatrix(sx, sy),
+    makeTranslationMatrix(-origin.x, -origin.y),
+  );
+
+  return transformCadPoint(point, matrix);
+}
+
+export function boundsFromPoints(points: CadPointLike[]): Bounds2DLike {
+  return {
+    minX: Math.min(...points.map((point) => point.x)),
+    minY: Math.min(...points.map((point) => point.y)),
+    maxX: Math.max(...points.map((point) => point.x)),
+    maxY: Math.max(...points.map((point) => point.y)),
+  };
+}
+
+export function pointDistance(a: CadPointLike, b: CadPointLike): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function pointToSegmentDistance(
+  point: CadPointLike,
+  start: CadPointLike,
+  end: CadPointLike,
+): number {
+  const abx = end.x - start.x;
+  const aby = end.y - start.y;
+  const apx = point.x - start.x;
+  const apy = point.y - start.y;
+  const ab2 = abx * abx + aby * aby;
+
+  if (ab2 === 0) {
+    return pointDistance(point, start);
+  }
+
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
+
+  return pointDistance(point, {
+    x: start.x + abx * t,
+    y: start.y + aby * t,
+  });
+}
+
+export function normalizeAngle360(angleDeg: number): number {
+  const value = angleDeg % 360;
+  return value < 0 ? value + 360 : value;
+}
+
+export function angleDegFromCenter(
+  center: CadPointLike,
+  point: CadPointLike,
+): number {
+  return normalizeAngle360(
+    (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI,
+  );
+}
+
+export function isAngleOnArc(
+  angleDeg: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  clockwise: boolean,
+): boolean {
+  const angle = normalizeAngle360(angleDeg);
+  const start = normalizeAngle360(startAngleDeg);
+  const end = normalizeAngle360(endAngleDeg);
+
+  if (!clockwise) {
+    if (start <= end) {
+      return angle >= start && angle <= end;
+    }
+    return angle >= start || angle <= end;
+  }
+
+  if (end <= start) {
+    return angle <= start && angle >= end;
+  }
+  return angle <= start || angle >= end;
+}
+
+export function arcStartPoint(
+  center: CadPointLike,
+  radius: number,
+  startAngleDeg: number,
+): CadPointLike {
+  const t = (startAngleDeg * Math.PI) / 180;
+  return {
+    x: round(center.x + Math.cos(t) * radius),
+    y: round(center.y + Math.sin(t) * radius),
+  };
+}
+
+export function arcEndPoint(
+  center: CadPointLike,
+  radius: number,
+  endAngleDeg: number,
+): CadPointLike {
+  const t = (endAngleDeg * Math.PI) / 180;
+  return {
+    x: round(center.x + Math.cos(t) * radius),
+    y: round(center.y + Math.sin(t) * radius),
+  };
+}
+
+export function sampleArcPoints(
+  center: CadPointLike,
+  radius: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  clockwise: boolean,
+  segments = 64,
+): CadPointLike[] {
+  const start = normalizeAngle360(startAngleDeg);
+  const end = normalizeAngle360(endAngleDeg);
+
+  let sweep: number;
+  if (!clockwise) {
+    sweep = end >= start ? end - start : 360 - start + end;
+  } else {
+    sweep = start >= end ? start - end : 360 - end + start;
+    sweep *= -1;
+  }
+
+  const points: CadPointLike[] = [];
+
+  for (let i = 0; i <= segments; i += 1) {
+    const angle = start + (sweep * i) / segments;
+    const rad = (angle * Math.PI) / 180;
+
+    points.push({
+      x: round(center.x + Math.cos(rad) * radius),
+      y: round(center.y + Math.sin(rad) * radius),
+    });
+  }
+
+  return points;
+}
+
+export function pointToArcDistance(
+  point: CadPointLike,
+  center: CadPointLike,
+  radius: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  clockwise: boolean,
+): number {
+  const angle = angleDegFromCenter(center, point);
+  const radialDistance = Math.abs(pointDistance(point, center) - radius);
+
+  if (isAngleOnArc(angle, startAngleDeg, endAngleDeg, clockwise)) {
+    return radialDistance;
+  }
+
+  const startPoint = arcStartPoint(center, radius, startAngleDeg);
+  const endPoint = arcEndPoint(center, radius, endAngleDeg);
+
+  return Math.min(
+    pointDistance(point, startPoint),
+    pointDistance(point, endPoint),
+  );
+}
 
 
 path: /src/styles/ui.ts
@@ -12682,6 +13858,7 @@ path: /src/utils/fontGeometry.ts
 ----------------------------------------
 import opentype from "opentype.js";
 import type { SketchText } from "../modules/cad/model/types";
+import { rotateCadPoint } from "../modules/geometry/geometryEngine";
 
 export type CadPoint = {
   x: number;
@@ -12829,24 +14006,6 @@ export function pathCommandsToPolylines(
   return result;
 }
 
-function rotatePoint(point: CadPoint, origin: CadPoint, angleDeg: number): CadPoint {
-  if (!angleDeg) {
-    return point;
-  }
-
-  const rad = (angleDeg * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-
-  const dx = point.x - origin.x;
-  const dy = point.y - origin.y;
-
-  return {
-    x: round(origin.x + dx * cos - dy * sin),
-    y: round(origin.y + dx * sin + dy * cos),
-  };
-}
-
 function getTextWidthApprox(polylines: CadPoint[][]): number {
   if (polylines.length === 0) {
     return 0;
@@ -12872,7 +14031,6 @@ export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]>
     return [];
   }
 
-  // Инверсия Y из font-space -> CAD-space
   polylines = polylines.map((polyline) =>
     polyline.map((point) => ({
       x: point.x,
@@ -12884,10 +14042,8 @@ export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]>
   const ys = polylines.flat().map((p) => p.y);
 
   const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
   const minY = Math.min(...ys);
-
-  const width = maxX - minX;
+  const width = getTextWidthApprox(polylines);
 
   let shiftX = 0;
   const align = shape.align ?? "left";
@@ -12908,7 +14064,7 @@ export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]>
   if ((shape.rotation ?? 0) !== 0) {
     const origin = { x: shape.x, y: shape.y };
     polylines = polylines.map((polyline) =>
-      polyline.map((point) => rotatePoint(point, origin, shape.rotation ?? 0)),
+      polyline.map((point) => rotateCadPoint(point, origin, shape.rotation ?? 0)),
     );
   }
 
@@ -13441,8 +14597,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 103
+included: 106
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 359337
+totalBytes(approx): 385944

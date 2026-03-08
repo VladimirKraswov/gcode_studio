@@ -2,7 +2,14 @@
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
-export type SketchShapeType = "rectangle" | "circle" | "polyline" | "text" | "svg";
+export type SketchShapeType =
+  | "rectangle"
+  | "circle"
+  | "line"
+  | "arc"
+  | "polyline"
+  | "text"
+  | "svg";
 
 export type SketchGroup = {
   id: string;
@@ -33,6 +40,24 @@ export type SketchCircle = SketchBase & {
   cx: number;
   cy: number;
   radius: number;
+};
+
+export type SketchLine = SketchBase & {
+  type: "line";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+export type SketchArc = SketchBase & {
+  type: "arc";
+  cx: number;
+  cy: number;
+  radius: number;
+  startAngle: number;
+  endAngle: number;
+  clockwise: boolean;
 };
 
 export type SketchPolylinePoint = {
@@ -75,6 +100,8 @@ export type SketchSvg = SketchBase & {
 export type SketchShape =
   | SketchRectangle
   | SketchCircle
+  | SketchLine
+  | SketchArc
   | SketchPolyline
   | SketchText
   | SketchSvg;
@@ -145,6 +172,8 @@ export type SketchTool =
   | "select"
   | "rectangle"
   | "circle"
+  | "line"
+  | "arc"
   | "polyline"
   | "text"
   | "pan";

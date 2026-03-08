@@ -1,6 +1,13 @@
-// path: /src/modules/cad/panels/ShapePropertiesPanel.tsx
 import { useEffect, useMemo, useState } from "react";
-import { FiBox, FiCircle, FiEdit3, FiImage, FiMove, FiType } from "react-icons/fi";
+import {
+  FiBox,
+  FiCircle,
+  FiEdit3,
+  FiImage,
+  FiMinus,
+  FiMove,
+  FiType,
+} from "react-icons/fi";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
 import type {
@@ -84,6 +91,10 @@ function getShapeIcon(type: SketchShape["type"]) {
     case "rectangle":
       return <FiBox size={18} />;
     case "circle":
+      return <FiCircle size={18} />;
+    case "line":
+      return <FiMinus size={18} />;
+    case "arc":
       return <FiCircle size={18} />;
     case "polyline":
       return <FiMove size={18} />;
@@ -342,6 +353,129 @@ export function ShapePropertiesPanel({
                 />
               </label>
             </div>
+          </CardBlock>
+        )}
+
+        {selectedShape.type === "line" && (
+          <CardBlock>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                X1
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.x1}
+                  onChange={(e) => updateSelected({ x1: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Y1
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.y1}
+                  onChange={(e) => updateSelected({ y1: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                X2
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.x2}
+                  onChange={(e) => updateSelected({ x2: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Y2
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.y2}
+                  onChange={(e) => updateSelected({ y2: Number(e.target.value) || 0 })}
+                />
+              </label>
+            </div>
+          </CardBlock>
+        )}
+
+        {selectedShape.type === "arc" && (
+          <CardBlock>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                CX
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.cx}
+                  onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                CY
+                <input
+                  style={ui.input}
+                  type="number"
+                  value={selectedShape.cy}
+                  onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Radius
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.001"
+                  step="0.001"
+                  value={selectedShape.radius}
+                  onChange={(e) =>
+                    updateSelected({
+                      radius: Math.max(0.001, Number(e.target.value) || 0.001),
+                    })
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Start angle
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.1"
+                  value={selectedShape.startAngle}
+                  onChange={(e) =>
+                    updateSelected({ startAngle: Number(e.target.value) || 0 })
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                End angle
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.1"
+                  value={selectedShape.endAngle}
+                  onChange={(e) =>
+                    updateSelected({ endAngle: Number(e.target.value) || 0 })
+                  }
+                />
+              </label>
+            </div>
+
+            <label style={{ ...checkboxRow, marginTop: 10 }}>
+              <input
+                type="checkbox"
+                checked={selectedShape.clockwise}
+                onChange={(e) => updateSelected({ clockwise: e.target.checked })}
+              />
+              <span>Clockwise</span>
+            </label>
           </CardBlock>
         )}
 

@@ -44,6 +44,7 @@ type CadCanvasProps = {
   view: ViewTransform;
   draft: DraftShape;
   polylineDraft: SketchPolylinePoint[];
+  polylineHoverPoint: SketchPolylinePoint | null;
   textPreviewMap: Record<string, CadPoint[][]>;
   tool: SketchTool;
   isDragging: boolean;
@@ -56,6 +57,7 @@ type CadCanvasProps = {
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerUp: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerLeave: (event: React.PointerEvent<SVGSVGElement>) => void;
+  onDoubleClick?: (event: React.MouseEvent<SVGSVGElement>) => void;
   onWheel: (event: React.WheelEvent<SVGSVGElement>) => void;
   onShapePointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
   onSelectionPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
@@ -81,6 +83,7 @@ export function CadCanvas({
   view,
   draft,
   polylineDraft,
+  polylineHoverPoint,
   textPreviewMap,
   tool,
   isDragging,
@@ -93,6 +96,7 @@ export function CadCanvas({
   onPointerMove,
   onPointerUp,
   onPointerLeave,
+  onDoubleClick,
   onWheel,
   onShapePointerDown,
   onSelectionPointerDown,
@@ -130,6 +134,7 @@ export function CadCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerLeave}
+      onDoubleClick={onDoubleClick}
       onWheel={onWheel}
       onContextMenu={(event) => event.preventDefault()}
       style={{
@@ -170,21 +175,25 @@ export function CadCanvas({
         onHoverChange={onSelectionHoverChange}
       />
 
-      {tool === "select" && selection.primaryId && onConstraintEdgeHandlePointerDown && onConstraintLabelPointerDown && (
-        <CadConstraintOverlay
-          document={document}
-          selection={selection}
-          documentHeight={document.height}
-          view={view}
-          constraintDraft={constraintDraft}
-          onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
-          onConstraintLabelPointerDown={onConstraintLabelPointerDown}
-        />
-      )}
+      {tool === "select" &&
+        selection.primaryId &&
+        onConstraintEdgeHandlePointerDown &&
+        onConstraintLabelPointerDown && (
+          <CadConstraintOverlay
+            document={document}
+            selection={selection}
+            documentHeight={document.height}
+            view={view}
+            constraintDraft={constraintDraft}
+            onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
+            onConstraintLabelPointerDown={onConstraintLabelPointerDown}
+          />
+        )}
 
       <DraftOverlay
         draft={draft}
         polylineDraft={polylineDraft}
+        polylineHoverPoint={polylineHoverPoint}
         documentHeight={document.height}
         view={view}
       />

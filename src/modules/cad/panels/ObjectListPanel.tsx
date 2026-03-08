@@ -1,8 +1,3 @@
-
-// =============================
-// FILE: src/modules/cad/panels/ObjectListPanel.tsx
-// =============================
-
 import { useMemo, useState } from "react";
 import {
   FiBox,
@@ -13,6 +8,7 @@ import {
   FiEyeOff,
   FiImage,
   FiLayers,
+  FiMinus,
   FiMove,
   FiTrash2,
   FiType,
@@ -44,6 +40,10 @@ function getShapeIcon(shape: SketchShape) {
     case "rectangle":
       return <FiBox size={14} />;
     case "circle":
+      return <FiCircle size={14} />;
+    case "line":
+      return <FiMinus size={14} />;
+    case "arc":
       return <FiCircle size={14} />;
     case "polyline":
       return <FiMove size={14} />;

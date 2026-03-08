@@ -1,6 +1,9 @@
 import {
+  arcEndPoint,
+  arcStartPoint,
   boundsFromPoints,
   rotateCadPoint,
+  sampleArcPoints,
 } from "../../geometry/geometryEngine";
 import type { SketchDocument, SketchShape } from "./types";
 
@@ -45,6 +48,25 @@ export function shapeBounds(shape: SketchShape): Bounds2D {
         maxX: shape.cx + shape.radius,
         maxY: shape.cy + shape.radius,
       };
+
+    case "line":
+      return boundsFromPoints([
+        { x: shape.x1, y: shape.y1 },
+        { x: shape.x2, y: shape.y2 },
+      ]);
+
+    case "arc": {
+      const points = sampleArcPoints(
+        { x: shape.cx, y: shape.cy },
+        shape.radius,
+        shape.startAngle,
+        shape.endAngle,
+        shape.clockwise,
+        72,
+      );
+
+      return boundsFromPoints(points);
+    }
 
     case "polyline":
       return boundsFromPoints(shape.points);
@@ -127,10 +149,10 @@ export function selectionBounds(shapes: SketchShape[]): Bounds2D {
 
   const bounds = shapes.map(shapeBounds);
   return {
-    minX: Math.min(...bounds.map((item) => item.minX)),
-    minY: Math.min(...bounds.map((item) => item.minY)),
-    maxX: Math.max(...bounds.map((item) => item.maxX)),
-    maxY: Math.max(...bounds.map((item) => item.maxY)),
+    minX: Math.min(...bounds.map((b) => b.minX)),
+    minY: Math.min(...bounds.map((b) => b.minY)),
+    maxX: Math.max(...bounds.map((b) => b.maxX)),
+    maxY: Math.max(...bounds.map((b) => b.maxY)),
   };
 }
 

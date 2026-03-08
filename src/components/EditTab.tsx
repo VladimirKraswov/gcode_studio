@@ -151,6 +151,7 @@ export function EditTab({
                 view={editor.view}
                 draft={editor.draft}
                 polylineDraft={editor.polylineDraft}
+                polylineHoverPoint={editor.polylineHoverPoint}
                 textPreviewMap={editor.textPreviewMap}
                 tool={editor.tool}
                 isDragging={editor.isDragging}
@@ -162,6 +163,7 @@ export function EditTab({
                 onPointerMove={editor.handleCanvasPointerMove}
                 onPointerUp={editor.handleCanvasPointerUp}
                 onPointerLeave={editor.handleCanvasPointerLeave}
+                onDoubleClick={editor.handleCanvasDoubleClick}
                 onWheel={editor.handleCanvasWheel}
                 onShapePointerDown={editor.bindSelectStart}
                 onSelectionPointerDown={editor.bindSelectionDragStart}

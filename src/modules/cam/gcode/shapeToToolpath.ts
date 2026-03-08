@@ -1,6 +1,8 @@
 import type {
+  SketchArc,
   SketchCircle,
   SketchDocument,
+  SketchLine,
   SketchPolyline,
   SketchRectangle,
   SketchShape,
@@ -8,7 +10,7 @@ import type {
   SketchText,
 } from "../../cad/model/types";
 import { getTextPolylines } from "../../cad/geometry/textGeometry";
-import { rotateCadPoint } from "../../geometry/geometryEngine";
+import { rotateCadPoint, sampleArcPoints } from "../../geometry/geometryEngine";
 import type { Toolpath, ToolpathPoint } from "../types";
 
 function round(value: number): number {
@@ -164,6 +166,29 @@ function offsetPolylinePoints(
   return result;
 }
 
+function offsetLinePoints(
+  start: ToolpathPoint,
+  end: ToolpathPoint,
+  offset: number,
+): ToolpathPoint[] {
+  if (Math.abs(offset) < 1e-9) {
+    return [{ ...start }, { ...end }];
+  }
+
+  const n = polylineNormal(start, end);
+
+  return [
+    {
+      x: round(start.x + n.x * offset),
+      y: round(start.y + n.y * offset),
+    },
+    {
+      x: round(end.x + n.x * offset),
+      y: round(end.y + n.y * offset),
+    },
+  ];
+}
+
 function isToolpath(value: Toolpath | null): value is Toolpath {
   return value !== null;
 }
@@ -211,6 +236,55 @@ export function circleToToolpaths(
       closed: true,
       cutZ,
       points: circleToPolylinePoints(radius, shape.cx, shape.cy, 96),
+    };
+  });
+
+  return result.filter(isToolpath);
+}
+
+export function lineToToolpaths(
+  shape: SketchLine,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const strokeWidth = resolveStrokeWidth(shape);
+  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
+
+  const start = { x: shape.x1, y: shape.y1 };
+  const end = { x: shape.x2, y: shape.y2 };
+
+  return bandOffsets.map((offset, index) => ({
+    name: `LINE ${shape.name} #${index + 1}`,
+    closed: false,
+    cutZ,
+    points: offsetLinePoints(start, end, offset),
+  }));
+}
+
+export function arcToToolpaths(
+  shape: SketchArc,
+  doc: SketchDocument,
+): Toolpath[] {
+  const cutZ = resolveCutZ(shape, doc);
+  const strokeWidth = resolveStrokeWidth(shape);
+  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
+
+  const result: Array<Toolpath | null> = bandOffsets.map((offset, index) => {
+    const radius = shape.radius + offset;
+    if (radius <= 0.001) return null;
+
+    return {
+      name: `ARC ${shape.name} #${index + 1}`,
+      closed: false,
+      cutZ,
+      points: sampleArcPoints(
+        { x: shape.cx, y: shape.cy },
+        radius,
+        shape.startAngle,
+        shape.endAngle,
+        shape.clockwise,
+        72,
+      ),
     };
   });
 
@@ -323,6 +397,10 @@ export async function shapeToToolpaths(
       return rectangleToToolpaths(shape, doc);
     case "circle":
       return circleToToolpaths(shape, doc);
+    case "line":
+      return lineToToolpaths(shape, doc);
+    case "arc":
+      return arcToToolpaths(shape, doc);
     case "polyline":
       return polylineToToolpaths(shape, doc);
     case "text":

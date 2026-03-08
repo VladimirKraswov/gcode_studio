@@ -10,8 +10,34 @@ export function startCircleDraft(x: number, y: number): DraftShape {
   return { type: "circle", startX: x, startY: y, endX: x, endY: y };
 }
 
+export function startLineDraft(x: number, y: number): DraftShape {
+  return { type: "line", startX: x, startY: y, endX: x, endY: y };
+}
+
+export function startArcRadiusDraft(x: number, y: number): DraftShape {
+  return {
+    type: "arc",
+    stage: "radius",
+    centerX: x,
+    centerY: y,
+    endX: x,
+    endY: y,
+    clockwise: false,
+  };
+}
+
 export function updateDraft(draft: DraftShape, x: number, y: number): DraftShape {
-  return draft ? { ...draft, endX: x, endY: y } : null;
+  if (!draft) return null;
+
+  if (draft.type === "arc") {
+    if (draft.stage === "radius") {
+      return { ...draft, endX: x, endY: y };
+    }
+
+    return { ...draft, endX: x, endY: y };
+  }
+
+  return { ...draft, endX: x, endY: y };
 }
 
 export function commitRectangleDraft(draft: DraftShape) {

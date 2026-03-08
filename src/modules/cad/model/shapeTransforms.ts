@@ -22,6 +22,27 @@ export function moveShape(shape: SketchShape, dx: number, dy: number): SketchSha
       return { ...shape, cx: next.x, cy: next.y };
     }
 
+    case "line": {
+      const p1 = translateCadPoint({ x: shape.x1, y: shape.y1 }, dx, dy);
+      const p2 = translateCadPoint({ x: shape.x2, y: shape.y2 }, dx, dy);
+      return {
+        ...shape,
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+      };
+    }
+
+    case "arc": {
+      const next = translateCadPoint({ x: shape.cx, y: shape.cy }, dx, dy);
+      return {
+        ...shape,
+        cx: next.x,
+        cy: next.y,
+      };
+    }
+
     case "polyline":
       return {
         ...shape,
@@ -64,6 +85,29 @@ export function rotateShape(shape: SketchShape, angle: number, origin: CadPoint)
     case "circle": {
       const next = rotateCadPoint({ x: shape.cx, y: shape.cy }, origin, angle);
       return { ...shape, cx: next.x, cy: next.y };
+    }
+
+    case "line": {
+      const p1 = rotateCadPoint({ x: shape.x1, y: shape.y1 }, origin, angle);
+      const p2 = rotateCadPoint({ x: shape.x2, y: shape.y2 }, origin, angle);
+      return {
+        ...shape,
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+      };
+    }
+
+    case "arc": {
+      const nextCenter = rotateCadPoint({ x: shape.cx, y: shape.cy }, origin, angle);
+      return {
+        ...shape,
+        cx: nextCenter.x,
+        cy: nextCenter.y,
+        startAngle: round(shape.startAngle + angle),
+        endAngle: round(shape.endAngle + angle),
+      };
     }
 
     case "polyline":
@@ -119,6 +163,28 @@ export function scaleShape(
     }
 
     case "circle": {
+      const next = scaleCadPoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
+      return {
+        ...shape,
+        cx: next.x,
+        cy: next.y,
+        radius: round(shape.radius * Math.max(sx, sy)),
+      };
+    }
+
+    case "line": {
+      const p1 = scaleCadPoint({ x: shape.x1, y: shape.y1 }, origin, sx, sy);
+      const p2 = scaleCadPoint({ x: shape.x2, y: shape.y2 }, origin, sx, sy);
+      return {
+        ...shape,
+        x1: p1.x,
+        y1: p1.y,
+        x2: p2.x,
+        y2: p2.y,
+      };
+    }
+
+    case "arc": {
       const next = scaleCadPoint({ x: shape.cx, y: shape.cy }, origin, sx, sy);
       return {
         ...shape,

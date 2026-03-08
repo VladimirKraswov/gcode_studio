@@ -114,3 +114,151 @@ export function boundsFromPoints(points: CadPointLike[]): Bounds2DLike {
     maxY: Math.max(...points.map((point) => point.y)),
   };
 }
+
+export function pointDistance(a: CadPointLike, b: CadPointLike): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function pointToSegmentDistance(
+  point: CadPointLike,
+  start: CadPointLike,
+  end: CadPointLike,
+): number {
+  const abx = end.x - start.x;
+  const aby = end.y - start.y;
+  const apx = point.x - start.x;
+  const apy = point.y - start.y;
+  const ab2 = abx * abx + aby * aby;
+
+  if (ab2 === 0) {
+    return pointDistance(point, start);
+  }
+
+  const t = Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2));
+
+  return pointDistance(point, {
+    x: start.x + abx * t,
+    y: start.y + aby * t,
+  });
+}
+
+export function normalizeAngle360(angleDeg: number): number {
+  const value = angleDeg % 360;
+  return value < 0 ? value + 360 : value;
+}
+
+export function angleDegFromCenter(
+  center: CadPointLike,
+  point: CadPointLike,
+): number {
+  return normalizeAngle360(
+    (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI,
+  );
+}
+
+export function isAngleOnArc(
+  angleDeg: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  clockwise: boolean,
+): boolean {
+  const angle = normalizeAngle360(angleDeg);
+  const start = normalizeAngle360(startAngleDeg);
+  const end = normalizeAngle360(endAngleDeg);
+
+  if (!clockwise) {
+    if (start <= end) {
+      return angle >= start && angle <= end;
+    }
+    return angle >= start || angle <= end;
+  }
+
+  if (end <= start) {
+    return angle <= start && angle >= end;
+  }
+  return angle <= start || angle >= end;
+}
+
+export function arcStartPoint(
+  center: CadPointLike,
+  radius: number,
+  startAngleDeg: number,
+): CadPointLike {
+  const t = (startAngleDeg * Math.PI) / 180;
+  return {
+    x: round(center.x + Math.cos(t) * radius),
+    y: round(center.y + Math.sin(t) * radius),
+  };
+}
+
+export function arcEndPoint(
+  center: CadPointLike,
+  radius: number,
+  endAngleDeg: number,
+): CadPointLike {
+  const t = (endAngleDeg * Math.PI) / 180;
+  return {
+    x: round(center.x + Math.cos(t) * radius),
+    y: round(center.y + Math.sin(t) * radius),
+  };
+}
+
+export function sampleArcPoints(
+  center: CadPointLike,
+  radius: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  clockwise: boolean,
+  segments = 64,
+): CadPointLike[] {
+  const start = normalizeAngle360(startAngleDeg);
+  const end = normalizeAngle360(endAngleDeg);
+
+  let sweep: number;
+  if (!clockwise) {
+    sweep = end >= start ? end - start : 360 - start + end;
+  } else {
+    sweep = start >= end ? start - end : 360 - end + start;
+    sweep *= -1;
+  }
+
+  const points: CadPointLike[] = [];
+
+  for (let i = 0; i <= segments; i += 1) {
+    const angle = start + (sweep * i) / segments;
+    const rad = (angle * Math.PI) / 180;
+
+    points.push({
+      x: round(center.x + Math.cos(rad) * radius),
+      y: round(center.y + Math.sin(rad) * radius),
+    });
+  }
+
+  return points;
+}
+
+export function pointToArcDistance(
+  point: CadPointLike,
+  center: CadPointLike,
+  radius: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  clockwise: boolean,
+): number {
+  const angle = angleDegFromCenter(center, point);
+  const radialDistance = Math.abs(pointDistance(point, center) - radius);
+
+  if (isAngleOnArc(angle, startAngleDeg, endAngleDeg, clockwise)) {
+    return radialDistance;
+  }
+
+  const startPoint = arcStartPoint(center, radius, startAngleDeg);
+  const endPoint = arcEndPoint(center, radius, endAngleDeg);
+
+  return Math.min(
+    pointDistance(point, startPoint),
+    pointDistance(point, endPoint),
+  );
+}

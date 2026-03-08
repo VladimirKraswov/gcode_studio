@@ -3,13 +3,17 @@ import type { ViewTransform } from "../model/view";
 import type { SketchPolylinePoint } from "../model/types";
 import type { DraftShape } from "../geometry/draftGeometry";
 import {
+  getArcPreviewPoints,
   getCircleFromDraft,
+  getLineFromDraft,
+  getPolylinePreviewPoints,
   getRectangleFromDraft,
 } from "../geometry/draftGeometry";
 
 type DraftOverlayProps = {
   draft: DraftShape;
   polylineDraft: SketchPolylinePoint[];
+  polylineHoverPoint: SketchPolylinePoint | null;
   documentHeight: number;
   view: ViewTransform;
 };
@@ -17,26 +21,64 @@ type DraftOverlayProps = {
 export function DraftOverlay({
   draft,
   polylineDraft,
+  polylineHoverPoint,
   documentHeight,
   view,
 }: DraftOverlayProps) {
+  const polylinePreview = getPolylinePreviewPoints(
+    polylineDraft,
+    polylineHoverPoint,
+  );
+
   return (
     <>
-      {polylineDraft.length > 1 && (
-        <polyline
-          points={polylineDraft
-            .map((point) => {
-              const p = cadToScreenPoint(point, documentHeight, view);
-              return `${p.x},${p.y}`;
-            })
-            .join(" ")}
-          fill="none"
-          stroke="#ef4444"
-          strokeWidth={1.5}
-          strokeDasharray="6 4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      {polylinePreview.length > 0 && (
+        <>
+          {polylinePreview.length > 1 && (
+            <polyline
+              points={polylinePreview
+                .map((point) => {
+                  const p = cadToScreenPoint(point, documentHeight, view);
+                  return `${p.x},${p.y}`;
+                })
+                .join(" ")}
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+
+          {polylineDraft.map((point, index) => {
+            const p = cadToScreenPoint(point, documentHeight, view);
+            return (
+              <circle
+                key={`poly-draft-${index}`}
+                cx={p.x}
+                cy={p.y}
+                r={3.5}
+                fill="#ffffff"
+                stroke="#ef4444"
+                strokeWidth={1.5}
+              />
+            );
+          })}
+
+          {polylineHoverPoint && polylineDraft.length > 0 && (() => {
+            const p = cadToScreenPoint(polylineHoverPoint, documentHeight, view);
+            return (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={3}
+                fill="#ef4444"
+                opacity={0.85}
+              />
+            );
+          })()}
+        </>
       )}
 
       {draft?.type === "rectangle" && (() => {
@@ -80,6 +122,131 @@ export function DraftOverlay({
             strokeDasharray="6 4"
             strokeWidth={1.5}
           />
+        );
+      })()}
+
+      {draft?.type === "line" && (() => {
+        const line = getLineFromDraft(draft);
+        const p1 = cadToScreenPoint(
+          { x: line.x1, y: line.y1 },
+          documentHeight,
+          view,
+        );
+        const p2 = cadToScreenPoint(
+          { x: line.x2, y: line.y2 },
+          documentHeight,
+          view,
+        );
+
+        return (
+          <line
+            x1={p1.x}
+            y1={p1.y}
+            x2={p2.x}
+            y2={p2.y}
+            stroke="#2563eb"
+            strokeDasharray="6 4"
+            strokeWidth={1.5}
+            strokeLinecap="round"
+          />
+        );
+      })()}
+
+      {draft?.type === "arc" && draft.stage === "radius" && (() => {
+        const center = cadToScreenPoint(
+          { x: draft.centerX, y: draft.centerY },
+          documentHeight,
+          view,
+        );
+        const end = cadToScreenPoint(
+          { x: draft.endX, y: draft.endY },
+          documentHeight,
+          view,
+        );
+
+        return (
+          <>
+            <circle
+              cx={center.x}
+              cy={center.y}
+              r={4}
+              fill="#2563eb"
+            />
+            <line
+              x1={center.x}
+              y1={center.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="#2563eb"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+          </>
+        );
+      })()}
+
+      {draft?.type === "arc" && draft.stage === "sweep" && (() => {
+        const preview = getArcPreviewPoints(draft);
+        const points = preview
+          .map((point) => {
+            const p = cadToScreenPoint(point, documentHeight, view);
+            return `${p.x},${p.y}`;
+          })
+          .join(" ");
+
+        const center = cadToScreenPoint(
+          { x: draft.centerX, y: draft.centerY },
+          documentHeight,
+          view,
+        );
+        const start = cadToScreenPoint(
+          { x: draft.startX, y: draft.startY },
+          documentHeight,
+          view,
+        );
+        const end = cadToScreenPoint(
+          { x: draft.endX, y: draft.endY },
+          documentHeight,
+          view,
+        );
+
+        return (
+          <>
+            <circle cx={center.x} cy={center.y} r={4} fill="#2563eb" />
+
+            <line
+              x1={center.x}
+              y1={center.y}
+              x2={start.x}
+              y2={start.y}
+              stroke="#93c5fd"
+              strokeDasharray="4 4"
+              strokeWidth={1.25}
+              strokeLinecap="round"
+            />
+
+            <line
+              x1={center.x}
+              y1={center.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="#93c5fd"
+              strokeDasharray="4 4"
+              strokeWidth={1.25}
+              strokeLinecap="round"
+            />
+
+            <polyline
+              points={points}
+              fill="none"
+              stroke="#2563eb"
+              strokeDasharray="6 4"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </>
         );
       })()}
     </>

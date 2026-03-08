@@ -1,5 +1,7 @@
 import type {
+  SketchArc,
   SketchCircle,
+  SketchLine,
   SketchPolyline,
   SketchPolylinePoint,
   SketchRectangle,
@@ -48,6 +50,52 @@ export function createCircleShape(
     cx,
     cy,
     radius,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
+export function createLineShape(
+  name: string,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): SketchLine {
+  return {
+    id: createId("line"),
+    type: "line",
+    name,
+    x1,
+    y1,
+    x2,
+    y2,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
+export function createArcShape(params: {
+  name: string;
+  cx: number;
+  cy: number;
+  radius: number;
+  startAngle: number;
+  endAngle: number;
+  clockwise?: boolean;
+}): SketchArc {
+  return {
+    id: createId("arc"),
+    type: "arc",
+    name: params.name,
+    cx: params.cx,
+    cy: params.cy,
+    radius: params.radius,
+    startAngle: params.startAngle,
+    endAngle: params.endAngle,
+    clockwise: params.clockwise ?? false,
     cutZ: null,
     strokeWidth: 1,
     ...baseShapeFields,

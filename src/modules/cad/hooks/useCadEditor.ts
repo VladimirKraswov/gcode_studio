@@ -1,9 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   appendPolylinePoint,
   finishDrag,
+  startArcRadiusDraft,
   startCircleDraft,
   startDrag,
+  startLineDraft,
   startRectangleDraft,
   updateDraft,
   updateDrag,
@@ -16,12 +18,16 @@ import {
 } from "../editor-state/textToolState";
 import type { DraftShape } from "../geometry/draftGeometry";
 import {
+  getArcFromDraft,
   getCircleFromDraft,
+  getLineFromDraft,
   getRectangleFromDraft,
 } from "../geometry/draftGeometry";
 import { addShape } from "../model/document";
 import {
+  createArcShape,
   createCircleShape,
+  createLineShape,
   createPolylineShape,
   createRectangleShape,
   createSvgShape,
@@ -60,13 +66,12 @@ import { selectionBounds, groupBounds, shapeBounds, type Bounds2D } from "../mod
 import type { CadPanButtonMode } from "../../../utils/settings";
 import {
   edgeAxis,
-  getConstraintTargetBounds,
   getDistanceBetweenEdges,
-  getEdgeValue,
   getSheetBounds,
   updateConstraint,
   upsertConstraintForEdge,
 } from "../model/constraints";
+import { distance } from "../geometry/distance";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -147,6 +152,15 @@ type ConstraintLabelDragState = {
 
 function angleBetween(center: SketchPolylinePoint, point: SketchPolylinePoint): number {
   return Math.atan2(point.y - center.y, point.x - center.x);
+}
+
+function isSamePoint(
+  a: SketchPolylinePoint | null | undefined,
+  b: SketchPolylinePoint | null | undefined,
+  epsilon = 0.001,
+): boolean {
+  if (!a || !b) return false;
+  return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
 }
 
 function getSelectionShapeIds(
@@ -265,6 +279,8 @@ export function useCadEditor({
   const [tool, setTool] = useState<SketchTool>("select");
   const [draft, setDraft] = useState<DraftShape>(null);
   const [polylineDraft, setPolylineDraft] = useState<SketchPolylinePoint[]>([]);
+  const [polylineHoverPoint, setPolylineHoverPoint] =
+    useState<SketchPolylinePoint | null>(null);
   const [textTool, setTextTool] = useState(createDefaultTextToolState());
   const [isGenerating, setIsGenerating] = useState(false);
   const [dragState, setDragState] = useState<DragState>(null);
@@ -277,6 +293,71 @@ export function useCadEditor({
     useState<ConstraintLabelDragState>(null);
 
   const textPreviewMap = useTextPreviewMap(document.shapes);
+
+  useEffect(() => {
+    if (tool !== "polyline") {
+      setPolylineHoverPoint(null);
+    }
+  }, [tool]);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+
+      const isTypingTarget =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target?.isContentEditable;
+
+      if (isTypingTarget) {
+        return;
+      }
+
+      if (tool !== "polyline") {
+        return;
+      }
+
+      if (event.key === "Enter") {
+        if (polylineDraft.length >= 2) {
+          event.preventDefault();
+          checkpointHistory();
+          const shape = createPolylineShape(
+            `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
+            polylineDraft,
+            false,
+          );
+
+          setDocument((prev) => addShape(prev, shape));
+          onSelectionChange(selectOnly(shape.id));
+          setPolylineDraft([]);
+          setPolylineHoverPoint(null);
+          setIsSelectionHover(false);
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (polylineDraft.length > 0) {
+          event.preventDefault();
+          setPolylineDraft([]);
+          setPolylineHoverPoint(null);
+          setIsSelectionHover(false);
+        }
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    checkpointHistory,
+    document.shapes,
+    onSelectionChange,
+    polylineDraft,
+    setDocument,
+    tool,
+  ]);
 
   function isPanMouseButton(button: number): boolean {
     if (panButtonMode === "middle") {
@@ -393,6 +474,47 @@ export function useCadEditor({
     setIsSelectionHover(false);
   }
 
+  function addLine(x1: number, y1: number, x2: number, y2: number) {
+    if (distance({ x: x1, y: y1 }, { x: x2, y: y2 }) < 0.5) return;
+
+    const shape = createLineShape(
+      `Line ${document.shapes.filter((s) => s.type === "line").length + 1}`,
+      x1,
+      y1,
+      x2,
+      y2,
+    );
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
+  }
+
+  function addArc(
+    cx: number,
+    cy: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    clockwise = false,
+  ) {
+    if (radius < 1) return;
+
+    const shape = createArcShape({
+      name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
+      cx,
+      cy,
+      radius,
+      startAngle,
+      endAngle,
+      clockwise,
+    });
+
+    setDocument((prev) => addShape(prev, shape));
+    onSelectionChange(selectOnly(shape.id));
+    setIsSelectionHover(false);
+  }
+
   function addText(x: number, y: number) {
     const value = textTool.text.trim();
     if (!value) return;
@@ -415,6 +537,7 @@ export function useCadEditor({
   function commitPolyline() {
     if (polylineDraft.length < 2) {
       setPolylineDraft([]);
+      setPolylineHoverPoint(null);
       return;
     }
 
@@ -427,6 +550,7 @@ export function useCadEditor({
     setDocument((prev) => addShape(prev, shape));
     onSelectionChange(selectOnly(shape.id));
     setPolylineDraft([]);
+    setPolylineHoverPoint(null);
     setIsSelectionHover(false);
   }
 
@@ -461,9 +585,9 @@ export function useCadEditor({
 
     const sheetBounds = getSheetBounds(document);
     for (const edge of compatibleEdges) {
-      const distance = edgeDistanceToPoint(point, sheetBounds, edge);
-      if (distance <= tolerance) {
-        const score = distance;
+      const dist = edgeDistanceToPoint(point, sheetBounds, edge);
+      if (dist <= tolerance) {
+        const score = dist;
         if (!best || score < best.score) {
           best = {
             target: { kind: "sheet", edge },
@@ -478,9 +602,9 @@ export function useCadEditor({
 
       const bounds = shapeBounds(shape);
       for (const edge of compatibleEdges) {
-        const distance = edgeDistanceToPoint(point, bounds, edge);
-        if (distance <= tolerance) {
-          const score = distance;
+        const dist = edgeDistanceToPoint(point, bounds, edge);
+        if (dist <= tolerance) {
+          const score = dist;
           if (!best || score < best.score) {
             best = {
               target: {
@@ -522,13 +646,83 @@ export function useCadEditor({
       return;
     }
 
+    if (tool === "line") {
+      setDraft(startLineDraft(cad.x, cad.y));
+      setIsSelectionHover(false);
+      return;
+    }
+
+    if (tool === "arc") {
+      setIsSelectionHover(false);
+
+      if (!draft) {
+        setDraft(startArcRadiusDraft(cad.x, cad.y));
+        return;
+      }
+
+      if (draft.type === "arc" && draft.stage === "radius") {
+        const radius = distance(
+          { x: draft.centerX, y: draft.centerY },
+          { x: cad.x, y: cad.y },
+        );
+
+        if (radius < 0.5) {
+          return;
+        }
+
+        setDraft({
+          type: "arc",
+          stage: "sweep",
+          centerX: draft.centerX,
+          centerY: draft.centerY,
+          startX: cad.x,
+          startY: cad.y,
+          endX: cad.x,
+          endY: cad.y,
+          clockwise: false,
+        });
+        return;
+      }
+
+      if (draft.type === "arc" && draft.stage === "sweep") {
+        const committed = getArcFromDraft({
+          ...draft,
+          endX: cad.x,
+          endY: cad.y,
+        });
+
+        if (committed) {
+          checkpointHistory();
+          addArc(
+            committed.cx,
+            committed.cy,
+            committed.radius,
+            committed.startAngle,
+            committed.endAngle,
+            committed.clockwise,
+          );
+        }
+
+        setDraft(null);
+        return;
+      }
+    }
+
     if (tool === "polyline") {
-      setPolylineDraft((prev) => appendPolylinePoint(prev, { x: cad.x, y: cad.y }));
+      setPolylineDraft((prev) => {
+        const last = prev[prev.length - 1];
+        if (isSamePoint(last, cad)) {
+          return prev;
+        }
+        return appendPolylinePoint(prev, { x: cad.x, y: cad.y });
+      });
+      setPolylineHoverPoint(cad);
       setIsSelectionHover(false);
       return;
     }
 
     if (tool === "text") {
+      checkpointHistory();
       addText(cad.x, cad.y);
       return;
     }
@@ -552,6 +746,10 @@ export function useCadEditor({
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
     const cad = normalizePoint(rawCad);
+
+    if (tool === "polyline") {
+      setPolylineHoverPoint(cad);
+    }
 
     if (
       constraintCreateState &&
@@ -684,7 +882,7 @@ export function useCadEditor({
             document.shapes.find((item) => item.id === target.shapeId)!,
           );
 
-    const distance = getDistanceBetweenEdges(
+    const dist = getDistanceBetweenEdges(
       sourceBounds,
       constraintCreateState.edge,
       targetBounds,
@@ -701,7 +899,7 @@ export function useCadEditor({
             ? { kind: "sheet" }
             : { kind: "shape", shapeId: target.shapeId },
         targetEdge: target.edge,
-        distance,
+        distance: dist,
       }),
     );
 
@@ -724,15 +922,21 @@ export function useCadEditor({
 
     if (draft?.type === "rectangle") {
       const rect = getRectangleFromDraft(draft);
+      checkpointHistory();
       addRectangle(rect.x, rect.y, rect.width, rect.height);
-    }
-
-    if (draft?.type === "circle") {
+      setDraft(null);
+    } else if (draft?.type === "circle") {
       const circle = getCircleFromDraft(draft);
+      checkpointHistory();
       addCircle(circle.cx, circle.cy, circle.radius);
+      setDraft(null);
+    } else if (draft?.type === "line") {
+      const line = getLineFromDraft(draft);
+      checkpointHistory();
+      addLine(line.x1, line.y1, line.x2, line.y2);
+      setDraft(null);
     }
 
-    setDraft(null);
     setDragState(finishDrag());
     setPanState(null);
     setTransformState(null);
@@ -740,7 +944,32 @@ export function useCadEditor({
   }
 
   function handleCanvasPointerLeave(event: React.PointerEvent<SVGSVGElement>) {
+    if (tool === "polyline") {
+      setPolylineHoverPoint(null);
+    }
+
+    if (draft?.type === "arc") {
+      setPanState(null);
+      return;
+    }
+
     handleCanvasPointerUp(event);
+  }
+
+  function handleCanvasDoubleClick(event: React.MouseEvent<SVGSVGElement>) {
+    if (tool !== "polyline") {
+      return;
+    }
+
+    if (polylineDraft.length < 2) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    checkpointHistory();
+    commitPolyline();
   }
 
   function handleCanvasWheel(event: React.WheelEvent<SVGSVGElement>) {
@@ -1059,6 +1288,7 @@ export function useCadEditor({
     setTool,
     draft,
     polylineDraft,
+    polylineHoverPoint,
     textTool,
     setTextTool,
     textPreviewMap,
@@ -1077,6 +1307,7 @@ export function useCadEditor({
     handleCanvasPointerMove,
     handleCanvasPointerUp,
     handleCanvasPointerLeave,
+    handleCanvasDoubleClick,
     handleCanvasWheel,
     bindSelectStart,
     bindSelectionDragStart,
