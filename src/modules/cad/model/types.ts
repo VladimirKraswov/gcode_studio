@@ -44,7 +44,7 @@ export type SketchGroup = {
   id: string;
   name: string;
   collapsed?: boolean;
-  array?: SketchArrayDefinition | null; // информация о массиве, если группа создана через массив
+  array?: SketchArrayDefinition | null;
 };
 
 

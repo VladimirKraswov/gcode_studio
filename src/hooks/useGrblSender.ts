@@ -29,7 +29,6 @@ export function useGrblSender() {
       await selectedPort.open({ baudRate: 115200 });
       setPort(selectedPort);
 
-      // Проверяем, что readable и writable не null
       if (!selectedPort.readable || !selectedPort.writable) {
         throw new Error("Port does not support readable/writable streams");
       }
@@ -91,7 +90,6 @@ export function useGrblSender() {
       const trimmed = line.trim();
       if (trimmed && !trimmed.startsWith(";")) {
         await send(trimmed);
-        // Небольшая задержка для обработки контроллером
         await new Promise(resolve => setTimeout(resolve, 10));
       }
     }

@@ -27,7 +27,6 @@ function normalizeCamSettings(
   value: Partial<SketchCamSettings> | undefined,
 ): SketchCamSettings {
   const defaults = createDefaultCamSettings();
-
   return {
     operation: value?.operation ?? defaults.operation,
     direction: value?.direction ?? defaults.direction,

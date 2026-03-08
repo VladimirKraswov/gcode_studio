@@ -20,7 +20,12 @@ function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
   return contour.map(p => ({ ...p }));
 }
 
-export function generateRampingPass(contour: CadPoint[], startZ: number, endZ: number, turns = 1): ToolpathPoint3D[] {
+export function generateRampingPass(
+  contour: CadPoint[],
+  startZ: number,
+  endZ: number,
+  turns = 1
+): ToolpathPoint3D[] {
   const normalized = normalizeClosedContour(contour);
   if (normalized.length < 2 || turns <= 0) return [];
 
@@ -40,7 +45,11 @@ export function generateRampingPass(contour: CadPoint[], startZ: number, endZ: n
   if (result.length > 0) {
     const last = result[result.length - 1];
     const first = closedContour[0];
-    if (Math.abs(last.x - first.x) > EPS || Math.abs(last.y - first.y) > EPS || Math.abs(last.z - endZ) > EPS) {
+    if (
+      Math.abs(last.x - first.x) > EPS ||
+      Math.abs(last.y - first.y) > EPS ||
+      Math.abs(last.z - endZ) > EPS
+    ) {
       result.push({ x: round(first.x), y: round(first.y), z: round(endZ) });
     }
   }

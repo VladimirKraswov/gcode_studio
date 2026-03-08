@@ -9,12 +9,24 @@ export type Toolpath = {
   points: ToolpathPoint[];
   closed: boolean;
   cutZ: number;
-  // дополнительные поля для управления
   kind?: "contour" | "pocket";
   useRamping?: boolean;
   useBridges?: boolean;
   bridgeCount?: number;
   bridgeWidth?: number;
+  bridgeHeight?: number;
+  rampTurns?: number;
+  stepdown?: number;
+
+  leadIn?: {
+    enabled: boolean;
+    length: number;
+  };
+
+  leadOut?: {
+    enabled: boolean;
+    length: number;
+  };
 };
 
 export type PlannedPath = {
