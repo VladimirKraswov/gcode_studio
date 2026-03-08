@@ -73,9 +73,9 @@ export function PathScene({
     [placement],
   );
 
-  const machineZeroScene = useMemo(
-    () => toScenePoint({ x: 0, y: 0, z: 0 }),
-    [],
+  const orbitTarget = useMemo(
+    () => toScenePoint(placement.centerGcode),
+    [placement],
   );
 
   const axesHelper = useMemo(() => {
@@ -427,15 +427,16 @@ export function PathScene({
         ref={controlsRef}
         key={cameraResetKey}
         makeDefault
-        target={[machineZeroScene.x, machineZeroScene.y, machineZeroScene.z]}
+        target={[orbitTarget.x, orbitTarget.y, orbitTarget.z]}
         enableDamping
         dampingFactor={0.08}
         screenSpacePanning
         minDistance={10}
         maxDistance={3000}
         enableRotate
+        rotateSpeed={0.45}
         mouseButtons={{
-          LEFT: THREE.MOUSE.PAN,
+          LEFT: THREE.MOUSE.ROTATE,
           MIDDLE: THREE.MOUSE.DOLLY,
           RIGHT: THREE.MOUSE.PAN,
         }}
