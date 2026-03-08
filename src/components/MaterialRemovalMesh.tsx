@@ -11,6 +11,7 @@ type MaterialRemovalMeshProps = {
   placementMode: PlacementMode;
   detailLevel?: number;
   toolDiameter?: number;
+  mirrorX?: boolean;
 };
 
 export function MaterialRemovalMesh({
@@ -21,19 +22,17 @@ export function MaterialRemovalMesh({
   placementMode,
   detailLevel = 5,
   toolDiameter = 1,
+  mirrorX = true,
 }: MaterialRemovalMeshProps) {
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
 
-  const previewMirrorX = true;
-
   const level = clamp(detailLevel, 1, 10);
   const t = (level - 1) / 9;
 
-  const gridX = Math.floor(100 + t * 900);
-  const gridY = Math.floor(100 + t * 900);
-  const stepDensity = 1 + t * 9;
-  const recomputeNormals = level >= 6;
+  const gridX = Math.floor(150 + t * 650);
+  const gridY = Math.floor(150 + t * 650);
+  const stepDensity = 2 + t * 18;
 
   const placement = useMemo(
     () => getStockPlacement(bounds, stock, placementMode),
@@ -43,6 +42,10 @@ export function MaterialRemovalMesh({
   const geometry = useMemo(() => {
     const plane = new THREE.PlaneGeometry(width, depth, gridX - 1, gridY - 1);
     plane.rotateX(-Math.PI / 2);
+
+    const colorArray = new Float32Array(gridX * gridY * 3);
+    plane.setAttribute("color", new THREE.BufferAttribute(colorArray, 3));
+
     return plane;
   }, [depth, gridX, gridY, width]);
 
@@ -50,80 +53,89 @@ export function MaterialRemovalMesh({
     return () => geometry.dispose();
   }, [geometry]);
 
-  const heights = useMemo(() => {
-    const arr = new Float32Array(gridX * gridY);
-    arr.fill(0);
-    return arr;
-  }, [gridX, gridY]);
+  const heights = useMemo(() => new Float32Array(gridX * gridY), [gridX, gridY]);
+  const shade = useMemo(() => new Float32Array(gridX * gridY), [gridX, gridY]);
 
   const material = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
-        color: "#d8b17b",
-        roughness: 0.95,
-        metalness: 0.02,
-        side: THREE.DoubleSide,
-        flatShading: !recomputeNormals,
+      new THREE.MeshLambertMaterial({
+        side: THREE.FrontSide,
+        flatShading: true,
+        vertexColors: true,
       }),
-    [recomputeNormals],
+    [],
   );
+
+  useEffect(() => {
+    return () => material.dispose();
+  }, [material]);
 
   useEffect(() => {
     const targetLength = (progress / 100) * totalLength;
     heights.fill(0);
+    shade.fill(0);
 
     let accumulated = 0;
     const toolRadius = Math.max(0.001, toolDiameter / 2);
+
     const cellSizeX = width / Math.max(1, gridX - 1);
     const cellSizeY = depth / Math.max(1, gridY - 1);
 
-    function carveAt(localX: number, localY: number, z: number) {
-      if (localX < -toolRadius || localX > width + toolRadius) return;
-      if (localY < -toolRadius || localY > depth + toolRadius) return;
+    // Главное исправление: расширяем эффективный радиус,
+    // чтобы траектория не пропадала между вершинами сетки.
+    const cellDiagonal = Math.sqrt(cellSizeX * cellSizeX + cellSizeY * cellSizeY);
+    const effectiveRadius = toolRadius + cellDiagonal * 0.5;
+    const effectiveRadiusSq = effectiveRadius * effectiveRadius;
 
-      const mappedCenterX = previewMirrorX ? width - localX : localX;
+    const carveAt = (localX: number, localY: number, z: number) => {
+      if (localX < -effectiveRadius || localX > width + effectiveRadius) return;
+      if (localY < -effectiveRadius || localY > depth + effectiveRadius) return;
 
-      const radiusCellsX = Math.ceil(toolRadius / Math.max(cellSizeX, 0.0001));
-      const radiusCellsY = Math.ceil(toolRadius / Math.max(cellSizeY, 0.0001));
+      let centerX = localX;
+      if (mirrorX) {
+        centerX = width - localX;
+      }
 
-      const centerGX = clamp(
-        Math.round((mappedCenterX / width) * (gridX - 1)),
-        0,
-        gridX - 1,
-      );
-      const centerGY = clamp(
-        Math.round((localY / depth) * (gridY - 1)),
-        0,
-        gridY - 1,
-      );
+      // Не прижимаем жестко к краю, оставляем запас по effectiveRadius
+      centerX = Math.min(width + effectiveRadius, Math.max(-effectiveRadius, centerX));
 
-      const nextZ = Math.max(z, -thickness);
+      const minGX = Math.floor((centerX - effectiveRadius) / cellSizeX);
+      const maxGX = Math.ceil((centerX + effectiveRadius) / cellSizeX);
+      const minGY = Math.floor((localY - effectiveRadius) / cellSizeY);
+      const maxGY = Math.ceil((localY + effectiveRadius) / cellSizeY);
 
-      for (let oy = -radiusCellsY; oy <= radiusCellsY; oy += 1) {
-        const gy = centerGY + oy;
-        if (gy < 0 || gy >= gridY) continue;
+      const gxStart = Math.max(0, minGX);
+      const gxEnd = Math.min(gridX - 1, maxGX);
+      const gyStart = Math.max(0, minGY);
+      const gyEnd = Math.min(gridY - 1, maxGY);
 
-        for (let ox = -radiusCellsX; ox <= radiusCellsX; ox += 1) {
-          const gx = centerGX + ox;
-          if (gx < 0 || gx >= gridX) continue;
+      const nextZ = Math.max(-thickness, Math.min(0, z));
 
+      for (let gy = gyStart; gy <= gyEnd; gy++) {
+        for (let gx = gxStart; gx <= gxEnd; gx++) {
           const sampleX = (gx / (gridX - 1)) * width;
           const sampleY = (gy / (gridY - 1)) * depth;
 
-          const dx = sampleX - mappedCenterX;
+          const dx = sampleX - centerX;
           const dy = sampleY - localY;
+          const distSq = dx * dx + dy * dy;
 
-          if (dx * dx + dy * dy <= toolRadius * toolRadius) {
+          if (distSq <= effectiveRadiusSq) {
             const index = gy * gridX + gx;
+
             if (nextZ < heights[index]) {
               heights[index] = nextZ;
             }
+
+            const distance01 = Math.min(1, Math.sqrt(distSq) / Math.max(effectiveRadius, 0.0001));
+            const influence = 1 - distance01;
+            shade[index] = Math.max(shade[index], 0.1 + influence * 0.9);
           }
         }
       }
-    }
+    };
 
-    for (let s = 0; s < segments.length; s += 1) {
+    for (let s = 0; s < segments.length; s++) {
       const seg = segments[s];
 
       const dx = seg.end.x - seg.start.x;
@@ -131,15 +143,13 @@ export function MaterialRemovalMesh({
       const dz = seg.end.z - seg.start.z;
 
       const distance = Math.max(Math.sqrt(dx * dx + dy * dy + dz * dz), 0.001);
+
       const segStart = accumulated;
       const segEnd = accumulated + distance;
       accumulated = segEnd;
 
-      if (seg.mode !== "G1" || !seg.isCutting) {
-        continue;
-      }
+      if (seg.mode !== "G1" || !seg.isCutting) continue;
 
-      const steps = Math.max(2, Math.ceil(distance * stepDensity));
       const limitT =
         segEnd <= targetLength
           ? 1
@@ -147,15 +157,18 @@ export function MaterialRemovalMesh({
             ? (targetLength - segStart) / distance
             : -1;
 
-      if (limitT < 0) {
-        break;
-      }
+      if (limitT < 0) break;
 
-      for (let i = 0; i <= steps; i += 1) {
+      // Небольшая страховка: шаг берем не только от stepDensity,
+      // но и от размера ячейки, чтобы не было дыр на длинных сегментах.
+      const maxStepLen = Math.max(Math.min(cellSizeX, cellSizeY) * 0.75, 0.05);
+      const stepsByDensity = Math.ceil(distance * stepDensity);
+      const stepsByGrid = Math.ceil(distance / maxStepLen);
+      const steps = Math.max(2, stepsByDensity, stepsByGrid);
+
+      for (let i = 0; i <= steps; i++) {
         const stepT = i / steps;
-        if (stepT > limitT) {
-          break;
-        }
+        if (stepT > limitT) break;
 
         const x = seg.start.x + dx * stepT;
         const y = seg.start.y + dy * stepT;
@@ -167,23 +180,34 @@ export function MaterialRemovalMesh({
         carveAt(localX, localY, z);
       }
 
-      if (segEnd > targetLength) {
-        break;
-      }
+      if (segEnd > targetLength) break;
     }
 
-    const positionAttribute = geometry.attributes.position as THREE.BufferAttribute;
-    const array = positionAttribute.array as Float32Array;
+    const positionAttr = geometry.attributes.position as THREE.BufferAttribute;
+    const positions = positionAttr.array as Float32Array;
 
-    for (let i = 0; i < heights.length; i += 1) {
-      array[i * 3 + 1] = heights[i];
+    for (let i = 0; i < heights.length; i++) {
+      positions[i * 3 + 1] = heights[i];
     }
+    positionAttr.needsUpdate = true;
 
-    positionAttribute.needsUpdate = true;
+    const colorAttr = geometry.attributes.color as THREE.BufferAttribute;
+    const colors = colorAttr.array as Float32Array;
 
-    if (recomputeNormals) {
-      geometry.computeVertexNormals();
+    const baseColor = new THREE.Color("#d8b17b");
+    const darkColor = new THREE.Color("#5a3e2a");
+
+    for (let i = 0; i < shade.length; i++) {
+      const k = clamp(shade[i], 0, 1);
+      colors[i * 3] = THREE.MathUtils.lerp(baseColor.r, darkColor.r, k);
+      colors[i * 3 + 1] = THREE.MathUtils.lerp(baseColor.g, darkColor.g, k);
+      colors[i * 3 + 2] = THREE.MathUtils.lerp(baseColor.b, darkColor.b, k);
     }
+    colorAttr.needsUpdate = true;
+
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
   }, [
     depth,
     geometry,
@@ -192,10 +216,10 @@ export function MaterialRemovalMesh({
     heights,
     placement.bottom,
     placement.left,
-    previewMirrorX,
+    mirrorX,
     progress,
-    recomputeNormals,
     segments,
+    shade,
     stepDensity,
     thickness,
     toolDiameter,
@@ -207,7 +231,12 @@ export function MaterialRemovalMesh({
 
   return (
     <group position={[center.x, 0, center.z]}>
-      <mesh geometry={geometry} material={material} castShadow receiveShadow />
+      <mesh
+        geometry={geometry}
+        material={material}
+        castShadow={false}
+        receiveShadow={false}
+      />
     </group>
   );
 }
