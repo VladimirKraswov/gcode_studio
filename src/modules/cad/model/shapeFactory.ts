@@ -10,10 +10,12 @@ import type {
   SketchText,
 } from "./types";
 import { createId } from "./ids";
+import { createDefaultCamSettings } from "./document";
 
 const baseShapeFields = {
   visible: true,
   groupId: null,
+  camSettings: createDefaultCamSettings(),
 } as const;
 
 export function createRectangleShape(
@@ -74,7 +76,22 @@ export function createLineShape(
     y2,
     cutZ: null,
     strokeWidth: 1,
-    ...baseShapeFields,
+    camSettings: {
+      ...createDefaultCamSettings(),
+      operation: "follow-path",
+      tabs: {
+        enabled: false,
+        count: 0,
+        width: 6,
+        height: 1,
+      },
+      ramping: {
+        enabled: false,
+        turns: 1,
+      },
+    },
+    visible: true,
+    groupId: null,
   };
 }
 
@@ -99,7 +116,22 @@ export function createArcShape(params: {
     clockwise: params.clockwise ?? false,
     cutZ: null,
     strokeWidth: 1,
-    ...baseShapeFields,
+    camSettings: {
+      ...createDefaultCamSettings(),
+      operation: "follow-path",
+      tabs: {
+        enabled: false,
+        count: 0,
+        width: 6,
+        height: 1,
+      },
+      ramping: {
+        enabled: false,
+        turns: 1,
+      },
+    },
+    visible: true,
+    groupId: null,
   };
 }
 
@@ -116,7 +148,22 @@ export function createPolylineShape(
     closed,
     cutZ: null,
     strokeWidth: 1,
-    ...baseShapeFields,
+    camSettings: {
+      ...createDefaultCamSettings(),
+      operation: closed ? "profile-outside" : "follow-path",
+      tabs: {
+        enabled: false,
+        count: closed ? 2 : 0,
+        width: 6,
+        height: 1,
+      },
+      ramping: {
+        enabled: closed,
+        turns: 1,
+      },
+    },
+    visible: true,
+    groupId: null,
   };
 }
 
@@ -207,7 +254,7 @@ export function cloneShape(shape: SketchShape): SketchShape {
         ...shape,
         id: createId("svg"),
         contours: shape.contours.map((polyline) =>
-          polyline.map((point) => ({ ...point }))
+          polyline.map((point) => ({ ...point })),
         ),
       };
   }

@@ -9,10 +9,12 @@ import {
   FiRefreshCw,
   FiType,
 } from "react-icons/fi";
+import { createDefaultCamSettings } from "../model/document";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
 import type {
   ConstraintEdge,
+  SketchCamSettings,
   SketchDistanceConstraintTarget,
   SketchDocument,
   SketchShape,
@@ -75,6 +77,13 @@ const twoColumnGrid: React.CSSProperties = {
   minWidth: 0,
 };
 
+const threeColumnGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 10,
+  minWidth: 0,
+};
+
 const fieldLabel: React.CSSProperties = { ...ui.inputLabel };
 const checkboxRow: React.CSSProperties = {
   display: "flex",
@@ -131,6 +140,31 @@ function openArrayEditor(groupId: string) {
   );
 }
 
+function resolveShapeCamSettings(
+  shape: SketchShape,
+  document: SketchDocument,
+): SketchCamSettings {
+  const docDefaults = document.defaultCamSettings ?? createDefaultCamSettings();
+  const shapeCam = shape.camSettings ?? {};
+
+  return {
+    operation: shapeCam.operation ?? docDefaults.operation,
+    direction: shapeCam.direction ?? docDefaults.direction,
+    stepdown: shapeCam.stepdown ?? docDefaults.stepdown,
+    stepover: shapeCam.stepover ?? docDefaults.stepover,
+    tabs: {
+      enabled: shapeCam.tabs?.enabled ?? docDefaults.tabs.enabled,
+      count: shapeCam.tabs?.count ?? docDefaults.tabs.count,
+      width: shapeCam.tabs?.width ?? docDefaults.tabs.width,
+      height: shapeCam.tabs?.height ?? docDefaults.tabs.height,
+    },
+    ramping: {
+      enabled: shapeCam.ramping?.enabled ?? docDefaults.ramping.enabled,
+      turns: shapeCam.ramping?.turns ?? docDefaults.ramping.turns,
+    },
+  };
+}
+
 export function ShapePropertiesPanel({
   document,
   setDocument,
@@ -147,6 +181,11 @@ export function ShapePropertiesPanel({
         ? document.groups.find((group) => group.id === selectedShape.groupId) ?? null
         : null,
     [document.groups, selectedShape.groupId],
+  );
+
+  const shapeCamSettings = useMemo(
+    () => resolveShapeCamSettings(selectedShape, document),
+    [selectedShape, document],
   );
 
   const [newConstraintEdge, setNewConstraintEdge] = useState<ConstraintEdge>("left");
@@ -180,6 +219,24 @@ export function ShapePropertiesPanel({
   function updateSelected(patch: Record<string, number | string | boolean | null>) {
     setDocument((prev) =>
       updateShape(prev, selectedShape.id, patch as Partial<SketchShape>),
+    );
+  }
+
+  function updateSelectedCam(
+    patch:
+      | Partial<SketchCamSettings>
+      | ((prev: SketchCamSettings) => SketchCamSettings),
+  ) {
+    const current = resolveShapeCamSettings(selectedShape, document);
+    const next =
+      typeof patch === "function"
+        ? patch(current)
+        : { ...current, ...patch };
+
+    setDocument((prev) =>
+      updateShape(prev, selectedShape.id, {
+        camSettings: next,
+      } as Partial<SketchShape>),
     );
   }
 
@@ -806,6 +863,202 @@ export function ShapePropertiesPanel({
             </CardBlock>
           </>
         )}
+
+        <CardBlock title="CAM операция">
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                Operation
+                <select
+                  value={shapeCamSettings.operation}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      operation: e.target.value as SketchCamSettings["operation"],
+                    })
+                  }
+                  style={ui.select}
+                >
+                  <option value="follow-path">Follow path</option>
+                  <option value="profile-inside">Profile inside</option>
+                  <option value="profile-outside">Profile outside</option>
+                  <option value="pocket">Pocket</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                Direction
+                <select
+                  value={shapeCamSettings.direction}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      direction: e.target.value as SketchCamSettings["direction"],
+                    })
+                  }
+                  style={ui.select}
+                >
+                  <option value="climb">Climb</option>
+                  <option value="conventional">Conventional</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                Stepdown override
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.001"
+                  value={shapeCamSettings.stepdown ?? ""}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      stepdown:
+                        e.target.value === ""
+                          ? null
+                          : Math.max(0.001, Number(e.target.value) || 0.001),
+                    })
+                  }
+                  placeholder="inherit document"
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Stepover override
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.05"
+                  max="1"
+                  step="0.01"
+                  value={shapeCamSettings.stepover ?? ""}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      stepover:
+                        e.target.value === ""
+                          ? null
+                          : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
+                    })
+                  }
+                  placeholder="inherit document"
+                />
+              </label>
+            </div>
+
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={shapeCamSettings.ramping.enabled}
+                onChange={(e) =>
+                  updateSelectedCam((prev) => ({
+                    ...prev,
+                    ramping: {
+                      ...prev.ramping,
+                      enabled: e.target.checked,
+                    },
+                  }))
+                }
+              />
+              <span>Enable ramping</span>
+            </label>
+
+            <label style={fieldLabel}>
+              Ramping turns
+              <input
+                style={ui.input}
+                type="number"
+                min="1"
+                step="1"
+                value={shapeCamSettings.ramping.turns}
+                onChange={(e) =>
+                  updateSelectedCam((prev) => ({
+                    ...prev,
+                    ramping: {
+                      ...prev.ramping,
+                      turns: Math.max(1, Number(e.target.value) || 1),
+                    },
+                  }))
+                }
+              />
+            </label>
+
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={shapeCamSettings.tabs.enabled}
+                onChange={(e) =>
+                  updateSelectedCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      enabled: e.target.checked,
+                    },
+                  }))
+                }
+              />
+              <span>Enable tabs / bridges</span>
+            </label>
+
+            <div style={threeColumnGrid}>
+              <label style={fieldLabel}>
+                Tabs count
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={shapeCamSettings.tabs.count}
+                  onChange={(e) =>
+                    updateSelectedCam((prev) => ({
+                      ...prev,
+                      tabs: {
+                        ...prev.tabs,
+                        count: Math.max(0, Number(e.target.value) || 0),
+                      },
+                    }))
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Tabs width
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={shapeCamSettings.tabs.width}
+                  onChange={(e) =>
+                    updateSelectedCam((prev) => ({
+                      ...prev,
+                      tabs: {
+                        ...prev.tabs,
+                        width: Math.max(0.1, Number(e.target.value) || 0.1),
+                      },
+                    }))
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Tabs height
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={shapeCamSettings.tabs.height}
+                  onChange={(e) =>
+                    updateSelectedCam((prev) => ({
+                      ...prev,
+                      tabs: {
+                        ...prev.tabs,
+                        height: Math.max(0.1, Number(e.target.value) || 0.1),
+                      },
+                    }))
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        </CardBlock>
 
         <CardBlock title="Расстояния / ограничения">
           <div style={{ display: "grid", gap: 10 }}>

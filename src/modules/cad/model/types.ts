@@ -2,6 +2,7 @@
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
+
 export type SketchShapeType =
   | "rectangle"
   | "circle"
@@ -12,19 +13,19 @@ export type SketchShapeType =
   | "svg";
 
 export type SketchLinearArrayParams = {
-  count: number;
-  spacing: number;
-  axis: "x" | "y";
-  direction: "positive" | "negative";
+  count: number;          // общее количество копий (включая оригинал)
+  spacing: number;        // расстояние между копиями
+  axis: "x" | "y";        // ось, вдоль которой размещаются копии
+  direction: "positive" | "negative"; // направление относительно оригинала
 };
 
 export type SketchCircularArrayParams = {
-  count: number;
-  centerX: number;
+  count: number;          // общее количество копий
+  centerX: number;        // центр окружности
   centerY: number;
-  radius: number;
-  totalAngle: number;
-  rotateItems: boolean;
+  radius: number;         // радиус окружности (расстояние от центра до центров объектов)
+  totalAngle: number;     // полный угол, на который размещаются копии (обычно 360)
+  rotateItems: boolean;   // поворачивать ли объекты вслед за окружностью
 };
 
 export type SketchArrayDefinition =
@@ -43,7 +44,38 @@ export type SketchGroup = {
   id: string;
   name: string;
   collapsed?: boolean;
-  array?: SketchArrayDefinition | null;
+  array?: SketchArrayDefinition | null; // информация о массиве, если группа создана через массив
+};
+
+
+// Настройки CAM для фигуры
+export type CamOperationType =
+  | "follow-path"          // обычное движение по контуру (без смещения)
+  | "profile-inside"       // обработка внутри контура (отверстие)
+  | "profile-outside"      // обработка снаружи контура (внешний обход)
+  | "pocket";              // зачистка области (карман)
+
+export type CamCutDirection = "climb" | "conventional";
+
+export type CamTabsSettings = {
+  enabled: boolean;
+  count: number;
+  width: number;
+  height: number;
+};
+
+export type CamRampingSettings = {
+  enabled: boolean;
+  turns: number;           // количество витков спирали для выхода на глубину
+};
+
+export type SketchCamSettings = {
+  operation: CamOperationType;
+  direction: CamCutDirection;
+  stepdown: number | null;     // если null, используется глобальный passDepth
+  stepover: number | null;     // если null, используется глобальный stepover
+  tabs: CamTabsSettings;
+  ramping: CamRampingSettings;
 };
 
 export type SketchBase = {
@@ -53,6 +85,7 @@ export type SketchBase = {
   strokeWidth?: number;
   visible: boolean;
   groupId: string | null;
+  camSettings?: Partial<SketchCamSettings>; // индивидуальные настройки CAM
 };
 
 export type SketchRectangle = SketchBase & {
@@ -191,6 +224,8 @@ export type SketchDocument = {
   toolDiameter: number;
   stepover: number;
 
+  defaultCamSettings: SketchCamSettings;
+
   snapEnabled: boolean;
   snapStep: number;
   shapes: SketchShape[];
@@ -207,3 +242,18 @@ export type SketchTool =
   | "polyline"
   | "text"
   | "pan";
+
+
+
+
+
+  
+
+
+  
+
+
+
+
+
+  

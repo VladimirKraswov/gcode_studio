@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio
 ignore: .codebundleignore
-generated: 2026-03-08T13:07:55.013Z
+generated: 2026-03-08T14:45:29.669Z
 
 
 
@@ -375,6 +375,7 @@ path: /package.json
     "@types/opentype.js": "^1.3.9",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/w3c-web-serial": "^1.0.8",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
@@ -2374,6 +2375,42 @@ function StatItem({
         <div style={ui.statLabel}>{label}</div>
         <div style={{ ...ui.statValue, fontSize: 16 }}>{value}</div>
       </div>
+    </div>
+  );
+}
+
+
+path: /src/components/GrblControlPanel.tsx
+----------------------------------------
+import { useGrblSender } from "../hooks/useGrblSender";
+import { FiPlay, FiStopCircle, FiHome, FiArrowUp, FiArrowDown, FiArrowLeft, FiArrowRight } from "react-icons/fi";
+
+export function GrblControlPanel() {
+  const { status, log, connect, disconnect, send, sendGCode } = useGrblSender();
+
+  return (
+    <div style={{ padding: 16, background: "#fff", borderRadius: 18, border: "1px solid #dbe4ee" }}>
+      <h3>Управление GRBL</h3>
+      <div>Статус: {status.state}</div>
+      <div>Позиция: X{status.pos.x.toFixed(2)} Y{status.pos.y.toFixed(2)} Z{status.pos.z.toFixed(2)}</div>
+      <button onClick={connect} disabled={status.connected}>Подключиться</button>
+      <button onClick={disconnect} disabled={!status.connected}>Отключиться</button>
+      <hr />
+      <div>
+        <button onClick={() => send("$H")}><FiHome /> Home</button>
+        <button onClick={() => send("?")}>Обновить статус</button>
+      </div>
+      <div>
+        <button onClick={() => send("G91G0X10")}><FiArrowRight /> X+10</button>
+        <button onClick={() => send("G91G0X-10")}><FiArrowLeft /> X-10</button>
+        <button onClick={() => send("G91G0Y10")}><FiArrowUp /> Y+10</button>
+        <button onClick={() => send("G91G0Y-10")}><FiArrowDown /> Y-10</button>
+        <button onClick={() => send("G91G0Z5")}>Z+5</button>
+        <button onClick={() => send("G91G0Z-5")}>Z-5</button>
+        <button onClick={() => send("G90")}>Абсолютные</button>
+      </div>
+      <hr />
+      <textarea value={log.join("\n")} readOnly rows={10} style={{ width: "100%" }} />
     </div>
   );
 }
@@ -4617,6 +4654,131 @@ export function useGCodeWorker(source: string) {
     parsed,
     isParsing,
   };
+}
+
+
+path: /src/hooks/useGrblSender.ts
+----------------------------------------
+import { useState, useCallback, useRef } from "react";
+
+export type GrblStatus = {
+  connected: boolean;
+  state: "Idle" | "Run" | "Hold" | "Jog" | "Alarm" | "Door" | "Check" | "Home" | "Sleep";
+  pos: { x: number; y: number; z: number };
+  wpos: { x: number; y: number; z: number };
+  feed: number;
+  spindle: number;
+};
+
+export function useGrblSender() {
+  const [port, setPort] = useState<SerialPort | null>(null);
+  const [status, setStatus] = useState<GrblStatus>({
+    connected: false,
+    state: "Idle",
+    pos: { x: 0, y: 0, z: 0 },
+    wpos: { x: 0, y: 0, z: 0 },
+    feed: 0,
+    spindle: 0,
+  });
+  const [log, setLog] = useState<string[]>([]);
+  const readerRef = useRef<ReadableStreamDefaultReader | null>(null);
+  const writerRef = useRef<WritableStreamDefaultWriter | null>(null);
+
+  const connect = useCallback(async () => {
+    try {
+      const selectedPort = await navigator.serial.requestPort();
+      await selectedPort.open({ baudRate: 115200 });
+      setPort(selectedPort);
+
+      // Проверяем, что readable и writable не null
+      if (!selectedPort.readable || !selectedPort.writable) {
+        throw new Error("Port does not support readable/writable streams");
+      }
+
+      const reader = selectedPort.readable.getReader();
+      const writer = selectedPort.writable.getWriter();
+      readerRef.current = reader;
+      writerRef.current = writer;
+
+      setStatus(prev => ({ ...prev, connected: true }));
+
+      const readLoop = async () => {
+        const decoder = new TextDecoder();
+        while (true) {
+          try {
+            const { value, done } = await reader.read();
+            if (done) break;
+            const text = decoder.decode(value);
+            setLog(prev => [...prev, text]);
+            parseStatus(text);
+          } catch (err) {
+            console.error("Read error", err);
+            break;
+          }
+        }
+      };
+      readLoop();
+    } catch (err) {
+      console.error("Connection failed", err);
+    }
+  }, []);
+
+  const disconnect = useCallback(async () => {
+    if (readerRef.current) {
+      await readerRef.current.cancel();
+      readerRef.current = null;
+    }
+    if (writerRef.current) {
+      await writerRef.current.close();
+      writerRef.current = null;
+    }
+    if (port) {
+      await port.close();
+      setPort(null);
+    }
+    setStatus(prev => ({ ...prev, connected: false }));
+  }, [port]);
+
+  const send = useCallback(async (command: string) => {
+    if (!writerRef.current) return;
+    const encoder = new TextEncoder();
+    await writerRef.current.write(encoder.encode(command + "\n"));
+    setLog(prev => [...prev, `> ${command}`]);
+  }, []);
+
+  const sendGCode = useCallback(async (gcode: string) => {
+    const lines = gcode.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith(";")) {
+        await send(trimmed);
+        // Небольшая задержка для обработки контроллером
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+  }, [send]);
+
+  const parseStatus = (data: string) => {
+    const match = data.match(/<([^>]+)>/);
+    if (match) {
+      const parts = match[1].split("|");
+      const state = parts[0] as GrblStatus["state"];
+      const mposMatch = parts.find(p => p.startsWith("MPos:"))?.split(":")[1]?.split(",");
+      const wposMatch = parts.find(p => p.startsWith("WPos:"))?.split(":")[1]?.split(",");
+      const feedMatch = parts.find(p => p.startsWith("F:"))?.split(":")[1];
+      const spindleMatch = parts.find(p => p.startsWith("S:"))?.split(":")[1];
+      setStatus(prev => ({
+        ...prev,
+        state,
+        pos: mposMatch ? { x: +mposMatch[0], y: +mposMatch[1], z: +mposMatch[2] } : prev.pos,
+        wpos: wposMatch ? { x: +wposMatch[0], y: +wposMatch[1], z: +wposMatch[2] } : prev.wpos,
+        feed: feedMatch ? +feedMatch : prev.feed,
+        spindle: spindleMatch ? +spindleMatch : prev.spindle,
+      }));
+    }
+  };
+
+  return { status, log, connect, disconnect, send, sendGCode };
 }
 
 
@@ -8059,6 +8221,23 @@ function getCompatibleEdges(axis: "x" | "y"): ConstraintEdge[] {
   return axis === "x" ? ["left", "right"] : ["bottom", "top"];
 }
 
+function getDefaultCircularRadius(
+  document: SketchDocument,
+  selection: SelectionState,
+  center: { x: number; y: number },
+): number {
+  const bounds = getSelectionBox(document, selection);
+  const sourceCenter = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+
+  return Math.max(
+    0,
+    distance(sourceCenter, center),
+  );
+}
+
 function getDefaultCircularCenter(
   document: SketchDocument,
   selection: SelectionState,
@@ -8104,16 +8283,19 @@ export function useCadEditor({
 
   const [arrayToolMode, setArrayToolMode] = useState<ArrayToolMode>(null);
   const [editingArrayGroupId, setEditingArrayGroupId] = useState<string | null>(null);
+
   const [linearArrayParams, setLinearArrayParams] = useState<LinearArrayParams>({
-    rows: 1,
-    columns: 3,
-    stepX: 20,
-    stepY: 0,
+    count: 3,
+    spacing: 20,
+    axis: "x",
+    direction: "positive",
   });
+
   const [circularArrayParams, setCircularArrayParams] = useState<CircularArrayParams>({
     count: 6,
     centerX: 0,
     centerY: 0,
+    radius: 30,
     totalAngle: 360,
     rotateItems: true,
   });
@@ -8153,10 +8335,13 @@ export function useCadEditor({
     if (selection.ids.length === 0) return;
 
     const center = getDefaultCircularCenter(document, selection);
+    const radius = getDefaultCircularRadius(document, selection, center);
+
     setCircularArrayParams((prev) => ({
       ...prev,
       centerX: center.x,
       centerY: center.y,
+      radius,
     }));
     setEditingArrayGroupId(null);
     setArrayToolMode("circular");
@@ -9853,6 +10038,7 @@ path: /src/modules/cad/model/array.ts
 ----------------------------------------
 import { cloneShape } from "./shapeFactory";
 import { moveShape, rotateShape } from "./shapeTransforms";
+import { selectionBounds } from "./shapeBounds";
 import type { SelectionState } from "./selection";
 import type {
   SketchArrayDefinition,
@@ -9946,37 +10132,43 @@ function ensureArrayGroup(
   };
 }
 
+function getSourceAnchorCenter(sourceShapes: SketchShape[]) {
+  const bounds = selectionBounds(sourceShapes);
+  return {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+}
+
 function buildLinearCopies(
   sourceShapes: SketchShape[],
   groupId: string,
   params: LinearArrayParams,
 ): { shapes: SketchShape[]; ids: string[] } {
-  const rows = Math.max(1, Math.floor(params.rows));
-  const columns = Math.max(1, Math.floor(params.columns));
+  const count = Math.max(1, Math.floor(params.count));
+  const spacing = Math.abs(params.spacing);
+  const sign = params.direction === "negative" ? -1 : 1;
 
   const createdShapes: SketchShape[] = [];
   const createdIds: string[] = [];
 
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < columns; col += 1) {
-      if (row === 0 && col === 0) continue;
+  for (let index = 1; index < count; index += 1) {
+    const delta = spacing * index * sign;
+    const dx = params.axis === "x" ? delta : 0;
+    const dy = params.axis === "y" ? delta : 0;
 
-      const dx = col * params.stepX;
-      const dy = row * params.stepY;
+    for (const shape of sourceShapes) {
+      const clone = cloneShape(shape);
+      const moved = moveShape(clone, dx, dy);
 
-      for (const shape of sourceShapes) {
-        const clone = cloneShape(shape);
-        const moved = moveShape(clone, dx, dy);
+      const nextShape: SketchShape = {
+        ...moved,
+        name: buildArrayBadgeName(shape.name, String(index + 1)),
+        groupId,
+      };
 
-        const nextShape: SketchShape = {
-          ...moved,
-          name: buildArrayBadgeName(shape.name, `${row + 1}-${col + 1}`),
-          groupId,
-        };
-
-        createdShapes.push(nextShape);
-        createdIds.push(nextShape.id);
-      }
+      createdShapes.push(nextShape);
+      createdIds.push(nextShape.id);
     }
   }
 
@@ -9993,20 +10185,38 @@ function buildCircularCopies(
 ): { shapes: SketchShape[]; ids: string[] } {
   const count = Math.max(1, Math.floor(params.count));
   const center = { x: params.centerX, y: params.centerY };
+  const radius = Math.max(0, params.radius);
+
+  const sourceAnchor = getSourceAnchorCenter(sourceShapes);
+  const baseAngle = Math.atan2(sourceAnchor.y - center.y, sourceAnchor.x - center.x);
+  const stepAngle = count <= 1 ? 0 : params.totalAngle / count;
 
   const createdShapes: SketchShape[] = [];
   const createdIds: string[] = [];
-  const stepAngle = count <= 1 ? 0 : params.totalAngle / count;
 
   for (let index = 1; index < count; index += 1) {
-    const angle = stepAngle * index;
+    const angleDeg = stepAngle * index;
+    const angleRad = baseAngle + (angleDeg * Math.PI) / 180;
+
+    const desiredAnchor = {
+      x: center.x + Math.cos(angleRad) * radius,
+      y: center.y + Math.sin(angleRad) * radius,
+    };
 
     for (const shape of sourceShapes) {
       const clone = cloneShape(shape);
-      const rotated = rotateShape(clone, angle, center);
+
       const nextShape = params.rotateItems
-        ? rotated
-        : rotateShape(rotated, -angle, center);
+        ? moveShape(
+            rotateShape(clone, angleDeg, sourceAnchor),
+            desiredAnchor.x - sourceAnchor.x,
+            desiredAnchor.y - sourceAnchor.y,
+          )
+        : moveShape(
+            clone,
+            desiredAnchor.x - sourceAnchor.x,
+            desiredAnchor.y - sourceAnchor.y,
+          );
 
       const finalShape: SketchShape = {
         ...nextShape,
@@ -10030,7 +10240,6 @@ function replaceShapesById(
   replacements: SketchShape[],
 ): SketchShape[] {
   const replacementMap = new Map(replacements.map((shape) => [shape.id, shape]));
-
   return document.shapes.map((shape) => replacementMap.get(shape.id) ?? shape);
 }
 
@@ -10192,10 +10401,7 @@ export function rebuildArrayGroup(
   const sourceIdSet = new Set(definition.sourceShapeIds);
 
   const shapesWithoutOldCopies = document.shapes.filter((shape) => {
-    if (shape.groupId !== groupId) {
-      return true;
-    }
-
+    if (shape.groupId !== groupId) return true;
     return sourceIdSet.has(shape.id);
   });
 
@@ -10648,13 +10854,56 @@ path: /src/modules/cad/model/document.ts
 // FILE: src/modules/cad/model/document.ts
 // =============================
 
-import type { SketchDocument, SketchShape } from "./types";
+import type { SketchCamSettings, SketchDocument, SketchShape } from "./types";
+
+export function createDefaultCamSettings(): SketchCamSettings {
+  return {
+    operation: "follow-path",
+    direction: "climb",
+    stepdown: null,
+    stepover: null,
+    tabs: {
+      enabled: false,
+      count: 2,
+      width: 6,
+      height: 1,
+    },
+    ramping: {
+      enabled: false,
+      turns: 1,
+    },
+  };
+}
+
+function normalizeCamSettings(
+  value: Partial<SketchCamSettings> | undefined,
+): SketchCamSettings {
+  const defaults = createDefaultCamSettings();
+
+  return {
+    operation: value?.operation ?? defaults.operation,
+    direction: value?.direction ?? defaults.direction,
+    stepdown: value?.stepdown ?? defaults.stepdown,
+    stepover: value?.stepover ?? defaults.stepover,
+    tabs: {
+      enabled: value?.tabs?.enabled ?? defaults.tabs.enabled,
+      count: value?.tabs?.count ?? defaults.tabs.count,
+      width: value?.tabs?.width ?? defaults.tabs.width,
+      height: value?.tabs?.height ?? defaults.tabs.height,
+    },
+    ramping: {
+      enabled: value?.ramping?.enabled ?? defaults.ramping.enabled,
+      turns: value?.ramping?.turns ?? defaults.ramping.turns,
+    },
+  };
+}
 
 function normalizeShape(shape: SketchShape): SketchShape {
   return {
     ...shape,
     visible: shape.visible ?? true,
     groupId: shape.groupId ?? null,
+    camSettings: normalizeCamSettings(shape.camSettings),
   };
 }
 
@@ -10687,6 +10936,8 @@ export function createEmptySketchDocument(): SketchDocument {
     toolNumber: 1,
     toolDiameter: 3.175,
     stepover: 0.45,
+
+    defaultCamSettings: createDefaultCamSettings(),
 
     snapEnabled: true,
     snapStep: 5,
@@ -11124,10 +11375,12 @@ import type {
   SketchText,
 } from "./types";
 import { createId } from "./ids";
+import { createDefaultCamSettings } from "./document";
 
 const baseShapeFields = {
   visible: true,
   groupId: null,
+  camSettings: createDefaultCamSettings(),
 } as const;
 
 export function createRectangleShape(
@@ -11188,7 +11441,22 @@ export function createLineShape(
     y2,
     cutZ: null,
     strokeWidth: 1,
-    ...baseShapeFields,
+    camSettings: {
+      ...createDefaultCamSettings(),
+      operation: "follow-path",
+      tabs: {
+        enabled: false,
+        count: 0,
+        width: 6,
+        height: 1,
+      },
+      ramping: {
+        enabled: false,
+        turns: 1,
+      },
+    },
+    visible: true,
+    groupId: null,
   };
 }
 
@@ -11213,7 +11481,22 @@ export function createArcShape(params: {
     clockwise: params.clockwise ?? false,
     cutZ: null,
     strokeWidth: 1,
-    ...baseShapeFields,
+    camSettings: {
+      ...createDefaultCamSettings(),
+      operation: "follow-path",
+      tabs: {
+        enabled: false,
+        count: 0,
+        width: 6,
+        height: 1,
+      },
+      ramping: {
+        enabled: false,
+        turns: 1,
+      },
+    },
+    visible: true,
+    groupId: null,
   };
 }
 
@@ -11230,7 +11513,22 @@ export function createPolylineShape(
     closed,
     cutZ: null,
     strokeWidth: 1,
-    ...baseShapeFields,
+    camSettings: {
+      ...createDefaultCamSettings(),
+      operation: closed ? "profile-outside" : "follow-path",
+      tabs: {
+        enabled: false,
+        count: closed ? 2 : 0,
+        width: 6,
+        height: 1,
+      },
+      ramping: {
+        enabled: closed,
+        turns: 1,
+      },
+    },
+    visible: true,
+    groupId: null,
   };
 }
 
@@ -11321,7 +11619,7 @@ export function cloneShape(shape: SketchShape): SketchShape {
         ...shape,
         id: createId("svg"),
         contours: shape.contours.map((polyline) =>
-          polyline.map((point) => ({ ...point }))
+          polyline.map((point) => ({ ...point })),
         ),
       };
   }
@@ -11667,6 +11965,7 @@ path: /src/modules/cad/model/types.ts
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
+
 export type SketchShapeType =
   | "rectangle"
   | "circle"
@@ -11677,18 +11976,19 @@ export type SketchShapeType =
   | "svg";
 
 export type SketchLinearArrayParams = {
-  rows: number;
-  columns: number;
-  stepX: number;
-  stepY: number;
+  count: number;          // общее количество копий (включая оригинал)
+  spacing: number;        // расстояние между копиями
+  axis: "x" | "y";        // ось, вдоль которой размещаются копии
+  direction: "positive" | "negative"; // направление относительно оригинала
 };
 
 export type SketchCircularArrayParams = {
-  count: number;
-  centerX: number;
+  count: number;          // общее количество копий
+  centerX: number;        // центр окружности
   centerY: number;
-  totalAngle: number;
-  rotateItems: boolean;
+  radius: number;         // радиус окружности (расстояние от центра до центров объектов)
+  totalAngle: number;     // полный угол, на который размещаются копии (обычно 360)
+  rotateItems: boolean;   // поворачивать ли объекты вслед за окружностью
 };
 
 export type SketchArrayDefinition =
@@ -11707,7 +12007,38 @@ export type SketchGroup = {
   id: string;
   name: string;
   collapsed?: boolean;
-  array?: SketchArrayDefinition | null;
+  array?: SketchArrayDefinition | null; // информация о массиве, если группа создана через массив
+};
+
+
+// Настройки CAM для фигуры
+export type CamOperationType =
+  | "follow-path"          // обычное движение по контуру (без смещения)
+  | "profile-inside"       // обработка внутри контура (отверстие)
+  | "profile-outside"      // обработка снаружи контура (внешний обход)
+  | "pocket";              // зачистка области (карман)
+
+export type CamCutDirection = "climb" | "conventional";
+
+export type CamTabsSettings = {
+  enabled: boolean;
+  count: number;
+  width: number;
+  height: number;
+};
+
+export type CamRampingSettings = {
+  enabled: boolean;
+  turns: number;           // количество витков спирали для выхода на глубину
+};
+
+export type SketchCamSettings = {
+  operation: CamOperationType;
+  direction: CamCutDirection;
+  stepdown: number | null;     // если null, используется глобальный passDepth
+  stepover: number | null;     // если null, используется глобальный stepover
+  tabs: CamTabsSettings;
+  ramping: CamRampingSettings;
 };
 
 export type SketchBase = {
@@ -11717,6 +12048,7 @@ export type SketchBase = {
   strokeWidth?: number;
   visible: boolean;
   groupId: string | null;
+  camSettings?: Partial<SketchCamSettings>; // индивидуальные настройки CAM
 };
 
 export type SketchRectangle = SketchBase & {
@@ -11855,6 +12187,8 @@ export type SketchDocument = {
   toolDiameter: number;
   stepover: number;
 
+  defaultCamSettings: SketchCamSettings;
+
   snapEnabled: boolean;
   snapStep: number;
   shapes: SketchShape[];
@@ -11871,6 +12205,21 @@ export type SketchTool =
   | "polyline"
   | "text"
   | "pan";
+
+
+
+
+
+  
+
+
+  
+
+
+
+
+
+  
 
 
 path: /src/modules/cad/model/view.ts
@@ -11980,15 +12329,15 @@ export function ArrayToolPanel({
           }}
         >
           <label style={fieldLabel}>
-            Rows
+            Количество
             <input
               type="number"
-              min="1"
+              min="2"
               step="1"
-              value={linear.rows}
+              value={linear.count}
               onChange={(e) =>
                 onLinearChange({
-                  rows: Math.max(1, Number(e.target.value) || 1),
+                  count: Math.max(2, Number(e.target.value) || 2),
                 })
               }
               style={ui.input}
@@ -11996,30 +12345,14 @@ export function ArrayToolPanel({
           </label>
 
           <label style={fieldLabel}>
-            Columns
-            <input
-              type="number"
-              min="1"
-              step="1"
-              value={linear.columns}
-              onChange={(e) =>
-                onLinearChange({
-                  columns: Math.max(1, Number(e.target.value) || 1),
-                })
-              }
-              style={ui.input}
-            />
-          </label>
-
-          <label style={fieldLabel}>
-            Step X
+            Шаг
             <input
               type="number"
               step="0.001"
-              value={linear.stepX}
+              value={linear.spacing}
               onChange={(e) =>
                 onLinearChange({
-                  stepX: Number(e.target.value) || 0,
+                  spacing: Math.abs(Number(e.target.value) || 0),
                 })
               }
               style={ui.input}
@@ -12027,30 +12360,47 @@ export function ArrayToolPanel({
           </label>
 
           <label style={fieldLabel}>
-            Step Y
-            <input
-              type="number"
-              step="0.001"
-              value={linear.stepY}
+            Ось
+            <select
+              value={linear.axis}
               onChange={(e) =>
                 onLinearChange({
-                  stepY: Number(e.target.value) || 0,
+                  axis: e.target.value as LinearArrayParams["axis"],
                 })
               }
-              style={ui.input}
-            />
+              style={ui.select}
+            >
+              <option value="x">X</option>
+              <option value="y">Y</option>
+            </select>
+          </label>
+
+          <label style={fieldLabel}>
+            Направление
+            <select
+              value={linear.direction}
+              onChange={(e) =>
+                onLinearChange({
+                  direction: e.target.value as LinearArrayParams["direction"],
+                })
+              }
+              style={ui.select}
+            >
+              <option value="positive">Плюс</option>
+              <option value="negative">Минус</option>
+            </select>
           </label>
         </div>
       ) : (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
             gap: 10,
           }}
         >
           <label style={fieldLabel}>
-            Count
+            Количество
             <input
               type="number"
               min="2"
@@ -12089,6 +12439,22 @@ export function ArrayToolPanel({
               onChange={(e) =>
                 onCircularChange({
                   centerY: Number(e.target.value) || 0,
+                })
+              }
+              style={ui.input}
+            />
+          </label>
+
+          <label style={fieldLabel}>
+            Радиус
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              value={circular.radius}
+              onChange={(e) =>
+                onCircularChange({
+                  radius: Math.max(0, Number(e.target.value) || 0),
                 })
               }
               style={ui.input}
@@ -12142,7 +12508,8 @@ export function ArrayToolPanel({
 path: /src/modules/cad/panels/DocumentSettingsPanel.tsx
 ----------------------------------------
 import { ui } from "../../../styles/ui";
-import type { SketchDocument } from "../model/types";
+import type { SketchCamSettings, SketchDocument } from "../model/types";
+import { createDefaultCamSettings } from "../model/document";
 
 type DocumentSettingsPanelProps = {
   document: SketchDocument;
@@ -12214,10 +12581,53 @@ function CardBlock({
   );
 }
 
+function resolveDocCamSettings(document: SketchDocument): SketchCamSettings {
+  const defaults = createDefaultCamSettings();
+  const value = document.defaultCamSettings ?? defaults;
+
+  return {
+    operation: value.operation ?? defaults.operation,
+    direction: value.direction ?? defaults.direction,
+    stepdown: value.stepdown ?? defaults.stepdown,
+    stepover: value.stepover ?? defaults.stepover,
+    tabs: {
+      enabled: value.tabs?.enabled ?? defaults.tabs.enabled,
+      count: value.tabs?.count ?? defaults.tabs.count,
+      width: value.tabs?.width ?? defaults.tabs.width,
+      height: value.tabs?.height ?? defaults.tabs.height,
+    },
+    ramping: {
+      enabled: value.ramping?.enabled ?? defaults.ramping.enabled,
+      turns: value.ramping?.turns ?? defaults.ramping.turns,
+    },
+  };
+}
+
 export function DocumentSettingsPanel({
   document,
   setDocument,
 }: DocumentSettingsPanelProps) {
+  const defaultCamSettings = resolveDocCamSettings(document);
+
+  function updateDefaultCam(
+    patch:
+      | Partial<SketchCamSettings>
+      | ((prev: SketchCamSettings) => SketchCamSettings),
+  ) {
+    setDocument((prev) => {
+      const current = resolveDocCamSettings(prev);
+      const next =
+        typeof patch === "function"
+          ? patch(current)
+          : { ...current, ...patch };
+
+      return {
+        ...prev,
+        defaultCamSettings: next,
+      };
+    });
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <CardBlock title="Сетка и лист">
@@ -12522,6 +12932,196 @@ export function DocumentSettingsPanel({
               }
             />
           </label>
+        </div>
+      </CardBlock>
+
+      <CardBlock title="CAM defaults">
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={twoColumnGrid}>
+            <label style={fieldLabel}>
+              Операция по умолчанию
+              <select
+                value={defaultCamSettings.operation}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    operation: e.target.value as SketchCamSettings["operation"],
+                  })
+                }
+                style={ui.select}
+              >
+                <option value="follow-path">Follow path</option>
+                <option value="profile-inside">Profile inside</option>
+                <option value="profile-outside">Profile outside</option>
+                <option value="pocket">Pocket</option>
+              </select>
+            </label>
+
+            <label style={fieldLabel}>
+              Направление
+              <select
+                value={defaultCamSettings.direction}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    direction: e.target.value as SketchCamSettings["direction"],
+                  })
+                }
+                style={ui.select}
+              >
+                <option value="climb">Climb</option>
+                <option value="conventional">Conventional</option>
+              </select>
+            </label>
+
+            <label style={fieldLabel}>
+              Stepdown override
+              <input
+                style={ui.input}
+                type="number"
+                step="0.001"
+                value={defaultCamSettings.stepdown ?? ""}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    stepdown: e.target.value === "" ? null : Math.max(0.001, Number(e.target.value) || 0.001),
+                  })
+                }
+                placeholder="inherit passDepth"
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Stepover override
+              <input
+                style={ui.input}
+                type="number"
+                min="0.05"
+                max="1"
+                step="0.01"
+                value={defaultCamSettings.stepover ?? ""}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    stepover: e.target.value === "" ? null : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
+                  })
+                }
+                placeholder="inherit document stepover"
+              />
+            </label>
+          </div>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={defaultCamSettings.ramping.enabled}
+              onChange={(e) =>
+                updateDefaultCam((prev) => ({
+                  ...prev,
+                  ramping: {
+                    ...prev.ramping,
+                    enabled: e.target.checked,
+                  },
+                }))
+              }
+            />
+            <span>Ramping по умолчанию</span>
+          </label>
+
+          <label style={fieldLabel}>
+            Количество витков ramping
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              step="1"
+              value={defaultCamSettings.ramping.turns}
+              onChange={(e) =>
+                updateDefaultCam((prev) => ({
+                  ...prev,
+                  ramping: {
+                    ...prev.ramping,
+                    turns: Math.max(1, Number(e.target.value) || 1),
+                  },
+                }))
+              }
+            />
+          </label>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={defaultCamSettings.tabs.enabled}
+              onChange={(e) =>
+                updateDefaultCam((prev) => ({
+                  ...prev,
+                  tabs: {
+                    ...prev.tabs,
+                    enabled: e.target.checked,
+                  },
+                }))
+              }
+            />
+            <span>Tabs / bridges по умолчанию</span>
+          </label>
+
+          <div style={threeColumnGrid}>
+            <label style={fieldLabel}>
+              Count
+              <input
+                style={ui.input}
+                type="number"
+                min="0"
+                step="1"
+                value={defaultCamSettings.tabs.count}
+                onChange={(e) =>
+                  updateDefaultCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      count: Math.max(0, Number(e.target.value) || 0),
+                    },
+                  }))
+                }
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Width
+              <input
+                style={ui.input}
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={defaultCamSettings.tabs.width}
+                onChange={(e) =>
+                  updateDefaultCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      width: Math.max(0.1, Number(e.target.value) || 0.1),
+                    },
+                  }))
+                }
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Height
+              <input
+                style={ui.input}
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={defaultCamSettings.tabs.height}
+                onChange={(e) =>
+                  updateDefaultCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      height: Math.max(0.1, Number(e.target.value) || 0.1),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
         </div>
       </CardBlock>
 
@@ -12961,7 +13561,6 @@ export function EditToolbar({
           <span>Клон</span>
         </button>
 
-        +
         <button
           type="button"
           title="Линейный массив выбранных объектов"
@@ -13549,10 +14148,12 @@ import {
   FiRefreshCw,
   FiType,
 } from "react-icons/fi";
+import { createDefaultCamSettings } from "../model/document";
 import { clamp } from "../../../utils";
 import { theme, ui } from "../../../styles/ui";
 import type {
   ConstraintEdge,
+  SketchCamSettings,
   SketchDistanceConstraintTarget,
   SketchDocument,
   SketchShape,
@@ -13615,6 +14216,13 @@ const twoColumnGrid: React.CSSProperties = {
   minWidth: 0,
 };
 
+const threeColumnGrid: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 10,
+  minWidth: 0,
+};
+
 const fieldLabel: React.CSSProperties = { ...ui.inputLabel };
 const checkboxRow: React.CSSProperties = {
   display: "flex",
@@ -13671,6 +14279,31 @@ function openArrayEditor(groupId: string) {
   );
 }
 
+function resolveShapeCamSettings(
+  shape: SketchShape,
+  document: SketchDocument,
+): SketchCamSettings {
+  const docDefaults = document.defaultCamSettings ?? createDefaultCamSettings();
+  const shapeCam = shape.camSettings ?? {};
+
+  return {
+    operation: shapeCam.operation ?? docDefaults.operation,
+    direction: shapeCam.direction ?? docDefaults.direction,
+    stepdown: shapeCam.stepdown ?? docDefaults.stepdown,
+    stepover: shapeCam.stepover ?? docDefaults.stepover,
+    tabs: {
+      enabled: shapeCam.tabs?.enabled ?? docDefaults.tabs.enabled,
+      count: shapeCam.tabs?.count ?? docDefaults.tabs.count,
+      width: shapeCam.tabs?.width ?? docDefaults.tabs.width,
+      height: shapeCam.tabs?.height ?? docDefaults.tabs.height,
+    },
+    ramping: {
+      enabled: shapeCam.ramping?.enabled ?? docDefaults.ramping.enabled,
+      turns: shapeCam.ramping?.turns ?? docDefaults.ramping.turns,
+    },
+  };
+}
+
 export function ShapePropertiesPanel({
   document,
   setDocument,
@@ -13687,6 +14320,11 @@ export function ShapePropertiesPanel({
         ? document.groups.find((group) => group.id === selectedShape.groupId) ?? null
         : null,
     [document.groups, selectedShape.groupId],
+  );
+
+  const shapeCamSettings = useMemo(
+    () => resolveShapeCamSettings(selectedShape, document),
+    [selectedShape, document],
   );
 
   const [newConstraintEdge, setNewConstraintEdge] = useState<ConstraintEdge>("left");
@@ -13720,6 +14358,24 @@ export function ShapePropertiesPanel({
   function updateSelected(patch: Record<string, number | string | boolean | null>) {
     setDocument((prev) =>
       updateShape(prev, selectedShape.id, patch as Partial<SketchShape>),
+    );
+  }
+
+  function updateSelectedCam(
+    patch:
+      | Partial<SketchCamSettings>
+      | ((prev: SketchCamSettings) => SketchCamSettings),
+  ) {
+    const current = resolveShapeCamSettings(selectedShape, document);
+    const next =
+      typeof patch === "function"
+        ? patch(current)
+        : { ...current, ...patch };
+
+    setDocument((prev) =>
+      updateShape(prev, selectedShape.id, {
+        camSettings: next,
+      } as Partial<SketchShape>),
     );
   }
 
@@ -13796,27 +14452,27 @@ export function ShapePropertiesPanel({
               {selectedGroup.array.type === "linear" ? (
                 <div style={twoColumnGrid}>
                   <div style={ui.statCard}>
-                    <div style={ui.statLabel}>Rows</div>
+                    <div style={ui.statLabel}>Count</div>
                     <div style={{ ...ui.statValue, fontSize: 15 }}>
-                      {selectedGroup.array.params.rows}
+                      {selectedGroup.array.params.count}
                     </div>
                   </div>
                   <div style={ui.statCard}>
-                    <div style={ui.statLabel}>Columns</div>
+                    <div style={ui.statLabel}>Spacing</div>
                     <div style={{ ...ui.statValue, fontSize: 15 }}>
-                      {selectedGroup.array.params.columns}
+                      {selectedGroup.array.params.spacing}
                     </div>
                   </div>
                   <div style={ui.statCard}>
-                    <div style={ui.statLabel}>Step X</div>
+                    <div style={ui.statLabel}>Axis</div>
                     <div style={{ ...ui.statValue, fontSize: 15 }}>
-                      {selectedGroup.array.params.stepX}
+                      {selectedGroup.array.params.axis.toUpperCase()}
                     </div>
                   </div>
                   <div style={ui.statCard}>
-                    <div style={ui.statLabel}>Step Y</div>
+                    <div style={ui.statLabel}>Direction</div>
                     <div style={{ ...ui.statValue, fontSize: 15 }}>
-                      {selectedGroup.array.params.stepY}
+                      {selectedGroup.array.params.direction === "positive" ? "+" : "-"}
                     </div>
                   </div>
                 </div>
@@ -13844,6 +14500,12 @@ export function ShapePropertiesPanel({
                     <div style={ui.statLabel}>Center Y</div>
                     <div style={{ ...ui.statValue, fontSize: 15 }}>
                       {selectedGroup.array.params.centerY}
+                    </div>
+                  </div>
+                  <div style={ui.statCard}>
+                    <div style={ui.statLabel}>Radius</div>
+                    <div style={{ ...ui.statValue, fontSize: 15 }}>
+                      {selectedGroup.array.params.radius}
                     </div>
                   </div>
                 </div>
@@ -14341,6 +15003,202 @@ export function ShapePropertiesPanel({
           </>
         )}
 
+        <CardBlock title="CAM операция">
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={twoColumnGrid}>
+              <label style={fieldLabel}>
+                Operation
+                <select
+                  value={shapeCamSettings.operation}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      operation: e.target.value as SketchCamSettings["operation"],
+                    })
+                  }
+                  style={ui.select}
+                >
+                  <option value="follow-path">Follow path</option>
+                  <option value="profile-inside">Profile inside</option>
+                  <option value="profile-outside">Profile outside</option>
+                  <option value="pocket">Pocket</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                Direction
+                <select
+                  value={shapeCamSettings.direction}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      direction: e.target.value as SketchCamSettings["direction"],
+                    })
+                  }
+                  style={ui.select}
+                >
+                  <option value="climb">Climb</option>
+                  <option value="conventional">Conventional</option>
+                </select>
+              </label>
+
+              <label style={fieldLabel}>
+                Stepdown override
+                <input
+                  style={ui.input}
+                  type="number"
+                  step="0.001"
+                  value={shapeCamSettings.stepdown ?? ""}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      stepdown:
+                        e.target.value === ""
+                          ? null
+                          : Math.max(0.001, Number(e.target.value) || 0.001),
+                    })
+                  }
+                  placeholder="inherit document"
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Stepover override
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.05"
+                  max="1"
+                  step="0.01"
+                  value={shapeCamSettings.stepover ?? ""}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      stepover:
+                        e.target.value === ""
+                          ? null
+                          : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
+                    })
+                  }
+                  placeholder="inherit document"
+                />
+              </label>
+            </div>
+
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={shapeCamSettings.ramping.enabled}
+                onChange={(e) =>
+                  updateSelectedCam((prev) => ({
+                    ...prev,
+                    ramping: {
+                      ...prev.ramping,
+                      enabled: e.target.checked,
+                    },
+                  }))
+                }
+              />
+              <span>Enable ramping</span>
+            </label>
+
+            <label style={fieldLabel}>
+              Ramping turns
+              <input
+                style={ui.input}
+                type="number"
+                min="1"
+                step="1"
+                value={shapeCamSettings.ramping.turns}
+                onChange={(e) =>
+                  updateSelectedCam((prev) => ({
+                    ...prev,
+                    ramping: {
+                      ...prev.ramping,
+                      turns: Math.max(1, Number(e.target.value) || 1),
+                    },
+                  }))
+                }
+              />
+            </label>
+
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={shapeCamSettings.tabs.enabled}
+                onChange={(e) =>
+                  updateSelectedCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      enabled: e.target.checked,
+                    },
+                  }))
+                }
+              />
+              <span>Enable tabs / bridges</span>
+            </label>
+
+            <div style={threeColumnGrid}>
+              <label style={fieldLabel}>
+                Tabs count
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={shapeCamSettings.tabs.count}
+                  onChange={(e) =>
+                    updateSelectedCam((prev) => ({
+                      ...prev,
+                      tabs: {
+                        ...prev.tabs,
+                        count: Math.max(0, Number(e.target.value) || 0),
+                      },
+                    }))
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Tabs width
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={shapeCamSettings.tabs.width}
+                  onChange={(e) =>
+                    updateSelectedCam((prev) => ({
+                      ...prev,
+                      tabs: {
+                        ...prev.tabs,
+                        width: Math.max(0.1, Number(e.target.value) || 0.1),
+                      },
+                    }))
+                  }
+                />
+              </label>
+
+              <label style={fieldLabel}>
+                Tabs height
+                <input
+                  style={ui.input}
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  value={shapeCamSettings.tabs.height}
+                  onChange={(e) =>
+                    updateSelectedCam((prev) => ({
+                      ...prev,
+                      tabs: {
+                        ...prev.tabs,
+                        height: Math.max(0.1, Number(e.target.value) || 0.1),
+                      },
+                    }))
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        </CardBlock>
+
         <CardBlock title="Расстояния / ограничения">
           <div style={{ display: "grid", gap: 10 }}>
             {selectedConstraints.length === 0 ? (
@@ -14717,6 +15575,696 @@ export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelPro
 }
 
 
+path: /src/modules/cam/algorithms/bridges.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+type BridgeInterval = { start: number; end: number };
+const EPS = 1e-6;
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function lerpPoint(a: CadPoint, b: CadPoint, t: number): CadPoint {
+  return { x: Number((a.x + (b.x - a.x) * t).toFixed(3)), y: Number((a.y + (b.y - a.y) * t).toFixed(3)) };
+}
+
+function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
+  if (contour.length < 2) return contour.map(p => ({ ...p }));
+  const first = contour[0];
+  const last = contour[contour.length - 1];
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map(p => ({ ...p }));
+  return contour.map(p => ({ ...p }));
+}
+
+function contourSegmentLengths(contour: CadPoint[]): { lengths: number[]; total: number } {
+  const lengths: number[] = [];
+  let total = 0;
+  for (let i = 0; i < contour.length; i++) {
+    const a = contour[i];
+    const b = contour[(i + 1) % contour.length];
+    const len = distance(a, b);
+    lengths.push(len);
+    total += len;
+  }
+  return { lengths, total };
+}
+
+function normalizeWrapIntervals(intervals: BridgeInterval[], total: number): BridgeInterval[] {
+  const result: BridgeInterval[] = [];
+  for (const interval of intervals) {
+    let start = interval.start;
+    let end = interval.end;
+    while (start < 0) { start += total; end += total; }
+    start %= total;
+    end %= total;
+    if (end < start) {
+      result.push({ start, end: total });
+      result.push({ start: 0, end });
+    } else result.push({ start, end });
+  }
+  return result.sort((a, b) => a.start - b.start);
+}
+
+function mergeIntervals(intervals: BridgeInterval[]): BridgeInterval[] {
+  if (intervals.length === 0) return [];
+  const merged: BridgeInterval[] = [intervals[0]];
+  for (let i = 1; i < intervals.length; i++) {
+    const prev = merged[merged.length - 1];
+    const next = intervals[i];
+    if (next.start <= prev.end + EPS) prev.end = Math.max(prev.end, next.end);
+    else merged.push({ ...next });
+  }
+  return merged;
+}
+
+function samplePointAtLength(contour: CadPoint[], lengths: number[], at: number): CadPoint {
+  let accumulated = 0;
+  for (let i = 0; i < contour.length; i++) {
+    const a = contour[i];
+    const b = contour[(i + 1) % contour.length];
+    const len = lengths[i];
+    if (len <= EPS) { accumulated += len; continue; }
+    const segStart = accumulated;
+    const segEnd = accumulated + len;
+    if (at >= segStart - EPS && at <= segEnd + EPS) {
+      const t = Math.max(0, Math.min(1, (at - segStart) / len));
+      return lerpPoint(a, b, t);
+    }
+    accumulated = segEnd;
+  }
+  return { ...contour[0] };
+}
+
+function collectKeptIntervals(total: number, bridgeIntervals: BridgeInterval[]): BridgeInterval[] {
+  if (bridgeIntervals.length === 0) return [{ start: 0, end: total }];
+  const kept: BridgeInterval[] = [];
+  let cursor = 0;
+  for (const bridge of bridgeIntervals) {
+    if (bridge.start > cursor + EPS) kept.push({ start: cursor, end: bridge.start });
+    cursor = Math.max(cursor, bridge.end);
+  }
+  if (cursor < total - EPS) kept.push({ start: cursor, end: total });
+  return kept.filter(item => item.end - item.start > EPS);
+}
+
+function extractSegmentBetween(contour: CadPoint[], lengths: number[], startLen: number, endLen: number): CadPoint[] {
+  const result: CadPoint[] = [samplePointAtLength(contour, lengths, startLen)];
+  let accumulated = 0;
+  for (let i = 0; i < contour.length; i++) {
+    const nextAccumulated = accumulated + lengths[i];
+    const vertex = contour[(i + 1) % contour.length];
+    if (nextAccumulated > startLen + EPS && nextAccumulated < endLen - EPS) result.push({ ...vertex });
+    accumulated = nextAccumulated;
+  }
+  const endPoint = samplePointAtLength(contour, lengths, endLen);
+  if (distance(result[result.length - 1], endPoint) > EPS) result.push(endPoint);
+  return result;
+}
+
+export function insertBridges(contour: CadPoint[], bridgeCount: number, bridgeWidth: number): CadPoint[][] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 3) return normalized.length >= 2 ? [normalized] : [];
+  if (bridgeCount <= 0 || bridgeWidth <= 0) return [normalized];
+  const { lengths, total } = contourSegmentLengths(normalized);
+  if (total <= EPS) return [normalized];
+  const clampedBridgeWidth = Math.min(Math.max(bridgeWidth, 0), total * 0.9);
+  const spacing = total / bridgeCount;
+  const rawBridgeIntervals: BridgeInterval[] = [];
+  for (let i = 0; i < bridgeCount; i++) {
+    const center = (i + 0.5) * spacing;
+    rawBridgeIntervals.push({ start: center - clampedBridgeWidth / 2, end: center + clampedBridgeWidth / 2 });
+  }
+  const mergedBridgeIntervals = mergeIntervals(normalizeWrapIntervals(rawBridgeIntervals, total));
+  const keptIntervals = collectKeptIntervals(total, mergedBridgeIntervals);
+  return keptIntervals.map(interval => extractSegmentBetween(normalized, lengths, interval.start, interval.end)).filter(seg => seg.length >= 2);
+}
+
+
+path: /src/modules/cam/algorithms/contourClassifier.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+export type ClassifiedContours = {
+  external: CadPoint[][];
+  holes: Map<number, number[]>;
+  parent: number[];
+  depth: number[];
+};
+
+const EPS = 1e-9;
+
+function signedArea(polygon: CadPoint[]): number {
+  let sum = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return sum / 2;
+}
+
+function areaAbs(polygon: CadPoint[]): number {
+  return Math.abs(signedArea(polygon));
+}
+
+function boundsOf(polygon: CadPoint[]) {
+  const xs = polygon.map(p => p.x);
+  const ys = polygon.map(p => p.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+function boundsContains(outer: ReturnType<typeof boundsOf>, inner: ReturnType<typeof boundsOf>): boolean {
+  return (
+    inner.minX >= outer.minX - EPS &&
+    inner.maxX <= outer.maxX + EPS &&
+    inner.minY >= outer.minY - EPS &&
+    inner.maxY <= outer.maxY + EPS
+  );
+}
+
+function contourSamplePoint(contour: CadPoint[]): CadPoint {
+  return contour[0] ?? { x: 0, y: 0 };
+}
+
+export function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+
+    const onSegment =
+      Math.abs((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x)) < EPS &&
+      point.x >= Math.min(a.x, b.x) - EPS &&
+      point.x <= Math.max(a.x, b.x) + EPS &&
+      point.y >= Math.min(a.y, b.y) - EPS &&
+      point.y <= Math.max(a.y, b.y) + EPS;
+    if (onSegment) return true;
+
+    const intersects =
+      (a.y > point.y) !== (b.y > point.y) &&
+      point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y + EPS) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+export function classifyContours(polylines: CadPoint[][]): ClassifiedContours {
+  const n = polylines.length;
+  const bounds = polylines.map(boundsOf);
+  const areas = polylines.map(areaAbs);
+  const parent = new Array<number>(n).fill(-1);
+  const depth = new Array<number>(n).fill(0);
+
+  for (let child = 0; child < n; child++) {
+    let bestParent = -1;
+    let bestParentArea = Infinity;
+    const probe = contourSamplePoint(polylines[child]);
+
+    for (let candidate = 0; candidate < n; candidate++) {
+      if (candidate === child) continue;
+      if (areas[candidate] <= areas[child] + EPS) continue;
+      if (!boundsContains(bounds[candidate], bounds[child])) continue;
+      if (!pointInPolygon(probe, polylines[candidate])) continue;
+      if (areas[candidate] < bestParentArea) {
+        bestParentArea = areas[candidate];
+        bestParent = candidate;
+      }
+    }
+    parent[child] = bestParent;
+  }
+
+  function computeDepth(index: number): number {
+    if (parent[index] === -1) return 0;
+    if (depth[index] > 0) return depth[index];
+    depth[index] = computeDepth(parent[index]) + 1;
+    return depth[index];
+  }
+
+  for (let i = 0; i < n; i++) depth[i] = computeDepth(i);
+
+  const externalIndices = polylines.map((_, i) => i).filter(i => depth[i] % 2 === 0);
+  const external = externalIndices.map(i => polylines[i]);
+  const holes = new Map<number, number[]>();
+  externalIndices.forEach((_, extIndex) => holes.set(extIndex, []));
+
+  for (let i = 0; i < n; i++) {
+    if (depth[i] % 2 === 1) {
+      let owner = parent[i];
+      while (owner !== -1 && depth[owner] % 2 === 1) owner = parent[owner];
+      if (owner !== -1) {
+        const extIndex = externalIndices.indexOf(owner);
+        if (extIndex >= 0) holes.get(extIndex)?.push(i);
+      }
+    }
+  }
+
+  return { external, holes, parent, depth };
+}
+
+
+path: /src/modules/cam/algorithms/gcodeArc.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+export type ArcParams = {
+  start: CadPoint;
+  end: CadPoint;
+  center: CadPoint;
+  clockwise: boolean;
+};
+
+export function arcToIJK(start: CadPoint, center: CadPoint): { i: number; j: number } {
+  return { i: center.x - start.x, j: center.y - start.y };
+}
+
+export function formatArcGCode(arc: ArcParams, feed: number, z?: number): string {
+  const { i, j } = arcToIJK(arc.start, arc.center);
+  const gCode = arc.clockwise ? "G2" : "G3";
+  const xPart = `X${arc.end.x.toFixed(3)}`;
+  const yPart = `Y${arc.end.y.toFixed(3)}`;
+  const zPart = z !== undefined ? ` Z${z.toFixed(3)}` : "";
+  const iPart = ` I${i.toFixed(3)}`;
+  const jPart = ` J${j.toFixed(3)}`;
+  const fPart = ` F${feed}`;
+  return `${gCode}${xPart}${yPart}${zPart}${iPart}${jPart}${fPart}`.replace(/\s+/g, " ").trim();
+}
+
+
+path: /src/modules/cam/algorithms/offsetBuilder.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function signedArea(points: CadPoint[]): number {
+  let sum = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return sum / 2;
+}
+
+function normalizeClosedContour(points: CadPoint[]): CadPoint[] {
+  if (points.length < 2) return points.map((p) => ({ ...p }));
+
+  const first = points[0];
+  const last = points[points.length - 1];
+
+  if (distance(first, last) <= EPS) {
+    return points.slice(0, -1).map((p) => ({ ...p }));
+  }
+
+  return points.map((p) => ({ ...p }));
+}
+
+function lineIntersection(
+  a1: CadPoint,
+  a2: CadPoint,
+  b1: CadPoint,
+  b2: CadPoint,
+): CadPoint | null {
+  const dax = a2.x - a1.x;
+  const day = a2.y - a1.y;
+  const dbx = b2.x - b1.x;
+  const dby = b2.y - b1.y;
+
+  const det = dax * dby - day * dbx;
+  if (Math.abs(det) <= EPS) return null;
+
+  const dx = b1.x - a1.x;
+  const dy = b1.y - a1.y;
+  const t = (dx * dby - dy * dbx) / det;
+
+  return {
+    x: round(a1.x + dax * t),
+    y: round(a1.y + day * t),
+  };
+}
+
+function segmentNormal(a: CadPoint, b: CadPoint, outwardSign: number): CadPoint {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+
+  return {
+    x: round((outwardSign * dy) / len),
+    y: round((-outwardSign * dx) / len),
+  };
+}
+
+function buildShiftedLines(
+  contour: CadPoint[],
+  offset: number,
+): Array<{ a: CadPoint; b: CadPoint }> {
+  const area = signedArea(contour);
+  const outwardSign = area >= 0 ? 1 : -1;
+
+  const result: Array<{ a: CadPoint; b: CadPoint }> = [];
+
+  for (let i = 0; i < contour.length; i += 1) {
+    const a = contour[i];
+    const b = contour[(i + 1) % contour.length];
+    const n = segmentNormal(a, b, outwardSign);
+
+    result.push({
+      a: {
+        x: round(a.x + n.x * offset),
+        y: round(a.y + n.y * offset),
+      },
+      b: {
+        x: round(b.x + n.x * offset),
+        y: round(b.y + n.y * offset),
+      },
+    });
+  }
+
+  return result;
+}
+
+function dedupeSequential(points: CadPoint[]): CadPoint[] {
+  if (points.length === 0) return [];
+
+  const result: CadPoint[] = [points[0]];
+
+  for (let i = 1; i < points.length; i += 1) {
+    if (distance(points[i], result[result.length - 1]) > EPS) {
+      result.push(points[i]);
+    }
+  }
+
+  if (result.length > 2 && distance(result[0], result[result.length - 1]) <= EPS) {
+    result.pop();
+  }
+
+  return result;
+}
+
+function fallbackVertexOffset(
+  prev: CadPoint,
+  curr: CadPoint,
+  next: CadPoint,
+  offset: number,
+  outwardSign: number,
+): CadPoint {
+  const n1 = segmentNormal(prev, curr, outwardSign);
+  const n2 = segmentNormal(curr, next, outwardSign);
+
+  const nx = n1.x + n2.x;
+  const ny = n1.y + n2.y;
+  const len = Math.hypot(nx, ny) || 1;
+
+  return {
+    x: round(curr.x + (nx / len) * offset),
+    y: round(curr.y + (ny / len) * offset),
+  };
+}
+
+/**
+ * Простая геометрическая эквидистанта для замкнутого полигона.
+ * Работает устойчиво для большинства CAD-контуров без самопересечений.
+ */
+export function buildOffset(
+  polyline: CadPoint[],
+  offset: number,
+  joinType: "round" | "miter" = "round",
+): CadPoint[][] {
+  void joinType;
+
+  const contour = normalizeClosedContour(polyline);
+  if (contour.length < 3 || Math.abs(offset) <= EPS) {
+    return contour.length >= 3 ? [contour] : [];
+  }
+
+  const shifted = buildShiftedLines(contour, offset);
+  const area = signedArea(contour);
+  const outwardSign = area >= 0 ? 1 : -1;
+
+  const points: CadPoint[] = [];
+
+  for (let i = 0; i < contour.length; i += 1) {
+    const prevLine = shifted[(i - 1 + shifted.length) % shifted.length];
+    const nextLine = shifted[i];
+
+    const intersection = lineIntersection(
+      prevLine.a,
+      prevLine.b,
+      nextLine.a,
+      nextLine.b,
+    );
+
+    if (intersection) {
+      points.push(intersection);
+    } else {
+      const prev = contour[(i - 1 + contour.length) % contour.length];
+      const curr = contour[i];
+      const next = contour[(i + 1) % contour.length];
+
+      points.push(fallbackVertexOffset(prev, curr, next, offset, outwardSign));
+    }
+  }
+
+  const deduped = dedupeSequential(points);
+  if (deduped.length < 3) return [];
+
+  return [deduped];
+}
+
+function polygonAreaAbs(points: CadPoint[]): number {
+  return Math.abs(signedArea(points));
+}
+
+/**
+ * Строит серию эквидистант в одну сторону, пока контур не схлопнется.
+ */
+export function buildContourOffsets(
+  polyline: CadPoint[],
+  isExternal: boolean,
+  step: number,
+  maxOffset: number,
+): CadPoint[][] {
+  const result: CadPoint[][] = [];
+  const base = normalizeClosedContour(polyline);
+
+  if (base.length < 3) return [];
+  if (step <= EPS || maxOffset < -EPS) return [];
+
+  const sign = isExternal ? 1 : -1;
+  const limit = Math.abs(maxOffset);
+
+  for (let current = 0; current <= limit + EPS; current += step) {
+    const amount = sign * current;
+    const built = current <= EPS ? [base] : buildOffset(base, amount);
+
+    if (built.length === 0) break;
+
+    const main = built
+      .filter((contour) => contour.length >= 3)
+      .sort((a, b) => polygonAreaAbs(b) - polygonAreaAbs(a))[0];
+
+    if (!main || polygonAreaAbs(main) <= EPS) {
+      break;
+    }
+
+    result.push(main);
+  }
+
+  return result;
+}
+
+
+path: /src/modules/cam/algorithms/pocketing.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function rotate(point: CadPoint, angleDeg: number): CadPoint {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { x: point.x * cos - point.y * sin, y: point.x * sin + point.y * cos };
+}
+
+function rotateAround(point: CadPoint, center: CadPoint, angleDeg: number): CadPoint {
+  const translated = { x: point.x - center.x, y: point.y - center.y };
+  const rotated = rotate(translated, angleDeg);
+  return { x: round(rotated.x + center.x), y: round(rotated.y + center.y) };
+}
+
+function boundsOf(points: CadPoint[]) {
+  const xs = points.map(p => p.x);
+  const ys = points.map(p => p.y);
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+}
+
+function clipHorizontalLineWithPolygon(y: number, polygon: CadPoint[]): Array<[CadPoint, CadPoint]> {
+  const intersections: number[] = [];
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    if (Math.abs(a.y - b.y) <= EPS) continue;
+    const ymin = Math.min(a.y, b.y);
+    const ymax = Math.max(a.y, b.y);
+    if (y < ymin || y >= ymax) continue;
+    const t = (y - a.y) / (b.y - a.y);
+    const x = a.x + (b.x - a.x) * t;
+    intersections.push(x);
+  }
+  intersections.sort((a, b) => a - b);
+  const result: Array<[CadPoint, CadPoint]> = [];
+  for (let i = 0; i + 1 < intersections.length; i += 2) {
+    const x1 = intersections[i];
+    const x2 = intersections[i + 1];
+    if (Math.abs(x2 - x1) > EPS) result.push([{ x: round(x1), y: round(y) }, { x: round(x2), y: round(y) }]);
+  }
+  return result;
+}
+
+export function generateParallelPocket(polygon: CadPoint[], step: number, angle = 0): CadPoint[][] {
+  if (polygon.length < 3 || step <= EPS) return [];
+  const centerBounds = boundsOf(polygon);
+  const center = { x: (centerBounds.minX + centerBounds.maxX) / 2, y: (centerBounds.minY + centerBounds.maxY) / 2 };
+  const rotatedPolygon = polygon.map(p => rotateAround(p, center, -angle));
+  const rotatedBounds = boundsOf(rotatedPolygon);
+  const rawSegments: CadPoint[][] = [];
+  let flip = false;
+  for (let y = rotatedBounds.minY; y <= rotatedBounds.maxY + EPS; y += step) {
+    const spans = clipHorizontalLineWithPolygon(y, rotatedPolygon);
+    for (const [a, b] of spans) {
+      const ordered = flip ? [b, a] : [a, b];
+      rawSegments.push(ordered);
+      flip = !flip;
+    }
+  }
+  return rawSegments.map(segment => segment.map(p => rotateAround(p, center, angle)));
+}
+
+
+path: /src/modules/cam/algorithms/ramping.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+export type ToolpathPoint3D = CadPoint & { z: number };
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
+  if (contour.length < 2) return contour.map(p => ({ ...p }));
+  const first = contour[0];
+  const last = contour[contour.length - 1];
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map(p => ({ ...p }));
+  return contour.map(p => ({ ...p }));
+}
+
+export function generateRampingPass(contour: CadPoint[], startZ: number, endZ: number, turns = 1): ToolpathPoint3D[] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 2 || turns <= 0) return [];
+
+  const closedContour = [...normalized, normalized[0]];
+  const segmentsPerTurn = closedContour.length - 1;
+  const totalSteps = segmentsPerTurn * Math.max(1, Math.floor(turns));
+  const result: ToolpathPoint3D[] = [];
+
+  for (let step = 0; step <= totalSteps; step++) {
+    const globalT = totalSteps === 0 ? 1 : step / totalSteps;
+    const z = round(startZ + (endZ - startZ) * globalT);
+    const localIndex = step % segmentsPerTurn;
+    const point = closedContour[localIndex];
+    result.push({ x: round(point.x), y: round(point.y), z });
+  }
+
+  if (result.length > 0) {
+    const last = result[result.length - 1];
+    const first = closedContour[0];
+    if (Math.abs(last.x - first.x) > EPS || Math.abs(last.y - first.y) > EPS || Math.abs(last.z - endZ) > EPS) {
+      result.push({ x: round(first.x), y: round(first.y), z: round(endZ) });
+    }
+  }
+  return result;
+}
+
+
+path: /src/modules/cam/algorithms/travelOptimizer.ts
+----------------------------------------
+import type { CadPoint } from "../../cad/geometry/textGeometry";
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function contourStart(contour: CadPoint[]): CadPoint {
+  return contour[0] ?? { x: 0, y: 0 };
+}
+
+function contourEnd(contour: CadPoint[]): CadPoint {
+  return contour[contour.length - 1] ?? { x: 0, y: 0 };
+}
+
+export function optimizeTravelOrder(contours: CadPoint[][], startPoint: CadPoint = { x: 0, y: 0 }): number[] {
+  const n = contours.length;
+  if (n === 0) return [];
+  if (n === 1) return [0];
+
+  const remaining = new Set<number>(contours.map((_, i) => i));
+  const order: number[] = [];
+  let current = { ...startPoint };
+
+  while (remaining.size > 0) {
+    let bestIndex = -1;
+    let bestDistance = Infinity;
+    for (const index of remaining) {
+      const contour = contours[index];
+      if (contour.length === 0) continue;
+      const dStart = distance(current, contourStart(contour));
+      const dEnd = distance(current, contourEnd(contour));
+      const d = Math.min(dStart, dEnd);
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex === -1) break;
+    order.push(bestIndex);
+    remaining.delete(bestIndex);
+    const chosen = contours[bestIndex];
+    const dStart = distance(current, contourStart(chosen));
+    const dEnd = distance(current, contourEnd(chosen));
+    current = dStart <= dEnd ? contourEnd(chosen) : contourStart(chosen);
+  }
+  return order;
+}
+
+
 path: /src/modules/cam/gcode/emitters.ts
 ----------------------------------------
 import type { SketchDocument } from "../../cad/model/types";
@@ -14739,31 +16287,16 @@ export function emitProgramPreamble(doc: SketchDocument): string[] {
     `T${Math.max(1, Math.round(doc.toolNumber))} M6`,
     `G0 Z${fmt(doc.startZ)}`,
   ];
-
-  if (doc.coolant && !isLaserMode(doc)) {
-    lines.push("M8");
-  }
-
+  if (doc.coolant && !isLaserMode(doc)) lines.push("M8");
   return lines;
 }
 
 export function emitProgramPostamble(doc: SketchDocument): string[] {
   const lines: string[] = [];
-
-  if (doc.spindleOn) {
-    lines.push("M5");
-  }
-
-  if (doc.coolant && !isLaserMode(doc)) {
-    lines.push("M9");
-  }
-
+  if (doc.spindleOn) lines.push("M5");
+  if (doc.coolant && !isLaserMode(doc)) lines.push("M9");
   lines.push(`G0 Z${fmt(doc.safeZ)}`);
-
-  if (doc.returnHome) {
-    lines.push("G0 X0 Y0");
-  }
-
+  if (doc.returnHome) lines.push("G0 X0 Y0");
   return lines;
 }
 
@@ -14771,37 +16304,31 @@ export function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
   return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
 }
 
-export function emitCutStart(doc: SketchDocument, cutZ: number): string[] {
+export function emitToolStart(doc: SketchDocument): string[] {
+  if (!doc.spindleOn) return [];
   const lines: string[] = [];
-
-  if (isLaserMode(doc)) {
-    if (doc.spindleOn) {
-      lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.laserPower))}`);
-    }
-    if (doc.dwellMs > 0) {
-      lines.push(`G4 P${fmt(doc.dwellMs)}`);
-    }
-    return lines;
-  }
-
-  if (doc.spindleOn) {
-    lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.spindleSpeed))}`);
-  }
-
-  if (doc.dwellMs > 0) {
-    lines.push(`G4 P${fmt(doc.dwellMs)}`);
-  }
-
-  lines.push(`G1 Z${fmt(cutZ)} F${fmt(doc.feedPlunge)}`);
+  if (isLaserMode(doc)) lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.laserPower))}`);
+  else lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.spindleSpeed))}`);
+  if (doc.dwellMs > 0) lines.push(`G4 P${fmt(doc.dwellMs)}`);
   return lines;
 }
 
-export function emitCutEnd(doc: SketchDocument): string[] {
-  if (isLaserMode(doc)) {
-    return doc.spindleOn ? ["M5"] : [];
-  }
+export function emitPlungeTo(doc: SketchDocument, cutZ: number): string[] {
+  if (isLaserMode(doc)) return [];
+  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedPlunge)}`];
+}
 
+export function emitToolEnd(doc: SketchDocument): string[] {
+  if (isLaserMode(doc)) return doc.spindleOn ? ["M5"] : [];
   return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
+}
+
+export function emitCutStart(doc: SketchDocument, cutZ: number): string[] {
+  return [...emitToolStart(doc), ...emitPlungeTo(doc, cutZ)];
+}
+
+export function emitCutEnd(doc: SketchDocument): string[] {
+  return emitToolEnd(doc);
 }
 
 
@@ -14826,79 +16353,134 @@ import {
   emitMoveTo,
   emitProgramPostamble,
   emitProgramPreamble,
+  emitToolEnd,
+  emitToolStart,
 } from "./emitters";
 import { fmt } from "./format";
 import { shapeToToolpaths } from "./shapeToToolpath";
+import { optimizeTravelOrder } from "../algorithms/travelOptimizer";
+import { generateRampingPass } from "../algorithms/ramping";
+import { insertBridges } from "../algorithms/bridges";
+import type { Toolpath, ToolpathPoint } from "../types";
 
-function isLaserMode(doc: SketchDocument): boolean {
-  return doc.toolType === "laser";
+function to2D(points: ToolpathPoint[]) {
+  return points.map(p => ({ x: p.x, y: p.y }));
 }
 
-function buildPassLevels(targetCutZ: number, passDepth: number): number[] {
-  if (targetCutZ >= 0) {
-    return [targetCutZ];
-  }
+function is3DPath(points: ToolpathPoint[]): boolean {
+  return points.some(point => typeof point.z === "number");
+}
 
-  const depth = Math.max(0.001, Math.abs(passDepth));
-  const levels: number[] = [];
-
-  let current = -depth;
+function buildDepthPasses(targetCutZ: number, passDepth: number): number[] {
+  if (targetCutZ >= 0) return [targetCutZ];
+  const step = Math.max(0.001, Math.abs(passDepth));
+  const passes: number[] = [];
+  let current = -step;
   while (current > targetCutZ) {
-    levels.push(Number(current.toFixed(3)));
-    current -= depth;
+    passes.push(Number(current.toFixed(3)));
+    current -= step;
+  }
+  passes.push(Number(targetCutZ.toFixed(3)));
+  return passes;
+}
+
+function emitLinearPath(points: ToolpathPoint[], feed: number): string[] {
+  const lines: string[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const point = points[i];
+    const xPart = `X${fmt(point.x)}`;
+    const yPart = `Y${fmt(point.y)}`;
+    const zPart = typeof point.z === "number" ? ` Z${fmt(point.z)}` : "";
+    lines.push(`G1 ${xPart} ${yPart}${zPart} F${fmt(feed)}`.replace(/\s+/g, " ").trim());
+  }
+  return lines;
+}
+
+function emitContourPass(doc: SketchDocument, toolpath: Toolpath, passZ: number, startZ: number): string[] {
+  const lines: string[] = [];
+  const base2D = to2D(toolpath.points);
+  if (base2D.length < 2) return lines;
+
+  if (toolpath.useBridges && toolpath.closed) {
+    const segments = insertBridges(
+      base2D,
+      Math.max(1, toolpath.bridgeCount ?? 2),
+      Math.max(0.1, toolpath.bridgeWidth ?? Math.max(doc.toolDiameter * 2, 3))
+    );
+    for (const segment of segments) {
+      if (segment.length < 2) continue;
+      lines.push(...emitMoveTo(segment[0].x, segment[0].y, doc.feedRapid));
+      if (toolpath.useRamping && doc.toolType !== "laser") {
+        lines.push(...emitToolStart(doc));
+        const ramp = generateRampingPass(segment, startZ, passZ, 1);
+        lines.push(...emitLinearPath(ramp, doc.feedCut));
+        lines.push(...emitToolEnd(doc));
+      } else {
+        lines.push(...emitCutStart(doc, passZ));
+        lines.push(...emitLinearPath(segment, doc.feedCut));
+        lines.push(...emitCutEnd(doc));
+      }
+    }
+    return lines;
   }
 
-  if (levels.length === 0 || levels[levels.length - 1] !== targetCutZ) {
-    levels.push(targetCutZ);
+  lines.push(...emitMoveTo(base2D[0].x, base2D[0].y, doc.feedRapid));
+
+  if (toolpath.useRamping && toolpath.closed && doc.toolType !== "laser") {
+    lines.push(...emitToolStart(doc));
+    const ramp = generateRampingPass(base2D, startZ, passZ, 1);
+    lines.push(...emitLinearPath(ramp, doc.feedCut));
+    lines.push(...emitToolEnd(doc));
+    return lines;
   }
 
-  return levels;
+  lines.push(...emitCutStart(doc, passZ));
+  lines.push(...emitLinearPath(toolpath.points, doc.feedCut));
+  if (toolpath.closed) {
+    const first = toolpath.points[0];
+    lines.push(`G1 X${fmt(first.x)} Y${fmt(first.y)} F${fmt(doc.feedCut)}`);
+  }
+  lines.push(...emitCutEnd(doc));
+  return lines;
+}
+
+function emitPrebuilt3DPath(doc: SketchDocument, toolpath: Toolpath): string[] {
+  const lines: string[] = [];
+  const points = toolpath.points;
+  if (points.length < 2) return lines;
+  lines.push(...emitMoveTo(points[0].x, points[0].y, doc.feedRapid));
+  lines.push(...emitToolStart(doc));
+  lines.push(...emitLinearPath(points, doc.feedCut));
+  lines.push(...emitToolEnd(doc));
+  return lines;
 }
 
 export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
   const lines: string[] = [...emitProgramPreamble(doc)];
+  const shapes = collectVisibleShapes(doc);
+  const allToolpaths: (Toolpath & { shapeId: string })[] = [];
 
-  for (const shape of collectVisibleShapes(doc)) {
+  for (const shape of shapes) {
     const toolpaths = await shapeToToolpaths(shape, doc);
+    toolpaths.forEach(tp => allToolpaths.push({ ...tp, shapeId: shape.id }));
+  }
 
-    for (const toolpath of toolpaths) {
-      if (toolpath.points.length < 2) continue;
+  const order = optimizeTravelOrder(allToolpaths.map(tp => to2D(tp.points)), { x: 0, y: 0 });
 
-      const passLevels = isLaserMode(doc)
-        ? [toolpath.cutZ]
-        : buildPassLevels(toolpath.cutZ, doc.passDepth);
+  for (const index of order) {
+    const toolpath = allToolpaths[index];
+    if (!toolpath || toolpath.points.length < 2) continue;
 
-      for (let passIndex = 0; passIndex < passLevels.length; passIndex += 1) {
-        const passCutZ = passLevels[passIndex];
+    if (is3DPath(toolpath.points)) {
+      lines.push(...emitPrebuilt3DPath(doc, toolpath));
+      continue;
+    }
 
-        lines.push(
-          `; ${toolpath.name} / pass ${passIndex + 1} / Z${fmt(passCutZ)}`,
-        );
-
-        if (!isLaserMode(doc)) {
-          lines.push(`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`);
-        }
-
-        lines.push(
-          ...emitMoveTo(toolpath.points[0].x, toolpath.points[0].y, doc.feedRapid),
-        );
-
-        lines.push(...emitCutStart(doc, passCutZ));
-
-        for (let i = 1; i < toolpath.points.length; i += 1) {
-          lines.push(
-            `G1 X${fmt(toolpath.points[i].x)} Y${fmt(toolpath.points[i].y)} F${fmt(doc.feedCut)}`,
-          );
-        }
-
-        if (toolpath.closed) {
-          lines.push(
-            `G1 X${fmt(toolpath.points[0].x)} Y${fmt(toolpath.points[0].y)} F${fmt(doc.feedCut)}`,
-          );
-        }
-
-        lines.push(...emitCutEnd(doc));
-      }
+    const passes = buildDepthPasses(toolpath.cutZ, doc.passDepth);
+    let previousZ = doc.safeZ;
+    for (const passZ of passes) {
+      lines.push(...emitContourPass(doc, toolpath, passZ, previousZ));
+      previousZ = passZ;
     }
   }
 
@@ -14910,6 +16492,7 @@ export async function generateSketchGCode(doc: SketchDocument): Promise<string> 
 path: /src/modules/cam/gcode/shapeToToolpath.ts
 ----------------------------------------
 import type {
+  CamOperationType,
   SketchArc,
   SketchCircle,
   SketchDocument,
@@ -14923,6 +16506,8 @@ import type {
 import { getTextPolylines } from "../../cad/geometry/textGeometry";
 import { rotateCadPoint, sampleArcPoints } from "../../geometry/geometryEngine";
 import type { Toolpath, ToolpathPoint } from "../types";
+import { buildContourOffsets } from "../algorithms/offsetBuilder";
+import { generateParallelPocket } from "../algorithms/pocketing";
 
 function round(value: number): number {
   return Number(value.toFixed(3));
@@ -14932,98 +16517,70 @@ function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
   return shape.cutZ ?? doc.cutZ;
 }
 
-function resolveStrokeWidth(shape: SketchShape): number {
-  return Math.max(0.1, shape.strokeWidth ?? 1);
-}
-
-function rotatePoint(
-  point: ToolpathPoint,
-  origin: ToolpathPoint,
-  angleDeg: number,
-): ToolpathPoint {
+function rotatePoint(point: ToolpathPoint, origin: ToolpathPoint, angleDeg: number): ToolpathPoint {
   return rotateCadPoint(point, origin, angleDeg);
 }
 
-function buildBandOffsets(
-  targetWidth: number,
-  toolDiameter: number,
-  stepover: number,
-): number[] {
-  const width = Math.max(0.1, targetWidth);
-  const radiusBand = width / 2;
-
-  if (toolDiameter >= width) {
-    return [0];
-  }
-
-  const step = Math.max(
-    0.05,
-    toolDiameter * Math.max(0.05, Math.min(1, stepover)),
-  );
-  const maxCenterOffset = Math.max(0, radiusBand - toolDiameter / 2);
-
-  if (maxCenterOffset <= 0.0001) {
-    return [0];
-  }
-
-  const offsets: number[] = [0];
-
-  for (let d = step; d < maxCenterOffset - 1e-6; d += step) {
-    offsets.push(round(d), round(-d));
-  }
-
-  offsets.push(round(maxCenterOffset), round(-maxCenterOffset));
-
-  return Array.from(new Set(offsets)).sort((a, b) => a - b);
+function resolveCam(shape: SketchShape, doc: SketchDocument) {
+  const docCam = doc.defaultCamSettings;
+  const shapeCam = shape.camSettings ?? {};
+  return {
+    operation: shapeCam.operation ?? docCam.operation,
+    direction: shapeCam.direction ?? docCam.direction,
+    stepdown: shapeCam.stepdown ?? docCam.stepdown,
+    stepover: shapeCam.stepover ?? docCam.stepover,
+    tabs: {
+      enabled: shapeCam.tabs?.enabled ?? docCam.tabs.enabled,
+      count: shapeCam.tabs?.count ?? docCam.tabs.count,
+      width: shapeCam.tabs?.width ?? docCam.tabs.width,
+      height: shapeCam.tabs?.height ?? docCam.tabs.height,
+    },
+    ramping: {
+      enabled: shapeCam.ramping?.enabled ?? docCam.ramping.enabled,
+      turns: shapeCam.ramping?.turns ?? docCam.ramping.turns,
+    },
+  };
 }
 
-function circleToPolylinePoints(
-  radius: number,
-  cx: number,
-  cy: number,
-  segments = 96,
-): ToolpathPoint[] {
+function rectangleToPoints(shape: SketchRectangle): ToolpathPoint[] {
+  const points = [
+    { x: shape.x, y: shape.y },
+    { x: shape.x + shape.width, y: shape.y },
+    { x: shape.x + shape.width, y: shape.y + shape.height },
+    { x: shape.x, y: shape.y + shape.height },
+  ];
+  const rotation = shape.rotation ?? 0;
+  if (!rotation) return points;
+  const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
+  return points.map(p => rotatePoint(p, center, rotation));
+}
+
+function circleToPoints(shape: SketchCircle, segments = 96): ToolpathPoint[] {
   const points: ToolpathPoint[] = [];
-  for (let i = 0; i <= segments; i += 1) {
+  for (let i = 0; i < segments; i++) {
     const t = (i / segments) * Math.PI * 2;
-    points.push({
-      x: round(cx + Math.cos(t) * radius),
-      y: round(cy + Math.sin(t) * radius),
-    });
+    points.push({ x: round(shape.cx + Math.cos(t) * shape.radius), y: round(shape.cy + Math.sin(t) * shape.radius) });
   }
   return points;
 }
 
-function rectangleOffsetLoop(
-  shape: SketchRectangle,
-  centerOffset: number,
-): ToolpathPoint[] | null {
-  const half = centerOffset;
-  const x = shape.x - half;
-  const y = shape.y - half;
-  const w = shape.width + half * 2;
-  const h = shape.height + half * 2;
+function lineToPoints(shape: SketchLine): ToolpathPoint[] {
+  return [{ x: shape.x1, y: shape.y1 }, { x: shape.x2, y: shape.y2 }];
+}
 
-  if (w <= 0 || h <= 0) return null;
+function arcToPoints(shape: SketchArc, segments = 72): ToolpathPoint[] {
+  return sampleArcPoints(
+    { x: shape.cx, y: shape.cy },
+    shape.radius,
+    shape.startAngle,
+    shape.endAngle,
+    shape.clockwise,
+    segments
+  );
+}
 
-  const points = [
-    { x: round(x), y: round(y) },
-    { x: round(x + w), y: round(y) },
-    { x: round(x + w), y: round(y + h) },
-    { x: round(x), y: round(y + h) },
-  ];
-
-  const rotation = shape.rotation ?? 0;
-  if (!rotation) {
-    return points;
-  }
-
-  const center = {
-    x: shape.x + shape.width / 2,
-    y: shape.y + shape.height / 2,
-  };
-
-  return points.map((point) => rotatePoint(point, center, rotation));
+function polylineToPoints(shape: SketchPolyline): ToolpathPoint[] {
+  return shape.points.map(p => ({ x: p.x, y: p.y }));
 }
 
 function polylineNormal(a: ToolpathPoint, b: ToolpathPoint) {
@@ -15033,304 +16590,396 @@ function polylineNormal(a: ToolpathPoint, b: ToolpathPoint) {
   return { x: -dy / len, y: dx / len };
 }
 
-function offsetPolylinePoints(
-  points: ToolpathPoint[],
-  offset: number,
-): ToolpathPoint[] {
-  if (points.length < 2 || Math.abs(offset) < 1e-9) {
-    return points.map((p) => ({ ...p }));
-  }
-
+function offsetPolylinePoints(points: ToolpathPoint[], offset: number): ToolpathPoint[] {
+  if (points.length < 2 || Math.abs(offset) < 1e-9) return points.map(p => ({ ...p }));
   const result: ToolpathPoint[] = [];
-
-  for (let i = 0; i < points.length; i += 1) {
+  for (let i = 0; i < points.length; i++) {
     if (i === 0) {
       const n = polylineNormal(points[0], points[1]);
-      result.push({
-        x: round(points[0].x + n.x * offset),
-        y: round(points[0].y + n.y * offset),
-      });
-      continue;
-    }
-
-    if (i === points.length - 1) {
+      result.push({ x: round(points[0].x + n.x * offset), y: round(points[0].y + n.y * offset) });
+    } else if (i === points.length - 1) {
       const n = polylineNormal(points[i - 1], points[i]);
-      result.push({
-        x: round(points[i].x + n.x * offset),
-        y: round(points[i].y + n.y * offset),
-      });
-      continue;
+      result.push({ x: round(points[i].x + n.x * offset), y: round(points[i].y + n.y * offset) });
+    } else {
+      const n1 = polylineNormal(points[i - 1], points[i]);
+      const n2 = polylineNormal(points[i], points[i + 1]);
+      const nx = n1.x + n2.x;
+      const ny = n1.y + n2.y;
+      const nlen = Math.hypot(nx, ny) || 1;
+      result.push({ x: round(points[i].x + (nx / nlen) * offset), y: round(points[i].y + (ny / nlen) * offset) });
+    }
+  }
+  return result;
+}
+
+function offsetLinePoints(start: ToolpathPoint, end: ToolpathPoint, offset: number): ToolpathPoint[] {
+  if (Math.abs(offset) < 1e-9) return [{ ...start }, { ...end }];
+  const n = polylineNormal(start, end);
+  return [
+    { x: round(start.x + n.x * offset), y: round(start.y + n.y * offset) },
+    { x: round(end.x + n.x * offset), y: round(end.y + n.y * offset) },
+  ];
+}
+
+function buildClosedToolpaths(name: string, contour: ToolpathPoint[], shape: SketchShape, doc: SketchDocument): Toolpath[] {
+  const cam = resolveCam(shape, doc);
+  const cutZ = resolveCutZ(shape, doc);
+  const stepover = cam.stepover ?? doc.stepover;
+  const step = Math.max(0.05, doc.toolDiameter * Math.max(0.05, Math.min(1, stepover)));
+  const toolRadius = doc.toolDiameter / 2;
+
+  if (cam.operation === "follow-path") {
+    return [{
+      name,
+      points: contour,
+      closed: true,
+      cutZ,
+      kind: "contour",
+      useRamping: cam.ramping.enabled && doc.toolType !== "laser",
+      useBridges: cam.tabs.enabled,
+      bridgeCount: cam.tabs.count,
+      bridgeWidth: cam.tabs.width,
+    }];
+  }
+
+  if (cam.operation === "profile-outside") {
+    const offsets = buildContourOffsets(contour, true, step, toolRadius);
+    const points = offsets[0] ?? contour;
+    return [{
+      name,
+      points,
+      closed: true,
+      cutZ,
+      kind: "contour",
+      useRamping: cam.ramping.enabled && doc.toolType !== "laser",
+      useBridges: cam.tabs.enabled,
+      bridgeCount: cam.tabs.count,
+      bridgeWidth: cam.tabs.width,
+    }];
+  }
+
+  if (cam.operation === "profile-inside") {
+    const offsets = buildContourOffsets(contour, false, step, toolRadius);
+    const points = offsets[0] ?? contour;
+    return [{
+      name,
+      points,
+      closed: true,
+      cutZ,
+      kind: "contour",
+      useRamping: cam.ramping.enabled && doc.toolType !== "laser",
+      useBridges: cam.tabs.enabled,
+      bridgeCount: cam.tabs.count,
+      bridgeWidth: cam.tabs.width,
+    }];
+  }
+
+  // pocket
+  const pockets = generateParallelPocket(contour, step, 0);
+  return pockets
+    .filter(path => path.length >= 2)
+    .map((path, index) => ({
+      name: `${name} Pocket #${index + 1}`,
+      points: path,
+      closed: false,
+      cutZ,
+      kind: "pocket" as const,
+      useRamping: false,
+      useBridges: false,
+    }));
+}
+
+function rectangleToToolpaths(shape: SketchRectangle, doc: SketchDocument): Toolpath[] {
+  return buildClosedToolpaths(`RECTANGLE ${shape.name}`, rectangleToPoints(shape), shape, doc);
+}
+
+function circleToToolpaths(shape: SketchCircle, doc: SketchDocument): Toolpath[] {
+  return buildClosedToolpaths(`CIRCLE ${shape.name}`, circleToPoints(shape), shape, doc);
+}
+
+function lineToToolpaths(shape: SketchLine, doc: SketchDocument): Toolpath[] {
+  const cam = resolveCam(shape, doc);
+  const cutZ = resolveCutZ(shape, doc);
+  if (cam.operation !== "follow-path") {
+    return [{ name: `LINE ${shape.name}`, closed: false, cutZ, kind: "contour", useRamping: false, points: lineToPoints(shape) }];
+  }
+  return [{ name: `LINE ${shape.name}`, closed: false, cutZ, kind: "contour", useRamping: false, points: lineToPoints(shape) }];
+}
+
+function arcToToolpaths(shape: SketchArc, doc: SketchDocument): Toolpath[] {
+  return [{
+    name: `ARC ${shape.name}`,
+    points: arcToPoints(shape),
+    closed: false,
+    cutZ: resolveCutZ(shape, doc),
+    kind: "contour",
+    useRamping: false,
+  }];
+}
+
+function polylineToToolpaths(shape: SketchPolyline, doc: SketchDocument): Toolpath[] {
+  if (shape.closed) {
+    return buildClosedToolpaths(`POLYLINE ${shape.name}`, polylineToPoints(shape), shape, doc);
+  }
+  return [{
+    name: `POLYLINE ${shape.name}`,
+    points: polylineToPoints(shape),
+    closed: false,
+    cutZ: resolveCutZ(shape, doc),
+    kind: "contour",
+    useRamping: false,
+  }];
+}
+
+async function textToToolpaths(shape: SketchText, doc: SketchDocument): Promise<Toolpath[]> {
+  const polylines = await getTextPolylines(shape);
+  return polylines
+    .filter(poly => poly.length >= 2)
+    .flatMap((poly, idx) => buildClosedToolpaths(`TEXT ${shape.name} #${idx + 1}`, poly, shape, doc));
+}
+
+function svgToToolpaths(shape: SketchSvg, doc: SketchDocument): Toolpath[] {
+  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
+  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+  const rotation = shape.rotation ?? 0;
+  const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
+  const contours = shape.contours
+    .map(contour => contour.map(point => {
+      const next = { x: round(shape.x + point.x * scaleX), y: round(shape.y + point.y * scaleY) };
+      return rotation ? rotatePoint(next, center, rotation) : next;
+    }))
+    .filter(contour => contour.length >= 2);
+
+  return contours.flatMap((contour, idx) => {
+    const isClosed = contour.length >= 3 &&
+      Math.abs(contour[0].x - contour[contour.length - 1].x) < 0.001 &&
+      Math.abs(contour[0].y - contour[contour.length - 1].y) < 0.001;
+    if (isClosed) {
+      return buildClosedToolpaths(`SVG ${shape.name} #${idx + 1}`, contour, shape, doc);
+    }
+    return [{
+      name: `SVG ${shape.name} #${idx + 1}`,
+      points: contour,
+      closed: false,
+      cutZ: resolveCutZ(shape, doc),
+      kind: "contour",
+      useRamping: false,
+    }];
+  });
+}
+
+export async function shapeToToolpaths(shape: SketchShape, doc: SketchDocument): Promise<Toolpath[]> {
+  switch (shape.type) {
+    case "rectangle": return rectangleToToolpaths(shape, doc);
+    case "circle": return circleToToolpaths(shape, doc);
+    case "line": return lineToToolpaths(shape, doc);
+    case "arc": return arcToToolpaths(shape, doc);
+    case "polyline": return polylineToToolpaths(shape, doc);
+    case "text": return textToToolpaths(shape, doc);
+    case "svg": return svgToToolpaths(shape, doc);
+  }
+}
+
+
+path: /src/modules/cam/planner.ts
+----------------------------------------
+import type { SketchDocument } from "../cad/model/types";
+import { collectVisibleShapes } from "../cad/model/grouping";
+import { shapeToToolpaths } from "./gcode/shapeToToolpath";
+import type { PlannedOperation, PlannedPath, Toolpath, ToolpathPoint } from "./types";
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: ToolpathPoint, b: ToolpathPoint): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function buildDepths(finalCutZ: number, passDepth: number): number[] {
+  if (finalCutZ >= 0) {
+    return [round(finalCutZ)];
+  }
+
+  const step = Math.max(0.001, Math.abs(passDepth));
+  const depths: number[] = [];
+
+  let current = -step;
+  while (current > finalCutZ) {
+    depths.push(round(current));
+    current -= step;
+  }
+
+  depths.push(round(finalCutZ));
+  return Array.from(new Set(depths));
+}
+
+function orientPathFromNearest(
+  points: ToolpathPoint[],
+  current: ToolpathPoint,
+  closed: boolean,
+): ToolpathPoint[] {
+  if (points.length <= 1) return points;
+
+  const start = points[0];
+  const end = points[points.length - 1];
+
+  if (!closed && distance(end, current) < distance(start, current)) {
+    return [...points].reverse();
+  }
+
+  return points;
+}
+
+type OrderedPlannedPath = PlannedPath & {
+  shapeId: string;
+  shapeName: string;
+};
+
+function orderPathsNearest(
+  paths: OrderedPlannedPath[],
+  start: ToolpathPoint,
+): OrderedPlannedPath[] {
+  const pending = [...paths];
+  const result: OrderedPlannedPath[] = [];
+  let current = start;
+
+  while (pending.length > 0) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < pending.length; i += 1) {
+      const candidate = pending[i];
+      const oriented = orientPathFromNearest(candidate.points, current, candidate.closed);
+      const d = distance(current, oriented[0]);
+
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestIndex = i;
+      }
     }
 
-    const n1 = polylineNormal(points[i - 1], points[i]);
-    const n2 = polylineNormal(points[i], points[i + 1]);
-    const nx = n1.x + n2.x;
-    const ny = n1.y + n2.y;
-    const nlen = Math.hypot(nx, ny) || 1;
+    const picked = pending.splice(bestIndex, 1)[0];
+    const orientedPoints = orientPathFromNearest(picked.points, current, picked.closed);
+    const finalPath: OrderedPlannedPath = { ...picked, points: orientedPoints };
 
-    result.push({
-      x: round(points[i].x + (nx / nlen) * offset),
-      y: round(points[i].y + (ny / nlen) * offset),
-    });
+    result.push(finalPath);
+    current = orientedPoints[orientedPoints.length - 1];
   }
 
   return result;
 }
 
-function offsetLinePoints(
-  start: ToolpathPoint,
-  end: ToolpathPoint,
-  offset: number,
-): ToolpathPoint[] {
-  if (Math.abs(offset) < 1e-9) {
-    return [{ ...start }, { ...end }];
-  }
+function toolpathsToPlannedPaths(toolpaths: Toolpath[], doc: SketchDocument): PlannedPath[] {
+  const planned: PlannedPath[] = [];
 
-  const n = polylineNormal(start, end);
+  for (const toolpath of toolpaths) {
+    const depths = buildDepths(toolpath.cutZ, doc.passDepth);
 
-  return [
-    {
-      x: round(start.x + n.x * offset),
-      y: round(start.y + n.y * offset),
-    },
-    {
-      x: round(end.x + n.x * offset),
-      y: round(end.y + n.y * offset),
-    },
-  ];
-}
-
-function isToolpath(value: Toolpath | null): value is Toolpath {
-  return value !== null;
-}
-
-export function rectangleToToolpaths(
-  shape: SketchRectangle,
-  doc: SketchDocument,
-): Toolpath[] {
-  const cutZ = resolveCutZ(shape, doc);
-  const bandOffsets = buildBandOffsets(
-    resolveStrokeWidth(shape),
-    doc.toolDiameter,
-    doc.stepover,
-  );
-
-  const result: Array<Toolpath | null> = bandOffsets.map((bandOffset, index) => {
-    const path = rectangleOffsetLoop(shape, bandOffset);
-    if (!path || path.length < 2) return null;
-
-    return {
-      name: `RECTANGLE ${shape.name} #${index + 1}`,
-      closed: true,
-      cutZ,
-      points: path,
-    };
-  });
-
-  return result.filter(isToolpath);
-}
-
-export function circleToToolpaths(
-  shape: SketchCircle,
-  doc: SketchDocument,
-): Toolpath[] {
-  const cutZ = resolveCutZ(shape, doc);
-  const strokeWidth = resolveStrokeWidth(shape);
-  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
-
-  const result: Array<Toolpath | null> = bandOffsets.map((bandOffset, index) => {
-    const radius = shape.radius + bandOffset;
-    if (radius <= 0.001) return null;
-
-    return {
-      name: `CIRCLE ${shape.name} #${index + 1}`,
-      closed: true,
-      cutZ,
-      points: circleToPolylinePoints(radius, shape.cx, shape.cy, 96),
-    };
-  });
-
-  return result.filter(isToolpath);
-}
-
-export function lineToToolpaths(
-  shape: SketchLine,
-  doc: SketchDocument,
-): Toolpath[] {
-  const cutZ = resolveCutZ(shape, doc);
-  const strokeWidth = resolveStrokeWidth(shape);
-  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
-
-  const start = { x: shape.x1, y: shape.y1 };
-  const end = { x: shape.x2, y: shape.y2 };
-
-  return bandOffsets.map((offset, index) => ({
-    name: `LINE ${shape.name} #${index + 1}`,
-    closed: false,
-    cutZ,
-    points: offsetLinePoints(start, end, offset),
-  }));
-}
-
-export function arcToToolpaths(
-  shape: SketchArc,
-  doc: SketchDocument,
-): Toolpath[] {
-  const cutZ = resolveCutZ(shape, doc);
-  const strokeWidth = resolveStrokeWidth(shape);
-  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
-
-  const result: Array<Toolpath | null> = bandOffsets.map((offset, index) => {
-    const radius = shape.radius + offset;
-    if (radius <= 0.001) return null;
-
-    return {
-      name: `ARC ${shape.name} #${index + 1}`,
-      closed: false,
-      cutZ,
-      points: sampleArcPoints(
-        { x: shape.cx, y: shape.cy },
-        radius,
-        shape.startAngle,
-        shape.endAngle,
-        shape.clockwise,
-        72,
-      ),
-    };
-  });
-
-  return result.filter(isToolpath);
-}
-
-export function polylineToToolpaths(
-  shape: SketchPolyline,
-  doc: SketchDocument,
-): Toolpath[] {
-  const cutZ = resolveCutZ(shape, doc);
-  const strokeWidth = resolveStrokeWidth(shape);
-  const bandOffsets = buildBandOffsets(strokeWidth, doc.toolDiameter, doc.stepover);
-
-  return bandOffsets.map((offset, index) => ({
-    name: `POLYLINE ${shape.name} #${index + 1}`,
-    closed: shape.closed,
-    cutZ,
-    points: offsetPolylinePoints(shape.points, offset),
-  }));
-}
-
-export async function textToToolpaths(
-  shape: SketchText,
-  doc: SketchDocument,
-): Promise<Toolpath[]> {
-  const polylines = await getTextPolylines(shape);
-  const cutZ = resolveCutZ(shape, doc);
-  const bandOffsets = buildBandOffsets(
-    resolveStrokeWidth(shape),
-    doc.toolDiameter,
-    doc.stepover,
-  );
-
-  const toolpaths: Toolpath[] = [];
-
-  polylines
-    .filter((polyline) => polyline.length >= 2)
-    .forEach((polyline, polylineIndex) => {
-      for (let i = 0; i < bandOffsets.length; i += 1) {
-        toolpaths.push({
-          name: `TEXT ${shape.name} #${polylineIndex + 1}.${i + 1}`,
-          closed: false,
-          cutZ,
-          points: offsetPolylinePoints(polyline, bandOffsets[i]),
-        });
-      }
-    });
-
-  return toolpaths;
-}
-
-export function svgToToolpaths(
-  shape: SketchSvg,
-  doc: SketchDocument,
-): Toolpath[] {
-  const cutZ = resolveCutZ(shape, doc);
-  const bandOffsets = buildBandOffsets(
-    resolveStrokeWidth(shape),
-    doc.toolDiameter,
-    doc.stepover,
-  );
-
-  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
-  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
-  const rotation = shape.rotation ?? 0;
-  const center = {
-    x: shape.x + shape.width / 2,
-    y: shape.y + shape.height / 2,
-  };
-
-  const baseContours = shape.contours
-    .map((contour) =>
-      contour.map((point) => {
-        const next = {
-          x: round(shape.x + point.x * scaleX),
-          y: round(shape.y + point.y * scaleY),
-        };
-
-        return rotation ? rotatePoint(next, center, rotation) : next;
-      }),
-    )
-    .filter((contour) => contour.length >= 2);
-
-  const toolpaths: Toolpath[] = [];
-
-  baseContours.forEach((contour, contourIndex) => {
-    bandOffsets.forEach((offset, offsetIndex) => {
-      toolpaths.push({
-        name: `SVG ${shape.name} #${contourIndex + 1}.${offsetIndex + 1}`,
-        closed:
-          contour.length > 2 &&
-          Math.abs(contour[0].x - contour[contour.length - 1].x) < 0.001 &&
-          Math.abs(contour[0].y - contour[contour.length - 1].y) < 0.001,
-        cutZ,
-        points: offsetPolylinePoints(contour, offset),
+    for (const depth of depths) {
+      planned.push({
+        name: `${toolpath.name} @ Z${depth}`,
+        points: toolpath.points.map((p) => ({ ...p })),
+        closed: toolpath.closed,
+        depth,
       });
-    });
-  });
+    }
+  }
 
-  return toolpaths;
+  return planned;
 }
 
-export async function shapeToToolpaths(
-  shape: SketchShape,
-  doc: SketchDocument,
-): Promise<Toolpath[]> {
-  switch (shape.type) {
-    case "rectangle":
-      return rectangleToToolpaths(shape, doc);
-    case "circle":
-      return circleToToolpaths(shape, doc);
-    case "line":
-      return lineToToolpaths(shape, doc);
-    case "arc":
-      return arcToToolpaths(shape, doc);
-    case "polyline":
-      return polylineToToolpaths(shape, doc);
-    case "text":
-      return textToToolpaths(shape, doc);
-    case "svg":
-      return svgToToolpaths(shape, doc);
+export async function planDocumentOperations(doc: SketchDocument): Promise<PlannedOperation[]> {
+  const visibleShapes = collectVisibleShapes(doc);
+  const operations: PlannedOperation[] = [];
+
+  for (const shape of visibleShapes) {
+    const toolpaths = await shapeToToolpaths(shape, doc);
+    const plannedPaths = toolpathsToPlannedPaths(toolpaths, doc);
+
+    operations.push({
+      shapeId: shape.id,
+      shapeName: shape.name,
+      paths: plannedPaths,
+    });
   }
+
+  const allPaths: OrderedPlannedPath[] = operations.flatMap((op) =>
+    op.paths.map((path) => ({
+      ...path,
+      shapeId: op.shapeId,
+      shapeName: op.shapeName,
+    })),
+  );
+
+  const ordered = orderPathsNearest(allPaths, { x: 0, y: 0 });
+
+  const grouped = new Map<string, PlannedOperation>();
+
+  for (const path of ordered) {
+    const key = path.shapeId;
+    const existing = grouped.get(key);
+
+    if (!existing) {
+      grouped.set(key, {
+        shapeId: path.shapeId,
+        shapeName: path.shapeName,
+        paths: [
+          {
+            name: path.name,
+            points: path.points,
+            closed: path.closed,
+            depth: path.depth,
+          },
+        ],
+      });
+      continue;
+    }
+
+    existing.paths.push({
+      name: path.name,
+      points: path.points,
+      closed: path.closed,
+      depth: path.depth,
+    });
+  }
+
+  return Array.from(grouped.values());
 }
 
 
 path: /src/modules/cam/types.ts
 ----------------------------------------
-export type ToolpathPoint = { x: number; y: number };
+export type ToolpathPoint = {
+  x: number;
+  y: number;
+  z?: number;
+};
 
 export type Toolpath = {
   name: string;
   points: ToolpathPoint[];
   closed: boolean;
   cutZ: number;
+  // дополнительные поля для управления
+  kind?: "contour" | "pocket";
+  useRamping?: boolean;
+  useBridges?: boolean;
+  bridgeCount?: number;
+  bridgeWidth?: number;
+};
+
+export type PlannedPath = {
+  name: string;
+  points: ToolpathPoint[];
+  closed: boolean;
+  depth: number;
+};
+
+export type PlannedOperation = {
+  shapeId: string;
+  shapeName: string;
+  paths: PlannedPath[];
 };
 
 
@@ -16738,7 +18387,7 @@ path: /tsconfig.app.json
     "useDefineForClassFields": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
-    "types": ["vite/client"],
+    "types": ["vite/client", "w3c-web-serial"],
     "skipLibCheck": true,
 
     /* Bundler mode */
@@ -16814,8 +18463,8 @@ export default defineConfig({
 
 
 === SUMMARY ===
-included: 107
+included: 117
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 443945
+totalBytes(approx): 500229

@@ -6,79 +6,134 @@ import {
   emitMoveTo,
   emitProgramPostamble,
   emitProgramPreamble,
+  emitToolEnd,
+  emitToolStart,
 } from "./emitters";
 import { fmt } from "./format";
 import { shapeToToolpaths } from "./shapeToToolpath";
+import { optimizeTravelOrder } from "../algorithms/travelOptimizer";
+import { generateRampingPass } from "../algorithms/ramping";
+import { insertBridges } from "../algorithms/bridges";
+import type { Toolpath, ToolpathPoint } from "../types";
 
-function isLaserMode(doc: SketchDocument): boolean {
-  return doc.toolType === "laser";
+function to2D(points: ToolpathPoint[]) {
+  return points.map(p => ({ x: p.x, y: p.y }));
 }
 
-function buildPassLevels(targetCutZ: number, passDepth: number): number[] {
-  if (targetCutZ >= 0) {
-    return [targetCutZ];
-  }
+function is3DPath(points: ToolpathPoint[]): boolean {
+  return points.some(point => typeof point.z === "number");
+}
 
-  const depth = Math.max(0.001, Math.abs(passDepth));
-  const levels: number[] = [];
-
-  let current = -depth;
+function buildDepthPasses(targetCutZ: number, passDepth: number): number[] {
+  if (targetCutZ >= 0) return [targetCutZ];
+  const step = Math.max(0.001, Math.abs(passDepth));
+  const passes: number[] = [];
+  let current = -step;
   while (current > targetCutZ) {
-    levels.push(Number(current.toFixed(3)));
-    current -= depth;
+    passes.push(Number(current.toFixed(3)));
+    current -= step;
+  }
+  passes.push(Number(targetCutZ.toFixed(3)));
+  return passes;
+}
+
+function emitLinearPath(points: ToolpathPoint[], feed: number): string[] {
+  const lines: string[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const point = points[i];
+    const xPart = `X${fmt(point.x)}`;
+    const yPart = `Y${fmt(point.y)}`;
+    const zPart = typeof point.z === "number" ? ` Z${fmt(point.z)}` : "";
+    lines.push(`G1 ${xPart} ${yPart}${zPart} F${fmt(feed)}`.replace(/\s+/g, " ").trim());
+  }
+  return lines;
+}
+
+function emitContourPass(doc: SketchDocument, toolpath: Toolpath, passZ: number, startZ: number): string[] {
+  const lines: string[] = [];
+  const base2D = to2D(toolpath.points);
+  if (base2D.length < 2) return lines;
+
+  if (toolpath.useBridges && toolpath.closed) {
+    const segments = insertBridges(
+      base2D,
+      Math.max(1, toolpath.bridgeCount ?? 2),
+      Math.max(0.1, toolpath.bridgeWidth ?? Math.max(doc.toolDiameter * 2, 3))
+    );
+    for (const segment of segments) {
+      if (segment.length < 2) continue;
+      lines.push(...emitMoveTo(segment[0].x, segment[0].y, doc.feedRapid));
+      if (toolpath.useRamping && doc.toolType !== "laser") {
+        lines.push(...emitToolStart(doc));
+        const ramp = generateRampingPass(segment, startZ, passZ, 1);
+        lines.push(...emitLinearPath(ramp, doc.feedCut));
+        lines.push(...emitToolEnd(doc));
+      } else {
+        lines.push(...emitCutStart(doc, passZ));
+        lines.push(...emitLinearPath(segment, doc.feedCut));
+        lines.push(...emitCutEnd(doc));
+      }
+    }
+    return lines;
   }
 
-  if (levels.length === 0 || levels[levels.length - 1] !== targetCutZ) {
-    levels.push(targetCutZ);
+  lines.push(...emitMoveTo(base2D[0].x, base2D[0].y, doc.feedRapid));
+
+  if (toolpath.useRamping && toolpath.closed && doc.toolType !== "laser") {
+    lines.push(...emitToolStart(doc));
+    const ramp = generateRampingPass(base2D, startZ, passZ, 1);
+    lines.push(...emitLinearPath(ramp, doc.feedCut));
+    lines.push(...emitToolEnd(doc));
+    return lines;
   }
 
-  return levels;
+  lines.push(...emitCutStart(doc, passZ));
+  lines.push(...emitLinearPath(toolpath.points, doc.feedCut));
+  if (toolpath.closed) {
+    const first = toolpath.points[0];
+    lines.push(`G1 X${fmt(first.x)} Y${fmt(first.y)} F${fmt(doc.feedCut)}`);
+  }
+  lines.push(...emitCutEnd(doc));
+  return lines;
+}
+
+function emitPrebuilt3DPath(doc: SketchDocument, toolpath: Toolpath): string[] {
+  const lines: string[] = [];
+  const points = toolpath.points;
+  if (points.length < 2) return lines;
+  lines.push(...emitMoveTo(points[0].x, points[0].y, doc.feedRapid));
+  lines.push(...emitToolStart(doc));
+  lines.push(...emitLinearPath(points, doc.feedCut));
+  lines.push(...emitToolEnd(doc));
+  return lines;
 }
 
 export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
   const lines: string[] = [...emitProgramPreamble(doc)];
+  const shapes = collectVisibleShapes(doc);
+  const allToolpaths: (Toolpath & { shapeId: string })[] = [];
 
-  for (const shape of collectVisibleShapes(doc)) {
+  for (const shape of shapes) {
     const toolpaths = await shapeToToolpaths(shape, doc);
+    toolpaths.forEach(tp => allToolpaths.push({ ...tp, shapeId: shape.id }));
+  }
 
-    for (const toolpath of toolpaths) {
-      if (toolpath.points.length < 2) continue;
+  const order = optimizeTravelOrder(allToolpaths.map(tp => to2D(tp.points)), { x: 0, y: 0 });
 
-      const passLevels = isLaserMode(doc)
-        ? [toolpath.cutZ]
-        : buildPassLevels(toolpath.cutZ, doc.passDepth);
+  for (const index of order) {
+    const toolpath = allToolpaths[index];
+    if (!toolpath || toolpath.points.length < 2) continue;
 
-      for (let passIndex = 0; passIndex < passLevels.length; passIndex += 1) {
-        const passCutZ = passLevels[passIndex];
+    if (is3DPath(toolpath.points)) {
+      lines.push(...emitPrebuilt3DPath(doc, toolpath));
+      continue;
+    }
 
-        lines.push(
-          `; ${toolpath.name} / pass ${passIndex + 1} / Z${fmt(passCutZ)}`,
-        );
-
-        if (!isLaserMode(doc)) {
-          lines.push(`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`);
-        }
-
-        lines.push(
-          ...emitMoveTo(toolpath.points[0].x, toolpath.points[0].y, doc.feedRapid),
-        );
-
-        lines.push(...emitCutStart(doc, passCutZ));
-
-        for (let i = 1; i < toolpath.points.length; i += 1) {
-          lines.push(
-            `G1 X${fmt(toolpath.points[i].x)} Y${fmt(toolpath.points[i].y)} F${fmt(doc.feedCut)}`,
-          );
-        }
-
-        if (toolpath.closed) {
-          lines.push(
-            `G1 X${fmt(toolpath.points[0].x)} Y${fmt(toolpath.points[0].y)} F${fmt(doc.feedCut)}`,
-          );
-        }
-
-        lines.push(...emitCutEnd(doc));
-      }
+    const passes = buildDepthPasses(toolpath.cutZ, doc.passDepth);
+    let previousZ = doc.safeZ;
+    for (const passZ of passes) {
+      lines.push(...emitContourPass(doc, toolpath, passZ, previousZ));
+      previousZ = passZ;
     }
   }
 

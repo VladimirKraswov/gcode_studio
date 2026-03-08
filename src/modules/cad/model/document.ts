@@ -2,13 +2,56 @@
 // FILE: src/modules/cad/model/document.ts
 // =============================
 
-import type { SketchDocument, SketchShape } from "./types";
+import type { SketchCamSettings, SketchDocument, SketchShape } from "./types";
+
+export function createDefaultCamSettings(): SketchCamSettings {
+  return {
+    operation: "follow-path",
+    direction: "climb",
+    stepdown: null,
+    stepover: null,
+    tabs: {
+      enabled: false,
+      count: 2,
+      width: 6,
+      height: 1,
+    },
+    ramping: {
+      enabled: false,
+      turns: 1,
+    },
+  };
+}
+
+function normalizeCamSettings(
+  value: Partial<SketchCamSettings> | undefined,
+): SketchCamSettings {
+  const defaults = createDefaultCamSettings();
+
+  return {
+    operation: value?.operation ?? defaults.operation,
+    direction: value?.direction ?? defaults.direction,
+    stepdown: value?.stepdown ?? defaults.stepdown,
+    stepover: value?.stepover ?? defaults.stepover,
+    tabs: {
+      enabled: value?.tabs?.enabled ?? defaults.tabs.enabled,
+      count: value?.tabs?.count ?? defaults.tabs.count,
+      width: value?.tabs?.width ?? defaults.tabs.width,
+      height: value?.tabs?.height ?? defaults.tabs.height,
+    },
+    ramping: {
+      enabled: value?.ramping?.enabled ?? defaults.ramping.enabled,
+      turns: value?.ramping?.turns ?? defaults.ramping.turns,
+    },
+  };
+}
 
 function normalizeShape(shape: SketchShape): SketchShape {
   return {
     ...shape,
     visible: shape.visible ?? true,
     groupId: shape.groupId ?? null,
+    camSettings: normalizeCamSettings(shape.camSettings),
   };
 }
 
@@ -41,6 +84,8 @@ export function createEmptySketchDocument(): SketchDocument {
     toolNumber: 1,
     toolDiameter: 3.175,
     stepover: 0.45,
+
+    defaultCamSettings: createDefaultCamSettings(),
 
     snapEnabled: true,
     snapStep: 5,

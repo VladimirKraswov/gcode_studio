@@ -1,5 +1,6 @@
 import { ui } from "../../../styles/ui";
-import type { SketchDocument } from "../model/types";
+import type { SketchCamSettings, SketchDocument } from "../model/types";
+import { createDefaultCamSettings } from "../model/document";
 
 type DocumentSettingsPanelProps = {
   document: SketchDocument;
@@ -71,10 +72,53 @@ function CardBlock({
   );
 }
 
+function resolveDocCamSettings(document: SketchDocument): SketchCamSettings {
+  const defaults = createDefaultCamSettings();
+  const value = document.defaultCamSettings ?? defaults;
+
+  return {
+    operation: value.operation ?? defaults.operation,
+    direction: value.direction ?? defaults.direction,
+    stepdown: value.stepdown ?? defaults.stepdown,
+    stepover: value.stepover ?? defaults.stepover,
+    tabs: {
+      enabled: value.tabs?.enabled ?? defaults.tabs.enabled,
+      count: value.tabs?.count ?? defaults.tabs.count,
+      width: value.tabs?.width ?? defaults.tabs.width,
+      height: value.tabs?.height ?? defaults.tabs.height,
+    },
+    ramping: {
+      enabled: value.ramping?.enabled ?? defaults.ramping.enabled,
+      turns: value.ramping?.turns ?? defaults.ramping.turns,
+    },
+  };
+}
+
 export function DocumentSettingsPanel({
   document,
   setDocument,
 }: DocumentSettingsPanelProps) {
+  const defaultCamSettings = resolveDocCamSettings(document);
+
+  function updateDefaultCam(
+    patch:
+      | Partial<SketchCamSettings>
+      | ((prev: SketchCamSettings) => SketchCamSettings),
+  ) {
+    setDocument((prev) => {
+      const current = resolveDocCamSettings(prev);
+      const next =
+        typeof patch === "function"
+          ? patch(current)
+          : { ...current, ...patch };
+
+      return {
+        ...prev,
+        defaultCamSettings: next,
+      };
+    });
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <CardBlock title="Сетка и лист">
@@ -379,6 +423,196 @@ export function DocumentSettingsPanel({
               }
             />
           </label>
+        </div>
+      </CardBlock>
+
+      <CardBlock title="CAM defaults">
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={twoColumnGrid}>
+            <label style={fieldLabel}>
+              Операция по умолчанию
+              <select
+                value={defaultCamSettings.operation}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    operation: e.target.value as SketchCamSettings["operation"],
+                  })
+                }
+                style={ui.select}
+              >
+                <option value="follow-path">Follow path</option>
+                <option value="profile-inside">Profile inside</option>
+                <option value="profile-outside">Profile outside</option>
+                <option value="pocket">Pocket</option>
+              </select>
+            </label>
+
+            <label style={fieldLabel}>
+              Направление
+              <select
+                value={defaultCamSettings.direction}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    direction: e.target.value as SketchCamSettings["direction"],
+                  })
+                }
+                style={ui.select}
+              >
+                <option value="climb">Climb</option>
+                <option value="conventional">Conventional</option>
+              </select>
+            </label>
+
+            <label style={fieldLabel}>
+              Stepdown override
+              <input
+                style={ui.input}
+                type="number"
+                step="0.001"
+                value={defaultCamSettings.stepdown ?? ""}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    stepdown: e.target.value === "" ? null : Math.max(0.001, Number(e.target.value) || 0.001),
+                  })
+                }
+                placeholder="inherit passDepth"
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Stepover override
+              <input
+                style={ui.input}
+                type="number"
+                min="0.05"
+                max="1"
+                step="0.01"
+                value={defaultCamSettings.stepover ?? ""}
+                onChange={(e) =>
+                  updateDefaultCam({
+                    stepover: e.target.value === "" ? null : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
+                  })
+                }
+                placeholder="inherit document stepover"
+              />
+            </label>
+          </div>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={defaultCamSettings.ramping.enabled}
+              onChange={(e) =>
+                updateDefaultCam((prev) => ({
+                  ...prev,
+                  ramping: {
+                    ...prev.ramping,
+                    enabled: e.target.checked,
+                  },
+                }))
+              }
+            />
+            <span>Ramping по умолчанию</span>
+          </label>
+
+          <label style={fieldLabel}>
+            Количество витков ramping
+            <input
+              style={ui.input}
+              type="number"
+              min="1"
+              step="1"
+              value={defaultCamSettings.ramping.turns}
+              onChange={(e) =>
+                updateDefaultCam((prev) => ({
+                  ...prev,
+                  ramping: {
+                    ...prev.ramping,
+                    turns: Math.max(1, Number(e.target.value) || 1),
+                  },
+                }))
+              }
+            />
+          </label>
+
+          <label style={checkboxRow}>
+            <input
+              type="checkbox"
+              checked={defaultCamSettings.tabs.enabled}
+              onChange={(e) =>
+                updateDefaultCam((prev) => ({
+                  ...prev,
+                  tabs: {
+                    ...prev.tabs,
+                    enabled: e.target.checked,
+                  },
+                }))
+              }
+            />
+            <span>Tabs / bridges по умолчанию</span>
+          </label>
+
+          <div style={threeColumnGrid}>
+            <label style={fieldLabel}>
+              Count
+              <input
+                style={ui.input}
+                type="number"
+                min="0"
+                step="1"
+                value={defaultCamSettings.tabs.count}
+                onChange={(e) =>
+                  updateDefaultCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      count: Math.max(0, Number(e.target.value) || 0),
+                    },
+                  }))
+                }
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Width
+              <input
+                style={ui.input}
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={defaultCamSettings.tabs.width}
+                onChange={(e) =>
+                  updateDefaultCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      width: Math.max(0.1, Number(e.target.value) || 0.1),
+                    },
+                  }))
+                }
+              />
+            </label>
+
+            <label style={fieldLabel}>
+              Height
+              <input
+                style={ui.input}
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={defaultCamSettings.tabs.height}
+                onChange={(e) =>
+                  updateDefaultCam((prev) => ({
+                    ...prev,
+                    tabs: {
+                      ...prev.tabs,
+                      height: Math.max(0.1, Number(e.target.value) || 0.1),
+                    },
+                  }))
+                }
+              />
+            </label>
+          </div>
         </div>
       </CardBlock>
 

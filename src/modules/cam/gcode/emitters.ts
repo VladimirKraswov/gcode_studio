@@ -18,31 +18,16 @@ export function emitProgramPreamble(doc: SketchDocument): string[] {
     `T${Math.max(1, Math.round(doc.toolNumber))} M6`,
     `G0 Z${fmt(doc.startZ)}`,
   ];
-
-  if (doc.coolant && !isLaserMode(doc)) {
-    lines.push("M8");
-  }
-
+  if (doc.coolant && !isLaserMode(doc)) lines.push("M8");
   return lines;
 }
 
 export function emitProgramPostamble(doc: SketchDocument): string[] {
   const lines: string[] = [];
-
-  if (doc.spindleOn) {
-    lines.push("M5");
-  }
-
-  if (doc.coolant && !isLaserMode(doc)) {
-    lines.push("M9");
-  }
-
+  if (doc.spindleOn) lines.push("M5");
+  if (doc.coolant && !isLaserMode(doc)) lines.push("M9");
   lines.push(`G0 Z${fmt(doc.safeZ)}`);
-
-  if (doc.returnHome) {
-    lines.push("G0 X0 Y0");
-  }
-
+  if (doc.returnHome) lines.push("G0 X0 Y0");
   return lines;
 }
 
@@ -50,35 +35,29 @@ export function emitMoveTo(x: number, y: number, feedRapid: number): string[] {
   return [`G0 X${fmt(x)} Y${fmt(y)} F${fmt(feedRapid)}`];
 }
 
-export function emitCutStart(doc: SketchDocument, cutZ: number): string[] {
+export function emitToolStart(doc: SketchDocument): string[] {
+  if (!doc.spindleOn) return [];
   const lines: string[] = [];
-
-  if (isLaserMode(doc)) {
-    if (doc.spindleOn) {
-      lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.laserPower))}`);
-    }
-    if (doc.dwellMs > 0) {
-      lines.push(`G4 P${fmt(doc.dwellMs)}`);
-    }
-    return lines;
-  }
-
-  if (doc.spindleOn) {
-    lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.spindleSpeed))}`);
-  }
-
-  if (doc.dwellMs > 0) {
-    lines.push(`G4 P${fmt(doc.dwellMs)}`);
-  }
-
-  lines.push(`G1 Z${fmt(cutZ)} F${fmt(doc.feedPlunge)}`);
+  if (isLaserMode(doc)) lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.laserPower))}`);
+  else lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.spindleSpeed))}`);
+  if (doc.dwellMs > 0) lines.push(`G4 P${fmt(doc.dwellMs)}`);
   return lines;
 }
 
-export function emitCutEnd(doc: SketchDocument): string[] {
-  if (isLaserMode(doc)) {
-    return doc.spindleOn ? ["M5"] : [];
-  }
+export function emitPlungeTo(doc: SketchDocument, cutZ: number): string[] {
+  if (isLaserMode(doc)) return [];
+  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedPlunge)}`];
+}
 
+export function emitToolEnd(doc: SketchDocument): string[] {
+  if (isLaserMode(doc)) return doc.spindleOn ? ["M5"] : [];
   return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
+}
+
+export function emitCutStart(doc: SketchDocument, cutZ: number): string[] {
+  return [...emitToolStart(doc), ...emitPlungeTo(doc, cutZ)];
+}
+
+export function emitCutEnd(doc: SketchDocument): string[] {
+  return emitToolEnd(doc);
 }
