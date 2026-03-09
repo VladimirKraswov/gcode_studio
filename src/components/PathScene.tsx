@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Line, OrbitControls, Text } from "@react-three/drei";
+import { Billboard, Line, OrbitControls, Text } from "@react-three/drei";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type {
@@ -49,6 +49,30 @@ function chooseTickStep(length: number): number {
   return candidates[candidates.length - 1];
 }
 
+function AxisLabel({
+  position,
+  color,
+  fontSize,
+  children,
+  anchorX = "center",
+  anchorY = "middle",
+}: {
+  position: THREE.Vector3;
+  color: string;
+  fontSize: number;
+  children: React.ReactNode;
+  anchorX?: "left" | "center" | "right";
+  anchorY?: "top" | "middle" | "bottom";
+}) {
+  return (
+    <Billboard position={position} follow>
+      <Text color={color} fontSize={fontSize} anchorX={anchorX} anchorY={anchorY}>
+        {children}
+      </Text>
+    </Billboard>
+  );
+}
+
 export function PathScene({
   parsed,
   currentState,
@@ -70,35 +94,33 @@ export function PathScene({
     [parsed.bounds, placementMode, stock],
   );
 
-  const stockCenter = useMemo(
-    () => toSceneCoords(placement.centerGcode),
-    [placement],
-  );
+  const stockCenter = useMemo(() => toSceneCoords(placement.centerGcode), [placement]);
 
-  const orbitTarget = useMemo(
-    () => toScenePoint(placement.centerGcode),
-    [placement],
-  );
+  const orbitTarget = useMemo(() => toScenePoint(placement.centerGcode), [placement]);
 
   const axesHelper = useMemo(() => {
-    const length = Math.max(
-      stock.width,
-      stock.height,
-      stock.thickness,
-      Math.abs(parsed.bounds.minX),
-      Math.abs(parsed.bounds.maxX),
-      Math.abs(parsed.bounds.minY),
-      Math.abs(parsed.bounds.maxY),
-      Math.abs(parsed.bounds.minZ),
-      Math.abs(parsed.bounds.maxZ),
-      100,
-    ) * 1.15;
+    const length =
+      Math.max(
+        stock.width,
+        stock.height,
+        stock.thickness,
+        Math.abs(parsed.bounds.minX),
+        Math.abs(parsed.bounds.maxX),
+        Math.abs(parsed.bounds.minY),
+        Math.abs(parsed.bounds.maxY),
+        Math.abs(parsed.bounds.minZ),
+        Math.abs(parsed.bounds.maxZ),
+        100,
+      ) * 1.15;
 
     if (length <= 0) return null;
 
     const tickStep = chooseTickStep(length);
     const tickHalf = Math.max(1.5, length * 0.015);
     const labelOffset = Math.max(4, length * 0.03);
+    const tickFontSize = Math.max(3.2, length * 0.02);
+    const axisFontSize = Math.max(4.4, length * 0.024);
+    const originFontSize = Math.max(3.8, length * 0.02);
 
     const origin = toScenePoint({ x: 0, y: 0, z: 0 });
 
@@ -112,7 +134,11 @@ export function PathScene({
     const zPos = toScenePoint({ x: 0, y: 0, z: length });
 
     const xTicks: React.ReactNode[] = [];
-    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+    for (
+      let value = -Math.floor(length / tickStep) * tickStep;
+      value <= length;
+      value += tickStep
+    ) {
       if (value === 0) continue;
 
       const from = toScenePoint({ x: value, y: 0, z: -tickHalf });
@@ -122,21 +148,19 @@ export function PathScene({
       xTicks.push(
         <group key={`x-tick-${value}`}>
           <Line points={[from, to]} color={theme.danger} lineWidth={1} />
-          <Text
-            position={labelPos}
-            color={theme.danger}
-            fontSize={Math.max(3.2, length * 0.02)}
-            anchorX="center"
-            anchorY="middle"
-          >
+          <AxisLabel position={labelPos} color={theme.danger} fontSize={tickFontSize}>
             {value}
-          </Text>
+          </AxisLabel>
         </group>,
       );
     }
 
     const yTicks: React.ReactNode[] = [];
-    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+    for (
+      let value = -Math.floor(length / tickStep) * tickStep;
+      value <= length;
+      value += tickStep
+    ) {
       if (value === 0) continue;
 
       const from = toScenePoint({ x: -tickHalf, y: value, z: 0 });
@@ -146,21 +170,19 @@ export function PathScene({
       yTicks.push(
         <group key={`y-tick-${value}`}>
           <Line points={[from, to]} color={theme.success} lineWidth={1} />
-          <Text
-            position={labelPos}
-            color={theme.success}
-            fontSize={Math.max(3.2, length * 0.02)}
-            anchorX="center"
-            anchorY="middle"
-          >
+          <AxisLabel position={labelPos} color={theme.success} fontSize={tickFontSize}>
             {value}
-          </Text>
+          </AxisLabel>
         </group>,
       );
     }
 
     const zTicks: React.ReactNode[] = [];
-    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
+    for (
+      let value = -Math.floor(length / tickStep) * tickStep;
+      value <= length;
+      value += tickStep
+    ) {
       if (value === 0) continue;
 
       const from = toScenePoint({ x: -tickHalf, y: 0, z: value });
@@ -170,15 +192,9 @@ export function PathScene({
       zTicks.push(
         <group key={`z-tick-${value}`}>
           <Line points={[from, to]} color={theme.primary} lineWidth={1} />
-          <Text
-            position={labelPos}
-            color={theme.primary}
-            fontSize={Math.max(3.2, length * 0.02)}
-            anchorX="center"
-            anchorY="middle"
-          >
+          <AxisLabel position={labelPos} color={theme.primary} fontSize={tickFontSize}>
             {value}
-          </Text>
+          </AxisLabel>
         </group>,
       );
     }
@@ -193,72 +209,65 @@ export function PathScene({
         {yTicks}
         {zTicks}
 
-        <Text
+        <AxisLabel
           position={toScenePoint({ x: length + labelOffset, y: 0, z: 0 })}
           color={theme.danger}
-          fontSize={Math.max(4.4, length * 0.024)}
+          fontSize={axisFontSize}
           anchorX="left"
-          anchorY="middle"
         >
           +X
-        </Text>
-        <Text
+        </AxisLabel>
+
+        <AxisLabel
           position={toScenePoint({ x: -length - labelOffset, y: 0, z: 0 })}
           color={theme.danger}
-          fontSize={Math.max(4.4, length * 0.024)}
+          fontSize={axisFontSize}
           anchorX="right"
-          anchorY="middle"
         >
           -X
-        </Text>
+        </AxisLabel>
 
-        <Text
+        <AxisLabel
           position={toScenePoint({ x: 0, y: length + labelOffset, z: 0 })}
           color={theme.success}
-          fontSize={Math.max(4.4, length * 0.024)}
-          anchorX="center"
-          anchorY="middle"
+          fontSize={axisFontSize}
         >
           +Y
-        </Text>
-        <Text
+        </AxisLabel>
+
+        <AxisLabel
           position={toScenePoint({ x: 0, y: -length - labelOffset, z: 0 })}
           color={theme.success}
-          fontSize={Math.max(4.4, length * 0.024)}
-          anchorX="center"
-          anchorY="middle"
+          fontSize={axisFontSize}
         >
           -Y
-        </Text>
+        </AxisLabel>
 
-        <Text
+        <AxisLabel
           position={toScenePoint({ x: 0, y: 0, z: length + labelOffset })}
           color={theme.primary}
-          fontSize={Math.max(4.4, length * 0.024)}
-          anchorX="center"
-          anchorY="middle"
+          fontSize={axisFontSize}
         >
           +Z
-        </Text>
-        <Text
+        </AxisLabel>
+
+        <AxisLabel
           position={toScenePoint({ x: 0, y: 0, z: -length - labelOffset })}
           color={theme.primary}
-          fontSize={Math.max(4.4, length * 0.024)}
-          anchorX="center"
-          anchorY="middle"
+          fontSize={axisFontSize}
         >
           -Z
-        </Text>
+        </AxisLabel>
 
-        <Text
+        <AxisLabel
           position={origin}
           color={theme.text}
-          fontSize={Math.max(3.8, length * 0.02)}
+          fontSize={originFontSize}
           anchorX="left"
           anchorY="bottom"
         >
           0
-        </Text>
+        </AxisLabel>
       </group>
     );
   }, [parsed.bounds, stock, theme]);
@@ -330,10 +339,7 @@ export function PathScene({
   const doneSegments = renderSegments.slice(0, Math.max(renderedDoneCount, 0));
 
   return (
-    <Canvas
-      camera={{ position: [0, 300, 0], fov: 50 }}
-      shadows={{ type: THREE.PCFShadowMap }}
-    >
+    <Canvas camera={{ position: [0, 300, 0], fov: 50 }} shadows={{ type: THREE.PCFShadowMap }}>
       <color attach="background" args={[theme.bgSoft]} />
       <ambientLight intensity={0.85} />
       <hemisphereLight intensity={0.45} groundColor={theme.border} />
@@ -359,11 +365,7 @@ export function PathScene({
       {rulers}
 
       {showMaterialRemoval && (
-        <mesh
-          position={[stockCenter.x, stockCenter.y, stockCenter.z]}
-          receiveShadow
-          renderOrder={1}
-        >
+        <mesh position={[stockCenter.x, stockCenter.y, stockCenter.z]} receiveShadow renderOrder={1}>
           <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
           <meshStandardMaterial
             color="#c89d67"
@@ -407,7 +409,13 @@ export function PathScene({
               key={`done-${seg.id}`}
               start={seg.start}
               end={seg.end}
-              color={seg.mode === "G0" ? theme.primary : seg.isCutting ? theme.text : theme.textSoft}
+              color={
+                seg.mode === "G0"
+                  ? theme.primary
+                  : seg.isCutting
+                    ? theme.text
+                    : theme.textSoft
+              }
               opacity={1}
             />
           ))}
