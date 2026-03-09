@@ -61,6 +61,7 @@ export const ui = {
     display: "flex",
     flexDirection: "column",
     gap: 16,
+    overflowY: "auto",
   } satisfies CSSProperties,
 
   panel: {

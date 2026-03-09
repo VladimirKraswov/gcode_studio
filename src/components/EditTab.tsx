@@ -1,13 +1,16 @@
+// src/components/EditTab.tsx
 import { SvgImportModal } from "./SvgImportModal";
-import { CadCanvas } from "../modules/cad/canvas/CadCanvas";
-import { useCadEditor } from "../modules/cad/hooks/useCadEditor";
-import { EditStatusBar } from "../modules/cad/panels/EditStatusBar";
-import { EditToolbar } from "../modules/cad/panels/EditToolbar";
-import { ArrayToolPanel } from "../modules/cad/panels/ArrayToolPanel";
-import { TextToolPanel } from "../modules/cad/panels/TextToolPanel";
-import type { SketchDocument } from "../modules/cad/model/types";
-import type { SelectionState } from "../modules/cad/model/selection";
-import type { ViewTransform } from "../modules/cad/model/view";
+import {
+  CadCanvas,
+  useCadEditor,
+  EditStatusBar,
+  EditToolbar,
+  ArrayToolPanel,
+  TextToolPanel,
+  type SketchDocument,
+  type SelectionState,
+  type ViewTransform,
+} from "../modules/cad";
 import type { CadPanButtonMode } from "../utils/settings";
 import { ui } from "../styles/ui";
 
@@ -30,61 +33,30 @@ type EditTabProps = {
   panButtonMode: CadPanButtonMode;
 };
 
-export function EditTab({
-  document,
-  setDocument,
-  setDocumentSilently,
-  onGenerateGCode,
-  selection,
-  onSelectionChange,
-  onSelectionChangeSilently,
-  view,
-  onViewChange,
-  onViewChangeSilently,
-  checkpointHistory,
-  onUndo,
-  onRedo,
-  canUndo,
-  canRedo,
-  panButtonMode,
-}: EditTabProps) {
+export function EditTab(props: EditTabProps) {
   const editor = useCadEditor({
-    document,
-    setDocument,
-    setDocumentSilently,
-    onGenerateGCode,
-    selection,
-    onSelectionChange,
-    onSelectionChangeSilently,
-    view,
-    onViewChange,
-    onViewChangeSilently,
-    checkpointHistory,
-    panButtonMode,
+    document: props.document,
+    setDocument: props.setDocument,
+    setDocumentSilently: props.setDocumentSilently,
+    onGenerateGCode: props.onGenerateGCode,
+    selection: props.selection,
+    onSelectionChange: props.onSelectionChange,
+    onSelectionChangeSilently: props.onSelectionChangeSilently,
+    view: props.view,
+    onViewChange: props.onViewChange,
+    onViewChangeSilently: props.onViewChangeSilently,
+    checkpointHistory: props.checkpointHistory,
+    panButtonMode: props.panButtonMode,
   });
 
-  const primaryShape =
-    document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
-
-  const canGroupSelected = selection.ids.length > 1;
+  const primaryShape = props.document.shapes.find((shape) => shape.id === props.selection.primaryId) ?? null;
+  const canGroupSelected = props.selection.ids.length > 1;
   const canUngroupSelected = Boolean(primaryShape?.groupId);
   const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
 
   return (
     <>
-      <div
-        style={{
-          ...ui.panel,
-          padding: 16,
-          height: "100%",
-          minHeight: 0,
-          minWidth: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          width: "100%",
-        }}
-      >
+      <div style={{ ...ui.panel, padding: 16, height: "100%", minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%" }}>
         <EditToolbar
           tool={editor.tool}
           onToolChange={editor.setTool}
@@ -96,10 +68,10 @@ export function EditTab({
           onResetView={editor.resetView}
           onGenerate={editor.handleGenerateClick}
           isGenerating={editor.isGenerating}
-          onUndo={onUndo}
-          onRedo={onRedo}
-          canUndo={canUndo}
-          canRedo={canRedo}
+          onUndo={props.onUndo}
+          onRedo={props.onRedo}
+          canUndo={props.canUndo}
+          canRedo={props.canRedo}
           onImportSvg={editor.startSvgImport}
           onGroupSelected={editor.groupSelected}
           onUngroupSelected={editor.ungroupSelected}
@@ -107,7 +79,7 @@ export function EditTab({
           onMirrorSelected={editor.mirrorSelected}
           canGroupSelected={canGroupSelected}
           canUngroupSelected={canUngroupSelected}
-          hasSelection={selection.ids.length > 0}
+          hasSelection={props.selection.ids.length > 0}
           hasDraft={hasDraft}
         />
 
@@ -127,48 +99,17 @@ export function EditTab({
           <TextToolPanel
             value={editor.textTool}
             fontOptions={editor.fontOptions}
-            onChange={(patch) =>
-              editor.setTextTool((prev) => ({
-                ...prev,
-                ...patch,
-              }))
-            }
+            onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
           />
         )}
 
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            minWidth: 0,
-            display: "flex",
-            gap: 12,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              ...ui.panelInset,
-              flex: 1,
-              minHeight: 0,
-              minWidth: 0,
-              overflow: "hidden",
-              background: "#f8fafc",
-              display: "flex",
-            }}
-          >
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                minWidth: 0,
-                overflow: "hidden",
-              }}
-            >
+        <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", gap: 12, overflow: "hidden" }}>
+          <div style={{ ...ui.panelInset, flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", background: "#f8fafc", display: "flex" }}>
+            <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
               <CadCanvas
                 svgRef={editor.svgRef}
-                document={document}
-                selection={selection}
+                document={props.document}
+                selection={props.selection}
                 view={editor.view}
                 draft={editor.draft}
                 polylineDraft={editor.polylineDraft}
@@ -201,7 +142,7 @@ export function EditTab({
         </div>
 
         <EditStatusBar
-          objectCount={document.shapes.length}
+          objectCount={props.document.shapes.length}
           tool={editor.tool}
           isDragging={editor.isDragging}
           isPanning={editor.isPanning}
