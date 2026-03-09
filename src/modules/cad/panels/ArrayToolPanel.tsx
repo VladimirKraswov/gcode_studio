@@ -1,5 +1,6 @@
 import { FiCopy, FiRefreshCw, FiX } from "react-icons/fi";
-import { theme, ui } from "../../../styles/ui";
+import { useStyles } from "../../../styles/useStyles";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type {
   CircularArrayParams,
   LinearArrayParams,
@@ -17,10 +18,6 @@ type ArrayToolPanelProps = {
   onClose: () => void;
 };
 
-const fieldLabel: React.CSSProperties = {
-  ...ui.inputLabel,
-};
-
 export function ArrayToolPanel({
   mode,
   linear,
@@ -30,10 +27,15 @@ export function ArrayToolPanel({
   onApply,
   onClose,
 }: ArrayToolPanelProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
+  const fieldLabel = styles.inputLabel;
+
   return (
     <div
       style={{
-        ...ui.panelInset,
+        ...styles.panelInset,
         padding: 12,
         marginBottom: 12,
         display: "grid",
@@ -51,7 +53,7 @@ export function ArrayToolPanel({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={ui.iconBadge}>
+          <div style={styles.iconBadge}>
             {mode === "linear" ? <FiCopy size={16} /> : <FiRefreshCw size={16} />}
           </div>
           <div>
@@ -65,11 +67,11 @@ export function ArrayToolPanel({
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={onClose} style={ui.buttonGhost}>
+          <button type="button" onClick={onClose} style={styles.buttonGhost}>
             <FiX size={15} />
             Закрыть
           </button>
-          <button type="button" onClick={onApply} style={ui.buttonPrimary}>
+          <button type="button" onClick={onApply} style={styles.buttonPrimary}>
             Применить
           </button>
         </div>
@@ -95,7 +97,7 @@ export function ArrayToolPanel({
                   count: Math.max(2, Number(e.target.value) || 2),
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 
@@ -110,7 +112,7 @@ export function ArrayToolPanel({
                   spacing: Math.abs(Number(e.target.value) || 0),
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 
@@ -123,7 +125,7 @@ export function ArrayToolPanel({
                   axis: e.target.value as LinearArrayParams["axis"],
                 })
               }
-              style={ui.select}
+              style={styles.select}
             >
               <option value="x">X</option>
               <option value="y">Y</option>
@@ -139,7 +141,7 @@ export function ArrayToolPanel({
                   direction: e.target.value as LinearArrayParams["direction"],
                 })
               }
-              style={ui.select}
+              style={styles.select}
             >
               <option value="positive">Плюс</option>
               <option value="negative">Минус</option>
@@ -166,7 +168,7 @@ export function ArrayToolPanel({
                   count: Math.max(2, Number(e.target.value) || 2),
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 
@@ -181,7 +183,7 @@ export function ArrayToolPanel({
                   centerX: Number(e.target.value) || 0,
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 
@@ -196,7 +198,7 @@ export function ArrayToolPanel({
                   centerY: Number(e.target.value) || 0,
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 
@@ -212,7 +214,7 @@ export function ArrayToolPanel({
                   radius: Math.max(0, Number(e.target.value) || 0),
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 
@@ -227,7 +229,7 @@ export function ArrayToolPanel({
                   totalAngle: Number(e.target.value) || 0,
                 })
               }
-              style={ui.input}
+              style={styles.input}
             />
           </label>
 

@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchCircle } from "../model/types";
 
@@ -17,6 +18,8 @@ export function CircleShapeView({
   isSelected,
   onPointerDown,
 }: CircleShapeViewProps) {
+  const { theme } = useTheme();
+
   const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, documentHeight, view);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
@@ -28,7 +31,7 @@ export function CircleShapeView({
         cy={p.y}
         r={shape.radius * view.scale}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         pointerEvents="none"
       />

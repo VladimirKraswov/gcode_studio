@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchPolyline } from "../model/types";
 
@@ -17,6 +18,8 @@ export function PolylineShapeView({
   isSelected,
   onPointerDown,
 }: PolylineShapeViewProps) {
+  const { theme } = useTheme();
+
   const points = shape.points
     .map((point) => {
       const p = cadToScreenPoint(point, documentHeight, view);
@@ -32,7 +35,7 @@ export function PolylineShapeView({
       <polyline
         points={points}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"

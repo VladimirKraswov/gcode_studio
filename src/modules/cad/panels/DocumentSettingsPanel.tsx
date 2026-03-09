@@ -1,41 +1,11 @@
-import { ui } from "../../../styles/ui";
+import { useStyles } from "../../../styles/useStyles";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchCamSettings, SketchDocument } from "../model/types";
 import { createDefaultCamSettings } from "../model/document";
 
 type DocumentSettingsPanelProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
-};
-
-const twoColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
-
-const threeColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
-
-const fieldLabel: React.CSSProperties = {
-  ...ui.inputLabel,
-};
-
-const checkboxRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  fontSize: 13,
-  fontWeight: 700,
-  color: "#0f172a",
-  padding: 12,
-  borderRadius: 12,
-  background: "#fff",
-  border: "1px solid #dbe4ee",
 };
 
 function CardBlock({
@@ -45,11 +15,12 @@ function CardBlock({
   title?: string;
   children: React.ReactNode;
 }) {
+  const { theme } = useTheme();
   return (
     <div
       style={{
-        background: "#fff",
-        border: "1px solid #dbe4ee",
+        background: theme.panelSolid,
+        border: `1px solid ${theme.border}`,
         borderRadius: 14,
         padding: 12,
         minWidth: 0,
@@ -60,7 +31,7 @@ function CardBlock({
           style={{
             fontSize: 13,
             fontWeight: 800,
-            color: "#0f172a",
+            color: theme.text,
             marginBottom: 10,
           }}
         >
@@ -98,6 +69,9 @@ export function DocumentSettingsPanel({
   document,
   setDocument,
 }: DocumentSettingsPanelProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   const defaultCamSettings = resolveDocCamSettings(document);
 
   function updateDefaultCam(
@@ -119,15 +93,42 @@ export function DocumentSettingsPanel({
     });
   }
 
+  const twoColumnGrid: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
+  };
+
+  const threeColumnGrid: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+    minWidth: 0,
+  };
+
+  const checkboxRow: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    fontWeight: 700,
+    color: theme.text,
+    padding: 12,
+    borderRadius: 12,
+    background: theme.panelSolid,
+    border: `1px solid ${theme.border}`,
+  };
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <CardBlock title="Сетка и лист">
         <div style={{ display: "grid", gap: 10 }}>
           <div style={twoColumnGrid}>
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Ширина листа
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 min="1"
                 value={document.width}
@@ -140,10 +141,10 @@ export function DocumentSettingsPanel({
               />
             </label>
 
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Высота листа
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 min="1"
                 value={document.height}
@@ -157,10 +158,10 @@ export function DocumentSettingsPanel({
             </label>
           </div>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Шаг сетки
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="1"
               value={document.snapStep}
@@ -191,7 +192,7 @@ export function DocumentSettingsPanel({
 
       <CardBlock title="Основные настройки генерации">
         <div style={twoColumnGrid}>
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Единицы
             <select
               value={document.units}
@@ -201,14 +202,14 @@ export function DocumentSettingsPanel({
                   units: e.target.value as SketchDocument["units"],
                 }))
               }
-              style={ui.select}
+              style={styles.select}
             >
               <option value="mm">мм (G21)</option>
               <option value="inch">дюймы (G20)</option>
             </select>
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Work offset
             <select
               value={document.workOffset}
@@ -218,7 +219,7 @@ export function DocumentSettingsPanel({
                   workOffset: e.target.value as SketchDocument["workOffset"],
                 }))
               }
-              style={ui.select}
+              style={styles.select}
             >
               <option value="G54">G54</option>
               <option value="G55">G55</option>
@@ -233,10 +234,10 @@ export function DocumentSettingsPanel({
 
       <CardBlock title="Оси Z и проходы">
         <div style={twoColumnGrid}>
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Start Z
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               value={document.startZ}
               onChange={(e) =>
@@ -248,10 +249,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Safe Z
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               value={document.safeZ}
               onChange={(e) =>
@@ -263,10 +264,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Cut Z по умолчанию
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               value={document.cutZ}
               onChange={(e) =>
@@ -278,10 +279,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Pass depth
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="0.001"
               step="0.001"
@@ -299,10 +300,10 @@ export function DocumentSettingsPanel({
 
       <CardBlock title="Подачи">
         <div style={threeColumnGrid}>
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Feed cut
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="1"
               value={document.feedCut}
@@ -315,10 +316,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Feed plunge
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="1"
               value={document.feedPlunge}
@@ -331,10 +332,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Feed rapid
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="1"
               value={document.feedRapid}
@@ -351,7 +352,7 @@ export function DocumentSettingsPanel({
 
       <CardBlock title="Инструмент">
         <div style={threeColumnGrid}>
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Тип инструмента
             <select
               value={document.toolType}
@@ -362,7 +363,7 @@ export function DocumentSettingsPanel({
                   spindleOn: e.target.value === "laser" ? true : prev.spindleOn,
                 }))
               }
-              style={ui.select}
+              style={styles.select}
             >
               <option value="router">Router</option>
               <option value="spindle">Spindle</option>
@@ -371,10 +372,10 @@ export function DocumentSettingsPanel({
             </select>
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Tool number
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="1"
               value={document.toolNumber}
@@ -387,10 +388,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Диаметр инструмента
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="0"
               step="0.001"
@@ -406,10 +407,10 @@ export function DocumentSettingsPanel({
         </div>
 
         <div style={{ marginTop: 10 }}>
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Stepover (0..1)
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="0.05"
               max="1"
@@ -429,7 +430,7 @@ export function DocumentSettingsPanel({
       <CardBlock title="CAM defaults">
         <div style={{ display: "grid", gap: 10 }}>
           <div style={twoColumnGrid}>
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Операция по умолчанию
               <select
                 value={defaultCamSettings.operation}
@@ -438,7 +439,7 @@ export function DocumentSettingsPanel({
                     operation: e.target.value as SketchCamSettings["operation"],
                   })
                 }
-                style={ui.select}
+                style={styles.select}
               >
                 <option value="follow-path">Follow path</option>
                 <option value="profile-inside">Profile inside</option>
@@ -447,7 +448,7 @@ export function DocumentSettingsPanel({
               </select>
             </label>
 
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Направление
               <select
                 value={defaultCamSettings.direction}
@@ -456,17 +457,17 @@ export function DocumentSettingsPanel({
                     direction: e.target.value as SketchCamSettings["direction"],
                   })
                 }
-                style={ui.select}
+                style={styles.select}
               >
                 <option value="climb">Climb</option>
                 <option value="conventional">Conventional</option>
               </select>
             </label>
 
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Stepdown override
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 step="0.001"
                 value={defaultCamSettings.stepdown ?? ""}
@@ -479,10 +480,10 @@ export function DocumentSettingsPanel({
               />
             </label>
 
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Stepover override
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 min="0.05"
                 max="1"
@@ -515,10 +516,10 @@ export function DocumentSettingsPanel({
             <span>Ramping по умолчанию</span>
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Количество витков ramping
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="1"
               step="1"
@@ -553,10 +554,10 @@ export function DocumentSettingsPanel({
           </label>
 
           <div style={threeColumnGrid}>
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Count
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 min="0"
                 step="1"
@@ -573,10 +574,10 @@ export function DocumentSettingsPanel({
               />
             </label>
 
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Width
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 min="0.1"
                 step="0.1"
@@ -593,10 +594,10 @@ export function DocumentSettingsPanel({
               />
             </label>
 
-            <label style={fieldLabel}>
+            <label style={styles.inputLabel}>
               Height
               <input
-                style={ui.input}
+                style={styles.input}
                 type="number"
                 min="0.1"
                 step="0.1"
@@ -618,10 +619,10 @@ export function DocumentSettingsPanel({
 
       <CardBlock title="Шпиндель / лазер / охлаждение">
         <div style={twoColumnGrid}>
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Spindle speed (S)
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="0"
               value={document.spindleSpeed}
@@ -634,7 +635,7 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Направление
             <select
               value={document.spindleDirection}
@@ -644,17 +645,17 @@ export function DocumentSettingsPanel({
                   spindleDirection: e.target.value as SketchDocument["spindleDirection"],
                 }))
               }
-              style={ui.select}
+              style={styles.select}
             >
               <option value="cw">CW (M3)</option>
               <option value="ccw">CCW (M4)</option>
             </select>
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             S power
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="0"
               value={document.laserPower}
@@ -667,10 +668,10 @@ export function DocumentSettingsPanel({
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label style={styles.inputLabel}>
             Dwell, мс
             <input
-              style={ui.input}
+              style={styles.input}
               type="number"
               min="0"
               value={document.dwellMs}

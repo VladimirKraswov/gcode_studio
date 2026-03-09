@@ -1,5 +1,5 @@
 import { FiPause, FiPlay, FiSkipBack } from "react-icons/fi";
-import { ui } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
 import { RangeCard } from "./RangeCard";
 
 type PlaybackSectionProps = {
@@ -21,6 +21,8 @@ export function PlaybackSection({
   speed,
   onSpeedChange,
 }: PlaybackSectionProps) {
+  const styles = useStyles();
+
   return (
     <>
       <div
@@ -31,11 +33,11 @@ export function PlaybackSection({
           marginBottom: 14,
         }}
       >
-        <button type="button" onClick={onPlayPause} style={ui.buttonPrimary}>
+        <button type="button" onClick={onPlayPause} style={styles.buttonPrimary}>
           {playing ? <FiPause size={15} /> : <FiPlay size={15} />}
           {playing ? "Пауза" : "Старт"}
         </button>
-        <button type="button" onClick={onResetPlayback} style={ui.buttonGhost}>
+        <button type="button" onClick={onResetPlayback} style={styles.buttonGhost}>
           <FiSkipBack size={15} />
           С начала
         </button>

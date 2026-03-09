@@ -12,7 +12,8 @@ import {
   type ViewTransform,
 } from "../modules/cad";
 import type { CadPanButtonMode } from "../utils/settings";
-import { ui } from "../styles/ui";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../contexts/ThemeContext";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -33,7 +34,10 @@ type EditTabProps = {
   panButtonMode: CadPanButtonMode;
 };
 
-export function EditTab(props: EditTabProps) {
+export default function EditTab(props: EditTabProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   const editor = useCadEditor({
     document: props.document,
     setDocument: props.setDocument,
@@ -56,7 +60,7 @@ export function EditTab(props: EditTabProps) {
 
   return (
     <>
-      <div style={{ ...ui.panel, padding: 16, height: "100%", minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%" }}>
+      <div style={{ ...styles.panel, padding: 16, height: "100%", minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%" }}>
         <EditToolbar
           tool={editor.tool}
           onToolChange={editor.setTool}
@@ -104,7 +108,7 @@ export function EditTab(props: EditTabProps) {
         )}
 
         <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", gap: 12, overflow: "hidden" }}>
-          <div style={{ ...ui.panelInset, flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", background: "#f8fafc", display: "flex" }}>
+          <div style={{ ...styles.panelInset, flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", background: theme.panelMuted, display: "flex" }}>
             <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
               <CadCanvas
                 svgRef={editor.svgRef}

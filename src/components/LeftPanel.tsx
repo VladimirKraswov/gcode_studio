@@ -1,11 +1,13 @@
 import type { ChangeEvent } from "react";
 import { FiFolder, FiPlay, FiSliders } from "react-icons/fi";
 import type { PlacementMode, StockDimensions } from "../types/gcode";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../contexts/ThemeContext";
 import {
   CollapsibleSection,
   FileProjectSection,
   PlaybackSection,
-  StockSceneSection,  // <-- добавлен импорт
+  StockSceneSection,
 } from "./sections";
 
 type LeftPanelMode = "default" | "cad";
@@ -59,18 +61,21 @@ export function LeftPanel({
   detailLevel,
   onDetailLevelChange,
 }: LeftPanelProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   if (mode === "cad") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <section style={{ padding: 16, background: "#fff", borderRadius: 18 }}>
+        <section style={{ ...styles.panel, padding: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 14, background: "#dbeafe", display: "grid", placeItems: "center" }}>
+            <div style={{ ...styles.iconBadge, width: 40, height: 40 }}>
               <FiFolder size={18} />
             </div>
-            <span>Объекты CAD</span>
+            <span style={{ fontSize: 16, fontWeight: 600, color: theme.text }}>Объекты CAD</span>
           </div>
-          <div style={{ marginTop: 12, color: "#64748b", fontSize: 13 }}>
-            В режиме CAD в левой колонке должен отображаться список объектов и групп.
+          <div style={{ marginTop: 12, color: theme.textMuted, fontSize: 13, lineHeight: 1.5 }}>
+            В режиме CAD в левой колонке отображается список объектов и групп.
           </div>
         </section>
       </div>

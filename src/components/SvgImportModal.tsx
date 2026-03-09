@@ -6,7 +6,8 @@ import {
   FiUploadCloud,
   FiX,
 } from "react-icons/fi";
-import { theme, ui } from "../styles/ui";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../contexts/ThemeContext";
 
 export type SvgImportStage =
   | "reading"
@@ -57,6 +58,9 @@ export function SvgImportModal({
   onChangeDraft,
   onConfirm,
 }: SvgImportModalProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   useEffect(() => {
     if (!open) return;
 
@@ -82,6 +86,64 @@ export function SvgImportModal({
   const canEdit = stage === "ready" && draft;
   const canConfirm = stage === "ready" && Boolean(draft);
 
+  const overlayStyle: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 1000,
+    background: "rgba(15, 23, 42, 0.42)",
+    backdropFilter: "blur(6px)",
+    display: "grid",
+    placeItems: "center",
+    padding: 24,
+  };
+
+  const modalStyle: React.CSSProperties = {
+    width: "min(680px, 100%)",
+    maxHeight: "min(88vh, 920px)",
+    overflowY: "auto",
+    background: theme.panelSolid,
+    borderRadius: 24,
+    border: `1px solid ${theme.border}`,
+    boxShadow: theme.shadow,
+    padding: 18,
+  };
+
+  const headerStyle: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 16,
+  };
+
+  const footerStyle: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 18,
+  };
+
+  const closeButtonStyle: React.CSSProperties = {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    border: `1px solid ${theme.border}`,
+    background: theme.panelSolid,
+    color: theme.text,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+  };
+
+  function Stat({ label, value }: { label: string; value: string }) {
+    return (
+      <div style={styles.statCard}>
+        <div style={styles.statLabel}>{label}</div>
+        <div style={{ ...styles.statValue, fontSize: 16 }}>{value}</div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={overlayStyle}
@@ -94,7 +156,7 @@ export function SvgImportModal({
       <div style={modalStyle}>
         <div style={headerStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={ui.iconBadge}>
+            <div style={styles.iconBadge}>
               {isBusy ? (
                 <FiLoader
                   size={18}
@@ -132,7 +194,7 @@ export function SvgImportModal({
         </div>
 
         {(isBusy || stage === "error" || stage === "aborted") && (
-          <div style={{ ...ui.panelInset, padding: 16, marginBottom: 14 }}>
+          <div style={{ ...styles.panelInset, padding: 16, marginBottom: 14 }}>
             <div
               style={{
                 display: "flex",
@@ -166,7 +228,7 @@ export function SvgImportModal({
               style={{
                 height: 12,
                 borderRadius: 999,
-                background: "#e2e8f0",
+                background: theme.border,
                 overflow: "hidden",
                 marginBottom: 10,
               }}
@@ -178,10 +240,10 @@ export function SvgImportModal({
                   borderRadius: 999,
                   background:
                     stage === "error"
-                      ? "linear-gradient(90deg, #fb7185 0%, #e11d48 100%)"
+                      ? `linear-gradient(90deg, ${theme.danger} 0%, ${theme.danger} 100%)`
                       : stage === "aborted"
-                        ? "linear-gradient(90deg, #fbbf24 0%, #d97706 100%)"
-                        : "linear-gradient(90deg, #60a5fa 0%, #2563eb 100%)",
+                        ? `linear-gradient(90deg, ${theme.warning} 0%, ${theme.warning} 100%)`
+                        : `linear-gradient(90deg, ${theme.primary} 0%, ${theme.primaryText} 100%)`,
                   transition: "width 160ms ease",
                 }}
               />
@@ -193,7 +255,7 @@ export function SvgImportModal({
 
             {isBusy && (
               <div style={{ marginTop: 14 }}>
-                <button type="button" onClick={onAbort} style={ui.buttonDanger}>
+                <button type="button" onClick={onAbort} style={styles.buttonDanger}>
                   <FiSlash size={16} />
                   Abort
                 </button>
@@ -206,7 +268,7 @@ export function SvgImportModal({
           <>
             <div
               style={{
-                ...ui.panelInset,
+                ...styles.panelInset,
                 padding: 14,
                 marginBottom: 14,
                 display: "grid",
@@ -230,10 +292,10 @@ export function SvgImportModal({
             </div>
 
             <div style={{ display: "grid", gap: 12 }}>
-              <label style={ui.inputLabel}>
+              <label style={styles.inputLabel}>
                 Имя объекта
                 <input
-                  style={ui.input}
+                  style={styles.input}
                   type="text"
                   value={draft.name}
                   onChange={(e) => onChangeDraft({ name: e.target.value })}
@@ -247,10 +309,10 @@ export function SvgImportModal({
                   gap: 10,
                 }}
               >
-                <label style={ui.inputLabel}>
+                <label style={styles.inputLabel}>
                   Ширина
                   <input
-                    style={ui.input}
+                    style={styles.input}
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -272,10 +334,10 @@ export function SvgImportModal({
                   />
                 </label>
 
-                <label style={ui.inputLabel}>
+                <label style={styles.inputLabel}>
                   Высота
                   <input
-                    style={ui.input}
+                    style={styles.input}
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -306,7 +368,7 @@ export function SvgImportModal({
                   padding: 12,
                   borderRadius: 14,
                   border: `1px solid ${theme.border}`,
-                  background: "#fff",
+                  background: theme.panelSolid,
                   fontSize: 13,
                   fontWeight: 700,
                   color: theme.text,
@@ -338,10 +400,10 @@ export function SvgImportModal({
                   gap: 10,
                 }}
               >
-                <label style={ui.inputLabel}>
+                <label style={styles.inputLabel}>
                   X
                   <input
-                    style={ui.input}
+                    style={styles.input}
                     type="number"
                     step="0.001"
                     value={draft.x}
@@ -351,10 +413,10 @@ export function SvgImportModal({
                   />
                 </label>
 
-                <label style={ui.inputLabel}>
+                <label style={styles.inputLabel}>
                   Y
                   <input
-                    style={ui.input}
+                    style={styles.input}
                     type="number"
                     step="0.001"
                     value={draft.y}
@@ -369,7 +431,7 @@ export function SvgImportModal({
         )}
 
         <div style={footerStyle}>
-          <button type="button" onClick={onClose} style={ui.buttonGhost}>
+          <button type="button" onClick={onClose} style={styles.buttonGhost}>
             Закрыть
           </button>
 
@@ -378,7 +440,7 @@ export function SvgImportModal({
             onClick={onConfirm}
             disabled={!canConfirm}
             style={{
-              ...ui.buttonPrimary,
+              ...styles.buttonPrimary,
               opacity: canConfirm ? 1 : 0.55,
               cursor: canConfirm ? "pointer" : "not-allowed",
             }}
@@ -390,61 +452,3 @@ export function SvgImportModal({
     </div>
   );
 }
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={ui.statCard}>
-      <div style={ui.statLabel}>{label}</div>
-      <div style={{ ...ui.statValue, fontSize: 16 }}>{value}</div>
-    </div>
-  );
-}
-
-const overlayStyle: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  zIndex: 1000,
-  background: "rgba(15, 23, 42, 0.42)",
-  backdropFilter: "blur(6px)",
-  display: "grid",
-  placeItems: "center",
-  padding: 24,
-};
-
-const modalStyle: React.CSSProperties = {
-  width: "min(680px, 100%)",
-  maxHeight: "min(88vh, 920px)",
-  overflowY: "auto",
-  background: "#fff",
-  borderRadius: 24,
-  border: `1px solid ${theme.border}`,
-  boxShadow: theme.shadow,
-  padding: 18,
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: 12,
-  marginBottom: 16,
-};
-
-const footerStyle: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 18,
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  width: 38,
-  height: 38,
-  borderRadius: 12,
-  border: `1px solid ${theme.border}`,
-  background: "#fff",
-  color: theme.text,
-  display: "grid",
-  placeItems: "center",
-  cursor: "pointer",
-};

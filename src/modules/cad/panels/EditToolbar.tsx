@@ -19,7 +19,7 @@ import {
   FiType,
   FiX,
 } from "react-icons/fi";
-import { ui } from "../../../styles/ui";
+import { useStyles } from "../../../styles/useStyles";
 import type { MirrorAxis, SketchTool } from "../model/types";
 
 type EditToolbarProps = {
@@ -118,12 +118,13 @@ export function EditToolbar({
   hasSelection,
   hasDraft,
 }: EditToolbarProps) {
+  const styles = useStyles();
   const svgInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
     <div
       style={{
-        ...ui.panelInset,
+        ...styles.panelInset,
         padding: 10,
         marginBottom: 12,
         display: "flex",
@@ -143,7 +144,7 @@ export function EditToolbar({
               type="button"
               title={`${item.label} — ${item.hint}`}
               onClick={() => onToolChange(item.id)}
-              style={active ? ui.buttonPrimary : ui.buttonGhost}
+              style={active ? styles.buttonPrimary : styles.buttonGhost}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -156,7 +157,7 @@ export function EditToolbar({
             type="button"
             title="Завершить текущий объект"
             onClick={onCommitPolyline}
-            style={ui.buttonGhost}
+            style={styles.buttonGhost}
             disabled={tool !== "polyline"}
           >
             <FiCheck size={16} />
@@ -169,7 +170,7 @@ export function EditToolbar({
             type="button"
             title="Отменить текущее рисование"
             onClick={onCancelDraft}
-            style={ui.buttonGhost}
+            style={styles.buttonGhost}
           >
             <FiX size={16} />
             <span>Отменить</span>
@@ -180,7 +181,7 @@ export function EditToolbar({
           type="button"
           title="Импортировать SVG"
           onClick={() => svgInputRef.current?.click()}
-          style={ui.buttonGhost}
+          style={styles.buttonGhost}
         >
           <FiImage size={16} />
           <span>SVG</span>
@@ -205,7 +206,7 @@ export function EditToolbar({
             type="button"
             title="Сгруппировать выбранные объекты"
             onClick={onGroupSelected}
-            style={ui.buttonGhost}
+            style={styles.buttonGhost}
           >
             <FiLayers size={16} />
             <span>Группа</span>
@@ -217,7 +218,7 @@ export function EditToolbar({
             type="button"
             title="Разгруппировать выбранную группу"
             onClick={onUngroupSelected}
-            style={ui.buttonGhost}
+            style={styles.buttonGhost}
           >
             <FiX size={16} />
             <span>Разгруппа</span>
@@ -230,7 +231,7 @@ export function EditToolbar({
           onClick={onCloneSelected}
           disabled={!hasSelection}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: hasSelection ? 1 : 0.45,
             cursor: hasSelection ? "pointer" : "not-allowed",
           }}
@@ -245,7 +246,7 @@ export function EditToolbar({
           onClick={onStartLinearArray}
           disabled={!hasSelection}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: hasSelection ? 1 : 0.45,
             cursor: hasSelection ? "pointer" : "not-allowed",
           }}
@@ -260,7 +261,7 @@ export function EditToolbar({
           onClick={onStartCircularArray}
           disabled={!hasSelection}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: hasSelection ? 1 : 0.45,
             cursor: hasSelection ? "pointer" : "not-allowed",
           }}
@@ -275,7 +276,7 @@ export function EditToolbar({
           onClick={() => onMirrorSelected("x")}
           disabled={!hasSelection}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: hasSelection ? 1 : 0.45,
             cursor: hasSelection ? "pointer" : "not-allowed",
           }}
@@ -290,7 +291,7 @@ export function EditToolbar({
           onClick={() => onMirrorSelected("y")}
           disabled={!hasSelection}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: hasSelection ? 1 : 0.45,
             cursor: hasSelection ? "pointer" : "not-allowed",
           }}
@@ -303,7 +304,7 @@ export function EditToolbar({
           type="button"
           title="Удалить выбранный объект"
           onClick={onDeleteSelected}
-          style={ui.buttonDanger}
+          style={styles.buttonDanger}
         >
           <FiTrash2 size={16} />
           <span>Удалить</span>
@@ -313,7 +314,7 @@ export function EditToolbar({
           type="button"
           title="Сбросить масштаб и позицию холста"
           onClick={onResetView}
-          style={ui.buttonGhost}
+          style={styles.buttonGhost}
         >
           <FiMaximize size={16} />
           <span>Вид</span>
@@ -325,7 +326,7 @@ export function EditToolbar({
           onClick={onUndo}
           disabled={!canUndo}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: canUndo ? 1 : 0.45,
             cursor: canUndo ? "pointer" : "not-allowed",
           }}
@@ -340,7 +341,7 @@ export function EditToolbar({
           onClick={onRedo}
           disabled={!canRedo}
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             opacity: canRedo ? 1 : 0.45,
             cursor: canRedo ? "pointer" : "not-allowed",
           }}
@@ -355,7 +356,7 @@ export function EditToolbar({
         onClick={onGenerate}
         disabled={isGenerating}
         title="Сгенерировать G-code из текущего документа"
-        style={{ ...ui.buttonPrimary, flexShrink: 0 }}
+        style={{ ...styles.buttonPrimary, flexShrink: 0 }}
       >
         <FiPlay size={16} />
         {isGenerating ? "Генерация..." : "Сгенерировать G-code"}

@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchRectangle } from "../model/types";
 
@@ -17,6 +18,8 @@ export function RectangleShapeView({
   isSelected,
   onPointerDown,
 }: RectangleShapeViewProps) {
+  const { theme } = useTheme();
+
   const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, documentHeight, view);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
@@ -35,7 +38,7 @@ export function RectangleShapeView({
         width={rectWidth}
         height={rectHeight}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         opacity={0.95}
         pointerEvents="none"

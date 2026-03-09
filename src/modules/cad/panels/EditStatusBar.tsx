@@ -1,4 +1,4 @@
-import { theme } from "../../../styles/ui";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchTool } from "../model/types";
 
 type EditStatusBarProps = {
@@ -18,6 +18,8 @@ export function EditStatusBar({
   isTransforming,
   hasDraft,
 }: EditStatusBarProps) {
+  const { theme } = useTheme();
+
   const interactionLabel = isTransforming
     ? "Трансформация / ограничение"
     : isDragging

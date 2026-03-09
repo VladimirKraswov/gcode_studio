@@ -1,6 +1,7 @@
 import { FiCode, FiEdit3, FiEye } from "react-icons/fi";
 import type { MainTab } from "../types/ui";
-import { theme } from "../styles/ui";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../contexts/ThemeContext";
 
 type MainTabsProps = {
   activeTab: MainTab;
@@ -14,6 +15,9 @@ const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   return (
     <div
       style={{
@@ -35,11 +39,11 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
               padding: "0 16px",
               borderRadius: 999,
               border: isActive
-                ? "1px solid #1d4ed8"
+                ? `1px solid ${theme.primaryText}`
                 : `1px solid ${theme.border}`,
               background: isActive
-                ? "linear-gradient(180deg, #3b82f6 0%, #2563eb 100%)"
-                : "#fff",
+                ? `linear-gradient(180deg, ${theme.primary} 0%, ${theme.primaryText} 100%)`
+                : theme.panelSolid,
               color: isActive ? "#fff" : theme.textSoft,
               fontWeight: 800,
               fontSize: 13,
@@ -48,7 +52,7 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
               alignItems: "center",
               gap: 8,
               boxShadow: isActive
-                ? "0 10px 20px rgba(37, 99, 235, 0.18)"
+                ? `0 10px 20px ${theme.primary}30`
                 : "none",
             }}
           >

@@ -1,4 +1,4 @@
-import { ui } from "../../../styles/ui";
+import { useStyles } from "../../../styles/useStyles";
 import type { TextToolState } from "../editor-state/textToolState";
 
 type TextToolPanelProps = {
@@ -7,15 +7,17 @@ type TextToolPanelProps = {
   onChange: (patch: Partial<TextToolState>) => void;
 };
 
-const miniLabel: React.CSSProperties = {
-  ...ui.inputLabel,
-};
-
 export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelProps) {
+  const styles = useStyles();
+
+  const miniLabel: React.CSSProperties = {
+    ...styles.inputLabel,
+  };
+
   return (
     <div
       style={{
-        ...ui.panelInset,
+        ...styles.panelInset,
         padding: 12,
         marginBottom: 12,
         display: "grid",
@@ -26,7 +28,7 @@ export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelPro
     >
       <label style={miniLabel}>
         Текст
-        <input type="text" value={value.text} onChange={(e) => onChange({ text: e.target.value })} style={ui.input} />
+        <input type="text" value={value.text} onChange={(e) => onChange({ text: e.target.value })} style={styles.input} />
       </label>
 
       <label style={miniLabel}>
@@ -36,7 +38,7 @@ export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelPro
           min="2"
           value={value.height}
           onChange={(e) => onChange({ height: Math.max(2, Number(e.target.value) || 2) })}
-          style={ui.input}
+          style={styles.input}
         />
       </label>
 
@@ -48,13 +50,13 @@ export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelPro
           step="0.5"
           value={value.letterSpacing}
           onChange={(e) => onChange({ letterSpacing: Math.max(0, Number(e.target.value) || 0) })}
-          style={ui.input}
+          style={styles.input}
         />
       </label>
 
       <label style={{ ...miniLabel, gridColumn: "1 / -1" }}>
         Шрифт
-        <select value={value.fontFile} onChange={(e) => onChange({ fontFile: e.target.value })} style={ui.select}>
+        <select value={value.fontFile} onChange={(e) => onChange({ fontFile: e.target.value })} style={styles.select}>
           {fontOptions.map((font) => (
             <option key={font} value={font}>
               {font.split("/").pop()}

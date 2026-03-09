@@ -1,6 +1,7 @@
 // src/components/sections/StockSceneSection.tsx
 import type { PlacementMode, StockDimensions } from "../../types/gcode";
-import { theme, ui } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
+import { useTheme } from "../../contexts/ThemeContext";
 import { RangeCard } from "./RangeCard";
 
 type StockSceneSectionProps = {
@@ -14,15 +15,6 @@ type StockSceneSectionProps = {
   onDetailLevelChange: (level: number) => void;
 };
 
-const radioLine: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 10,
-  fontSize: 13,
-  color: theme.text,
-  marginBottom: 8,
-};
-
 export function StockSceneSection({
   placementMode,
   onPlacementModeChange,
@@ -33,11 +25,23 @@ export function StockSceneSection({
   detailLevel,
   onDetailLevelChange,
 }: StockSceneSectionProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
+  const radioLine: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 13,
+    color: theme.text,
+    marginBottom: 8,
+  };
+
   return (
     <>
       <div
         style={{
-          ...ui.panelInset,
+          ...styles.panelInset,
           padding: 12,
           marginBottom: 12,
         }}
@@ -71,7 +75,7 @@ export function StockSceneSection({
           marginBottom: 12,
         }}
       >
-        <label style={ui.inputLabel}>
+        <label style={styles.inputLabel}>
           Ширина
           <input
             type="number"
@@ -83,10 +87,10 @@ export function StockSceneSection({
                 width: Math.max(1, Number(e.target.value) || 1),
               })
             }
-            style={ui.input}
+            style={styles.input}
           />
         </label>
-        <label style={ui.inputLabel}>
+        <label style={styles.inputLabel}>
           Высота
           <input
             type="number"
@@ -98,10 +102,10 @@ export function StockSceneSection({
                 height: Math.max(1, Number(e.target.value) || 1),
               })
             }
-            style={ui.input}
+            style={styles.input}
           />
         </label>
-        <label style={ui.inputLabel}>
+        <label style={styles.inputLabel}>
           Толщина
           <input
             type="number"
@@ -114,7 +118,7 @@ export function StockSceneSection({
                 thickness: Math.max(0.1, Number(e.target.value) || 0.1),
               })
             }
-            style={ui.input}
+            style={styles.input}
           />
         </label>
       </div>
@@ -126,7 +130,7 @@ export function StockSceneSection({
           gap: 10,
           padding: 12,
           borderRadius: 14,
-          background: "#fff",
+          background: theme.panelSolid,
           border: `1px solid ${theme.border}`,
           fontSize: 13,
           fontWeight: 700,

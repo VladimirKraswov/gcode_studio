@@ -1,3 +1,4 @@
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchDocument } from "../model/types";
 import type { ViewTransform } from "../model/view";
 
@@ -27,6 +28,8 @@ function chooseMajorCadStep(baseStep: number, scale: number): number {
 }
 
 export function CadGrid({ document, view }: CadGridProps) {
+  const { theme } = useTheme();
+
   const baseStep = Math.max(1, document.snapStep || 1);
   const minorCadStep = baseStep;
   const majorCadStep = chooseMajorCadStep(baseStep, view.scale);
@@ -56,14 +59,14 @@ export function CadGrid({ document, view }: CadGridProps) {
           y1={bottom}
           x2={sx}
           y2={bottom + tickMajor}
-          stroke="#64748b"
+          stroke={theme.cad.rulerTickMajor}
           strokeWidth={1}
         />
         <text
           x={sx}
           y={bottom + rulerOffset}
           fontSize="11"
-          fill="#475569"
+          fill={theme.cad.rulerText}
           textAnchor="middle"
         >
           {x}
@@ -82,14 +85,14 @@ export function CadGrid({ document, view }: CadGridProps) {
           y1={sy}
           x2={left}
           y2={sy}
-          stroke="#64748b"
+          stroke={theme.cad.rulerTickMajor}
           strokeWidth={1}
         />
         <text
           x={left - rulerOffset}
           y={sy + 4}
           fontSize="11"
-          fill="#475569"
+          fill={theme.cad.rulerText}
           textAnchor="end"
         >
           {y}
@@ -109,7 +112,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={sx}
         y2={bottom + tickMinor}
-        stroke="#94a3b8"
+        stroke={theme.cad.rulerTickMinor}
         strokeWidth={1}
       />,
     );
@@ -126,7 +129,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={sy}
         x2={left}
         y2={sy}
-        stroke="#94a3b8"
+        stroke={theme.cad.rulerTickMinor}
         strokeWidth={1}
       />,
     );
@@ -146,7 +149,7 @@ export function CadGrid({ document, view }: CadGridProps) {
           <path
             d={`M ${minorStep} 0 L 0 0 0 ${minorStep}`}
             fill="none"
-            stroke="#e2e8f0"
+            stroke={theme.cad.gridMinor}
             strokeWidth="1"
           />
         </pattern>
@@ -163,7 +166,7 @@ export function CadGrid({ document, view }: CadGridProps) {
           <path
             d={`M ${majorStep} 0 L 0 0 0 ${majorStep}`}
             fill="none"
-            stroke="#cbd5e1"
+            stroke={theme.cad.gridMajor}
             strokeWidth="1.2"
           />
         </pattern>
@@ -183,7 +186,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={right}
         y2={bottom}
-        stroke="#ef4444"
+        stroke={theme.cad.axisX}
         strokeWidth={1.5}
       />
       <line
@@ -191,18 +194,18 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={left}
         y2={top}
-        stroke="#2563eb"
+        stroke={theme.cad.axisY}
         strokeWidth={1.5}
       />
 
       {/* Стрелки направлений */}
       <polygon
         points={`${right + 10},${bottom} ${right + 2},${bottom - 4} ${right + 2},${bottom + 4}`}
-        fill="#ef4444"
+        fill={theme.cad.axisX}
       />
       <polygon
         points={`${left},${top - 10} ${left - 4},${top - 2} ${left + 4},${top - 2}`}
-        fill="#2563eb"
+        fill={theme.cad.axisY}
       />
 
       {/* Линейка X */}
@@ -211,7 +214,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom + 14}
         x2={right}
         y2={bottom + 14}
-        stroke="#cbd5e1"
+        stroke={theme.cad.ruler}
         strokeWidth={1}
       />
       {xMinorTicks}
@@ -223,7 +226,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={left - 14}
         y2={top}
-        stroke="#cbd5e1"
+        stroke={theme.cad.ruler}
         strokeWidth={1}
       />
       {yMinorTicks}
@@ -235,7 +238,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 4}
         fontSize="12"
         fontWeight="700"
-        fill="#ef4444"
+        fill={theme.cad.axisX}
       >
         +X
       </text>
@@ -245,7 +248,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 4}
         fontSize="12"
         fontWeight="700"
-        fill="#ef4444"
+        fill={theme.cad.axisX}
         textAnchor="end"
       >
         -X
@@ -256,7 +259,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={top - 14}
         fontSize="12"
         fontWeight="700"
-        fill="#2563eb"
+        fill={theme.cad.axisY}
       >
         +Y
       </text>
@@ -266,7 +269,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 28}
         fontSize="12"
         fontWeight="700"
-        fill="#2563eb"
+        fill={theme.cad.axisY}
       >
         -Y
       </text>
@@ -277,7 +280,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 22}
         fontSize="11"
         fontWeight="700"
-        fill="#0f172a"
+        fill={theme.cad.axisText}
       >
         X
       </text>
@@ -287,20 +290,20 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={top - 18}
         fontSize="11"
         fontWeight="700"
-        fill="#0f172a"
+        fill={theme.cad.axisText}
         textAnchor="middle"
       >
         Y
       </text>
 
       {/* Ноль */}
-      <circle cx={left} cy={bottom} r={3.5} fill="#0f172a" />
+      <circle cx={left} cy={bottom} r={3.5} fill={theme.cad.axisText} />
       <text
         x={left + 8}
         y={bottom - 8}
         fontSize="11"
         fontWeight="700"
-        fill="#0f172a"
+        fill={theme.cad.axisText}
       >
         0,0
       </text>

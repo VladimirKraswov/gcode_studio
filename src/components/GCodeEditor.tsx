@@ -24,6 +24,8 @@ import {
   FiX,
 } from "react-icons/fi";
 import { downloadTextFile } from "../utils";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../contexts/ThemeContext";
 
 type GCodeEditorProps = {
   source: string;
@@ -60,19 +62,10 @@ const gcodeLanguage = StreamLanguage.define({
   token: (stream: StringStream) => {
     if (stream.eatSpace()) return null;
 
-    // Комментарии ;...
     if (stream.match(/^;.*/)) return "comment";
-
-    // Номера строк N10, N100
     if (stream.match(/^[Nn]\d+/)) return "atom";
-
-    // G/M/T/S/F/P/L команды
     if (stream.match(/^[GgMmTtSsFfPpLl]\d+(\.\d+)?/)) return "keyword";
-
-    // Координаты и параметры
     if (stream.match(/^[XYZIJKABCUWV]\s*[+-]?\d*\.?\d+/)) return "variableName";
-
-    // Просто числа
     if (stream.match(/^[+-]?\d*\.?\d+/)) return "number";
 
     stream.next();
@@ -80,64 +73,117 @@ const gcodeLanguage = StreamLanguage.define({
   },
 });
 
-// --- Стили для тегов (One Dark) ---
+// --- Стили для тегов (One Dark) — можно оставить одинаковыми для обеих тем,
+//     но можно сделать и отдельные светлые стили. Пока оставим так.
 const oneDarkHighlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: "#7f8c8d", fontStyle: "italic" },
-  { tag: tags.keyword, color: "#c678dd" }, // фиолетовый (G‑коды, M‑коды)
-  { tag: tags.variableName, color: "#61afef" }, // синий (координаты)
-  { tag: tags.number, color: "#d19a66" }, // оранжевый
-  { tag: tags.atom, color: "#e5c07b" }, // жёлтый (номера строк)
+  { tag: tags.keyword, color: "#c678dd" },
+  { tag: tags.variableName, color: "#61afef" },
+  { tag: tags.number, color: "#d19a66" },
+  { tag: tags.atom, color: "#e5c07b" },
 ]);
 
-// --- Тема редактора (One Dark) ---
-const editorTheme = EditorView.theme({
-  "&": {
-    height: "100%",
-    width: "100%",
-    fontSize: "13px",
-    backgroundColor: "#282c34",
-    color: "#abb2bf",
+const lightEditorTheme = EditorView.theme(
+  {
+    "&": {
+      height: "100%",
+      width: "100%",
+      fontSize: "13px",
+      color: "#24292e",
+      backgroundColor: "#ffffff",
+    },
+
+    ".cm-editor": {
+      height: "100%",
+      backgroundColor: "#ffffff",
+    },
+
+    ".cm-scroller": {
+      backgroundColor: "#ffffff",
+      color: "#24292e",
+      fontFamily: "monospace",
+    },
+
+    ".cm-content": {
+      caretColor: "#0366d6",
+    },
+
+    ".cm-gutters": {
+      backgroundColor: "#f6f8fa",
+      color: "#6a737d",
+      borderRight: "1px solid #e1e4e8",
+    },
+
+    ".cm-activeLine": {
+      backgroundColor: "#f0f3f5",
+    },
+
+    ".cm-activeLineGutter": {
+      backgroundColor: "#e2e5e9",
+      color: "#24292e",
+    },
+
+    ".cm-cursor": {
+      borderLeftColor: "#0366d6",
+    },
+
+    ".cm-selectionBackground, ::selection": {
+      backgroundColor: "#c8e1ff",
+    },
   },
-  ".cm-editor": {
-    height: "100%",
+  { dark: false }
+);
+
+const darkEditorTheme = EditorView.theme(
+  {
+    "&": {
+      height: "100%",
+      width: "100%",
+      fontSize: "13px",
+      color: "#abb2bf",
+      backgroundColor: "#282c34",
+    },
+
+    ".cm-editor": {
+      height: "100%",
+      backgroundColor: "#282c34",
+    },
+
+    ".cm-scroller": {
+      backgroundColor: "#282c34",
+      color: "#abb2bf",
+      fontFamily: "monospace",
+    },
+
+    ".cm-content": {
+      caretColor: "#61afef",
+    },
+
+    ".cm-gutters": {
+      backgroundColor: "#21252b",
+      color: "#7f848e",
+      borderRight: "1px solid #3e4451",
+    },
+
+    ".cm-activeLine": {
+      backgroundColor: "rgba(97, 175, 239, 0.10)",
+    },
+
+    ".cm-activeLineGutter": {
+      backgroundColor: "rgba(97, 175, 239, 0.16)",
+      color: "#abb2bf",
+    },
+
+    ".cm-cursor": {
+      borderLeftColor: "#61afef",
+    },
+
+    ".cm-selectionBackground, ::selection": {
+      backgroundColor: "rgba(80, 160, 210, 0.3)",
+    },
   },
-  ".cm-scroller": {
-    overflow: "auto !important",
-    fontFamily:
-      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-    lineHeight: "1.6",
-    padding: "8px 0",
-  },
-  ".cm-content": {
-    padding: "14px 16px",
-    whiteSpace: "pre",
-    caretColor: "#61afef",
-  },
-  ".cm-line": {
-    padding: "0 4px",
-  },
-  ".cm-focused": {
-    outline: "none",
-  },
-  ".cm-gutters": {
-    backgroundColor: "#21252b",
-    color: "#7f848e",
-    borderRight: "1px solid #3e4451",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "rgba(97, 175, 239, 0.10)",
-  },
-  ".cm-activeLineGutter": {
-    backgroundColor: "rgba(97, 175, 239, 0.16)",
-    color: "#abb2bf",
-  },
-  ".cm-cursor": {
-    borderLeftColor: "#61afef",
-  },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-    backgroundColor: "rgba(80, 160, 210, 0.3)",
-  },
-});
+  { dark: true }
+);
 
 export function GCodeEditor({
   source,
@@ -147,6 +193,8 @@ export function GCodeEditor({
   onClose,
   title = "Редактор G-code",
 }: GCodeEditorProps) {
+  const styles = useStyles();
+  const { theme, isDark } = useTheme(); // получаем флаг тёмной темы
   const editorRef = useRef<ReactCodeMirrorRef | null>(null);
   const localValueRef = useRef(source);
 
@@ -174,7 +222,7 @@ export function GCodeEditor({
       EditorView.editable.of(true),
       gcodeLanguage,
       syntaxHighlighting(oneDarkHighlightStyle),
-      editorTheme,
+      isDark ? darkEditorTheme : lightEditorTheme, // выбираем тему в зависимости от isDark
       keymap.of([
         {
           key: "Mod-s",
@@ -186,7 +234,7 @@ export function GCodeEditor({
         },
       ]),
     ];
-  }, [handleSave]);
+  }, [handleSave, isDark]);
 
   const handleChange = useCallback((value: string) => {
     localValueRef.current = value;
@@ -276,19 +324,17 @@ export function GCodeEditor({
         flexDirection: "column",
         borderRadius: isTab ? 20 : 24,
         overflow: "hidden",
-        background:
-          "linear-gradient(180deg, rgba(248,250,252,1) 0%, rgba(241,245,249,1) 100%)",
-        border: "1px solid #e2e8f0",
-        boxShadow:
-          "0 10px 30px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.05)",
+        background: theme.panelMuted,
+        border: `1px solid ${theme.border}`,
+        boxShadow: theme.shadow,
       }}
     >
       {/* Шапка и панель команд */}
       <div
         style={{
           padding: "16px 16px 14px",
-          borderBottom: "1px solid #e2e8f0",
-          background: "rgba(255,255,255,0.78)",
+          borderBottom: `1px solid ${theme.border}`,
+          background: theme.panel,
           backdropFilter: "blur(10px)",
           display: "flex",
           flexDirection: "column",
@@ -305,7 +351,7 @@ export function GCodeEditor({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={iconBadgeStyle}>
+            <div style={styles.iconBadge}>
               <FiFileText size={18} />
             </div>
 
@@ -323,14 +369,26 @@ export function GCodeEditor({
                     margin: 0,
                     fontSize: 17,
                     fontWeight: 700,
-                    color: "#0f172a",
+                    color: theme.text,
                   }}
                 >
                   {title}
                 </h3>
 
                 {isDirty && (
-                  <span style={dirtyBadgeStyle}>Есть изменения</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: theme.warning,
+                      background: theme.warning + "20",
+                      border: `1px solid ${theme.warning}`,
+                      padding: "2px 8px",
+                      borderRadius: 999,
+                    }}
+                  >
+                    Есть изменения
+                  </span>
                 )}
               </div>
 
@@ -338,7 +396,7 @@ export function GCodeEditor({
                 style={{
                   marginTop: 4,
                   fontSize: 12,
-                  color: "#64748b",
+                  color: theme.textMuted,
                 }}
               >
                 {fileName} · {stats.lines} строк · {stats.chars} символов
@@ -351,7 +409,7 @@ export function GCodeEditor({
               <button
                 type="button"
                 onClick={onClose}
-                style={toolbarGhostButtonStyle}
+                style={styles.buttonGhost}
                 title="Закрыть редактор"
               >
                 <FiX size={15} />
@@ -362,7 +420,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleApply}
-              style={toolbarPrimaryButtonStyle}
+              style={styles.buttonPrimary}
               title="Применить изменения"
             >
               <FiCheck size={16} />
@@ -372,7 +430,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleSave}
-              style={toolbarButtonStyle}
+              style={styles.buttonGhost}
               title="Сохранить как файл"
             >
               <FiDownload size={16} />
@@ -382,7 +440,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleReset}
-              style={toolbarButtonStyle}
+              style={styles.buttonGhost}
               title="Вернуть исходный текст"
             >
               <FiRefreshCw size={16} />
@@ -392,7 +450,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleClear}
-              style={toolbarDangerButtonStyle}
+              style={styles.buttonDanger}
               title="Очистить редактор"
             >
               <FiTrash2 size={16} />
@@ -408,8 +466,8 @@ export function GCodeEditor({
             gap: 8,
             padding: 12,
             borderRadius: 16,
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            background: theme.panelSolid,
+            border: `1px solid ${theme.border}`,
             position: "sticky",
             top: 0,
           }}
@@ -421,7 +479,7 @@ export function GCodeEditor({
               gap: 8,
               fontSize: 14,
               fontWeight: 600,
-              color: "#0f172a",
+              color: theme.text,
             }}
           >
             <FiCommand size={16} />
@@ -436,7 +494,7 @@ export function GCodeEditor({
                 left: 10,
                 top: "50%",
                 transform: "translateY(-50%)",
-                color: "#64748b",
+                color: theme.textMuted,
               }}
             />
             <input
@@ -444,7 +502,10 @@ export function GCodeEditor({
               value={commandSearch}
               onChange={(e) => setCommandSearch(e.target.value)}
               placeholder="Найти команду..."
-              style={searchInputStyle}
+              style={{
+                ...styles.input,
+                paddingLeft: 32,
+              }}
             />
           </div>
 
@@ -463,7 +524,7 @@ export function GCodeEditor({
                 key={cmd}
                 type="button"
                 onClick={() => handleAddCommand(cmd)}
-                style={commandButtonStyle}
+                style={styles.buttonGhost}
                 title={`Вставить ${cmd}`}
               >
                 <FiEdit3 size={14} />
@@ -472,7 +533,7 @@ export function GCodeEditor({
             ))}
 
             {filteredCommands.length === 0 && (
-              <div style={{ fontSize: 13, color: "#64748b" }}>
+              <div style={{ fontSize: 13, color: theme.textMuted }}>
                 Команды не найдены
               </div>
             )}
@@ -495,10 +556,10 @@ export function GCodeEditor({
           style={{
             padding: "8px 12px",
             borderRadius: 12,
-            background: "#ffffff",
-            border: "1px solid #e2e8f0",
+            background: theme.panelSolid,
+            border: `1px solid ${theme.border}`,
             fontSize: 12,
-            color: "#64748b",
+            color: theme.textMuted,
             display: "flex",
             justifyContent: "space-between",
             gap: 10,
@@ -510,7 +571,7 @@ export function GCodeEditor({
             <span>Кнопки команд вставляют текст в курсор</span>
           </div>
 
-          <div style={{ fontWeight: 600, color: isDirty ? "#b45309" : "#16a34a" }}>
+          <div style={{ fontWeight: 600, color: isDirty ? theme.warning : theme.success }}>
             {isDirty ? "Не сохранено" : "Синхронизировано"}
           </div>
         </div>
@@ -522,9 +583,8 @@ export function GCodeEditor({
             minHeight: 0,
             borderRadius: 18,
             overflow: "hidden",
-            border: "1px solid #1e293b",
-            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-            background: "#282c34",
+            border: `1px solid ${isDark ? "#1e293b" : "#e2e8f0"}`,
+            boxShadow: "inset 0 1px 0 rgba(0,0,0,0.04)",
             display: "flex",
           }}
         >
@@ -534,6 +594,7 @@ export function GCodeEditor({
             height="100%"
             width="100%"
             extensions={extensions}
+            // theme={isDark ? "dark" : "light"}
             basicSetup={{
               foldGutter: false,
               dropCursor: false,
@@ -555,85 +616,3 @@ export function GCodeEditor({
     </div>
   );
 }
-
-// --- Стили для кнопок и значков ---
-const iconBadgeStyle: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: 14,
-  display: "grid",
-  placeItems: "center",
-  background: "#dbeafe",
-  color: "#2563eb",
-  flexShrink: 0,
-};
-
-const dirtyBadgeStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 700,
-  color: "#92400e",
-  background: "#fef3c7",
-  border: "1px solid #fde68a",
-  padding: "2px 8px",
-  borderRadius: 999,
-};
-
-const searchInputStyle: React.CSSProperties = {
-  width: "100%",
-  height: 36,
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  padding: "0 12px 0 32px",
-  fontSize: 13,
-  outline: "none",
-  background: "#f8fafc",
-};
-
-const toolbarButtonStyle: React.CSSProperties = {
-  height: 38,
-  padding: "0 14px",
-  borderRadius: 12,
-  border: "1px solid #cbd5e1",
-  background: "#ffffff",
-  color: "#0f172a",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const toolbarGhostButtonStyle: React.CSSProperties = {
-  ...toolbarButtonStyle,
-  background: "#f8fafc",
-};
-
-const toolbarPrimaryButtonStyle: React.CSSProperties = {
-  ...toolbarButtonStyle,
-  background: "linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%)",
-  color: "#ffffff",
-  border: "1px solid #1d4ed8",
-};
-
-const toolbarDangerButtonStyle: React.CSSProperties = {
-  ...toolbarButtonStyle,
-  background: "#fff1f2",
-  color: "#be123c",
-  border: "1px solid #fecdd3",
-};
-
-const commandButtonStyle: React.CSSProperties = {
-  height: 34,
-  padding: "0 12px",
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  background: "#f8fafc",
-  color: "#0f172a",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 6,
-  fontSize: 12,
-  fontWeight: 600,
-  cursor: "pointer",
-};

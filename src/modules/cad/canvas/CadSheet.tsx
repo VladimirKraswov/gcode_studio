@@ -1,3 +1,4 @@
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchDocument } from "../model/types";
 import type { ViewTransform } from "../model/view";
 
@@ -7,14 +8,16 @@ type CadSheetProps = {
 };
 
 export function CadSheet({ document, view }: CadSheetProps) {
+  const { theme } = useTheme();
+
   return (
     <rect
       x={view.offsetX}
       y={view.offsetY}
       width={document.width * view.scale}
       height={document.height * view.scale}
-      fill="rgba(255,255,255,0.86)"
-      stroke="#cbd5e1"
+      fill={theme.cad.sheetFill}
+      stroke={theme.cad.sheetStroke}
       strokeWidth={1.5}
     />
   );

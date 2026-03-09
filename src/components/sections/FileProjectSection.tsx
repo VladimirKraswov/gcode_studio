@@ -1,6 +1,7 @@
 import type { ChangeEvent } from "react";
 import { FiBox, FiCamera, FiFolder, FiSave, FiUpload } from "react-icons/fi";
-import { theme, ui } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type FileProjectSectionProps = {
   fileName: string;
@@ -19,11 +20,14 @@ export function FileProjectSection({
   onLoadDemo,
   onResetCamera,
 }: FileProjectSectionProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   return (
     <>
       <label
         style={{
-          ...ui.buttonGhost,
+          ...styles.buttonGhost,
           width: "100%",
           justifyContent: "center",
           marginBottom: 12,
@@ -56,7 +60,7 @@ export function FileProjectSection({
       >
         <label
           style={{
-            ...ui.buttonGhost,
+            ...styles.buttonGhost,
             width: "100%",
             justifyContent: "center",
             position: "relative",
@@ -78,7 +82,7 @@ export function FileProjectSection({
           />
         </label>
 
-        <button type="button" onClick={onSaveProject} style={ui.buttonGhost}>
+        <button type="button" onClick={onSaveProject} style={styles.buttonGhost}>
           <FiSave size={15} />
           Сохранить .gs
         </button>
@@ -86,12 +90,12 @@ export function FileProjectSection({
 
       <div
         style={{
-          ...ui.panelInset,
+          ...styles.panelInset,
           padding: 12,
           marginBottom: 12,
         }}
       >
-        <div style={ui.mutedText}>Текущий файл</div>
+        <div style={styles.mutedText}>Текущий файл</div>
         <div
           style={{
             marginTop: 6,
@@ -105,11 +109,11 @@ export function FileProjectSection({
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <button type="button" onClick={onLoadDemo} style={ui.buttonGhost}>
+        <button type="button" onClick={onLoadDemo} style={styles.buttonGhost}>
           <FiBox size={15} />
           Демо
         </button>
-        <button type="button" onClick={onResetCamera} style={ui.buttonGhost}>
+        <button type="button" onClick={onResetCamera} style={styles.buttonGhost}>
           <FiCamera size={15} />
           Камера
         </button>

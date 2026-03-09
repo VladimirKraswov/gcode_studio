@@ -1,4 +1,5 @@
-import { theme, ui } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type RangeCardProps = {
   label: string;
@@ -19,10 +20,13 @@ export function RangeCard({
   current,
   onChange,
 }: RangeCardProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   return (
     <div
       style={{
-        ...ui.panelInset,
+        ...styles.panelInset,
         padding: 12,
         marginBottom: 10,
       }}

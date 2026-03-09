@@ -14,7 +14,8 @@ import {
   FiTrash2,
   FiType,
 } from "react-icons/fi";
-import { theme, ui } from "../../../styles/ui";
+import { useStyles } from "../../../styles/useStyles";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SelectionState } from "../model/selection";
 import { selectOnly } from "../model/selection";
 import type { SketchArrayDefinition, SketchDocument, SketchShape } from "../model/types";
@@ -96,6 +97,8 @@ export function ObjectListPanel({
   onDeleteShape,
   onReorderShapes,
 }: ObjectListPanelProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
   const [draggedShapeId, setDraggedShapeId] = useState<string | null>(null);
 
   const items = useMemo<ListItem[]>(() => {
@@ -142,10 +145,102 @@ export function ObjectListPanel({
     onReorderShapes(next);
   }
 
+  const iconButtonStyle: React.CSSProperties = {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    border: `1px solid ${theme.border}`,
+    background: theme.panelSolid,
+    color: theme.text,
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    padding: 0,
+  };
+
+  function ShapeRow({
+    shape,
+    active,
+    onSelect,
+    onRename,
+    onToggleVisibility,
+    onDelete,
+    onDragStart,
+    onDragOver,
+    onDragEnd,
+  }: {
+    shape: SketchShape;
+    active: boolean;
+    onSelect: () => void;
+    onRename: (name: string) => void;
+    onToggleVisibility: () => void;
+    onDelete: () => void;
+    onDragStart: () => void;
+    onDragOver: () => void;
+    onDragEnd: () => void;
+  }) {
+    return (
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragOver={(e) => {
+          e.preventDefault();
+          onDragOver();
+        }}
+        onDragEnd={onDragEnd}
+        style={{
+          border: `1px solid ${active ? theme.primary : theme.border}`,
+          borderRadius: 12,
+          background: active ? theme.primarySoft : theme.panelSolid,
+          padding: 10,
+          display: "grid",
+          gap: 8,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <button
+            type="button"
+            onClick={onSelect}
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              cursor: "pointer",
+              color: theme.text,
+              fontWeight: 700,
+              minWidth: 0,
+            }}
+          >
+            <span style={{ display: "grid", placeItems: "center", width: 20, height: 20 }}>
+              {getShapeIcon(shape)}
+            </span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {shape.name}
+            </span>
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button type="button" onClick={onToggleVisibility} style={iconButtonStyle}>
+              {shape.visible !== false ? <FiEye size={14} /> : <FiEyeOff size={14} />}
+            </button>
+            <button type="button" onClick={onDelete} style={iconButtonStyle}>
+              <FiTrash2 size={14} />
+            </button>
+          </div>
+        </div>
+
+        <input type="text" value={shape.name} onChange={(e) => onRename(e.target.value)} style={styles.input} />
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
-        ...ui.panel,
+        ...styles.panel,
         padding: 12,
         width: 320,
         minWidth: 280,
@@ -159,7 +254,7 @@ export function ObjectListPanel({
       className="scrollbar-thin"
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={ui.iconBadge}>
+        <div style={styles.iconBadge}>
           <FiLayers size={16} />
         </div>
         <div>
@@ -174,7 +269,7 @@ export function ObjectListPanel({
 
       <div style={{ display: "grid", gap: 10 }}>
         {items.length === 0 && (
-          <div style={{ ...ui.panelInset, padding: 12, color: theme.textMuted, fontSize: 13 }}>
+          <div style={{ ...styles.panelInset, padding: 12, color: theme.textMuted, fontSize: 13 }}>
             Пока нет объектов.
           </div>
         )}
@@ -191,9 +286,9 @@ export function ObjectListPanel({
               <div
                 key={item.groupId}
                 style={{
-                  border: `1px solid ${selected ? "#93c5fd" : theme.border}`,
+                  border: `1px solid ${selected ? theme.primary : theme.border}`,
                   borderRadius: 14,
-                  background: selected ? "#eff6ff" : "#fff",
+                  background: selected ? theme.primarySoft : theme.panelSolid,
                   overflow: "hidden",
                 }}
               >
@@ -266,7 +361,7 @@ export function ObjectListPanel({
                     type="text"
                     value={group?.name ?? ""}
                     onChange={(e) => onRenameGroup(item.groupId, e.target.value)}
-                    style={ui.input}
+                    style={styles.input}
                   />
 
                   {arrayBadge && (
@@ -279,7 +374,7 @@ export function ObjectListPanel({
                         flexWrap: "wrap",
                         padding: 10,
                         borderRadius: 12,
-                        background: "#fff",
+                        background: theme.panelSolid,
                         border: `1px solid ${theme.border}`,
                       }}
                     >
@@ -300,7 +395,7 @@ export function ObjectListPanel({
                       <button
                         type="button"
                         onClick={() => openArrayEditor(item.groupId)}
-                        style={ui.buttonGhost}
+                        style={styles.buttonGhost}
                       >
                         <FiEdit3 size={14} />
                         Изменить массив
@@ -350,95 +445,3 @@ export function ObjectListPanel({
     </div>
   );
 }
-
-function ShapeRow({
-  shape,
-  active,
-  onSelect,
-  onRename,
-  onToggleVisibility,
-  onDelete,
-  onDragStart,
-  onDragOver,
-  onDragEnd,
-}: {
-  shape: SketchShape;
-  active: boolean;
-  onSelect: () => void;
-  onRename: (name: string) => void;
-  onToggleVisibility: () => void;
-  onDelete: () => void;
-  onDragStart: () => void;
-  onDragOver: () => void;
-  onDragEnd: () => void;
-}) {
-  return (
-    <div
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={(e) => {
-        e.preventDefault();
-        onDragOver();
-      }}
-      onDragEnd={onDragEnd}
-      style={{
-        border: `1px solid ${active ? "#93c5fd" : theme.border}`,
-        borderRadius: 12,
-        background: active ? "#eff6ff" : "#fff",
-        padding: 10,
-        display: "grid",
-        gap: 8,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-        <button
-          type="button"
-          onClick={onSelect}
-          style={{
-            border: "none",
-            background: "transparent",
-            padding: 0,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            cursor: "pointer",
-            color: theme.text,
-            fontWeight: 700,
-            minWidth: 0,
-          }}
-        >
-          <span style={{ display: "grid", placeItems: "center", width: 20, height: 20 }}>
-            {getShapeIcon(shape)}
-          </span>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {shape.name}
-          </span>
-        </button>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <button type="button" onClick={onToggleVisibility} style={iconButtonStyle}>
-            {shape.visible !== false ? <FiEye size={14} /> : <FiEyeOff size={14} />}
-          </button>
-          <button type="button" onClick={onDelete} style={iconButtonStyle}>
-            <FiTrash2 size={14} />
-          </button>
-        </div>
-      </div>
-
-      <input type="text" value={shape.name} onChange={(e) => onRename(e.target.value)} style={ui.input} />
-    </div>
-  );
-}
-
-const iconButtonStyle: React.CSSProperties = {
-  width: 30,
-  height: 30,
-  borderRadius: 10,
-  border: `1px solid ${theme.border}`,
-  background: "#fff",
-  color: theme.text,
-  display: "grid",
-  placeItems: "center",
-  cursor: "pointer",
-  padding: 0,
-};

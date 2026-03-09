@@ -7,7 +7,8 @@ import {
 } from "react-icons/fi";
 import type { CameraInfo, CurrentState, ParsedStats, Bounds, StockDimensions } from "../../types/gcode";
 import { fmt } from "../../utils";
-import { ui, theme } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type InfoPanelSectionProps = {
   bounds: Bounds;
@@ -19,6 +20,7 @@ type InfoPanelSectionProps = {
 };
 
 function PanelGroup({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
+  const { theme } = useTheme();
   return (
     <section style={{ marginBottom: 18 }}>
       <div
@@ -56,12 +58,13 @@ function StatGrid({ children }: { children: React.ReactNode }) {
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
-    <div style={ui.statCard}>
-      <div style={ui.statLabel}>{label}</div>
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
       <div
         style={{
-          ...ui.statValue,
+          ...styles.statValue,
           fontSize: 15,
           wordBreak: "break-word",
         }}
@@ -80,11 +83,14 @@ export function InfoPanelSection({
   cameraInfo,
   totalLength,
 }: InfoPanelSectionProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   return (
-    <div style={{ ...ui.panel, padding: 16 }}>
-      <div style={ui.panelHeader}>
-        <h3 style={ui.sectionTitle}>
-          <div style={ui.iconBadge}>
+    <div style={{ ...styles.panel, padding: 16 }}>
+      <div style={styles.panelHeader}>
+        <h3 style={styles.sectionTitle}>
+          <div style={styles.iconBadge}>
             <FiActivity size={18} />
           </div>
           <span>Информация</span>
@@ -118,11 +124,11 @@ export function InfoPanelSection({
           <MiniStat label="Строка" value={String(currentState.lineNumber)} />
         </StatGrid>
 
-        <div style={{ marginTop: 10, ...ui.statCard }}>
-          <div style={ui.statLabel}>Текущая строка G‑code</div>
+        <div style={{ marginTop: 10, ...styles.statCard }}>
+          <div style={styles.statLabel}>Текущая строка G‑code</div>
           <div
             style={{
-              ...ui.statValue,
+              ...styles.statValue,
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
               fontSize: 14,
               wordBreak: "break-word",
@@ -150,7 +156,7 @@ export function InfoPanelSection({
             />
           </div>
         ) : (
-          <div style={{ ...ui.panelInset, padding: 12, color: theme.textMuted }}>
+          <div style={{ ...styles.panelInset, padding: 12, color: theme.textMuted }}>
             Нет данных камеры
           </div>
         )}

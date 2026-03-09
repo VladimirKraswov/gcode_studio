@@ -1,5 +1,6 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
 import { sampleArcPoints } from "../../geometry/geometryEngine";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchArc } from "../model/types";
 
@@ -18,6 +19,8 @@ export function ArcShapeView({
   isSelected,
   onPointerDown,
 }: ArcShapeViewProps) {
+  const { theme } = useTheme();
+
   const points = sampleArcPoints(
     { x: shape.cx, y: shape.cy },
     shape.radius,
@@ -40,7 +43,7 @@ export function ArcShapeView({
       <polyline
         points={points}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"

@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchPolylinePoint } from "../model/types";
 import type { DraftShape } from "../geometry/draftGeometry";
@@ -25,6 +26,8 @@ export function DraftOverlay({
   documentHeight,
   view,
 }: DraftOverlayProps) {
+  const { theme } = useTheme();
+
   const polylinePreview = getPolylinePreviewPoints(
     polylineDraft,
     polylineHoverPoint,
@@ -43,7 +46,7 @@ export function DraftOverlay({
                 })
                 .join(" ")}
               fill="none"
-              stroke="#ef4444"
+              stroke={theme.cad.draftAccent}
               strokeWidth={1.5}
               strokeDasharray="6 4"
               strokeLinecap="round"
@@ -59,8 +62,8 @@ export function DraftOverlay({
                 cx={p.x}
                 cy={p.y}
                 r={3.5}
-                fill="#ffffff"
-                stroke="#ef4444"
+                fill={theme.cad.constraintLabelFill}
+                stroke={theme.cad.draftAccent}
                 strokeWidth={1.5}
               />
             );
@@ -73,7 +76,7 @@ export function DraftOverlay({
                 cx={p.x}
                 cy={p.y}
                 r={3}
-                fill="#ef4444"
+                fill={theme.cad.draftAccent}
                 opacity={0.85}
               />
             );
@@ -95,8 +98,8 @@ export function DraftOverlay({
             y={p.y}
             width={rect.width * view.scale}
             height={rect.height * view.scale}
-            fill="rgba(37,99,235,0.12)"
-            stroke="#2563eb"
+            fill={theme.cad.draftFill}
+            stroke={theme.cad.draftStroke}
             strokeDasharray="6 4"
             strokeWidth={1.5}
             rx={8}
@@ -117,8 +120,8 @@ export function DraftOverlay({
             cx={p.x}
             cy={p.y}
             r={circle.radius * view.scale}
-            fill="rgba(37,99,235,0.12)"
-            stroke="#2563eb"
+            fill={theme.cad.draftFill}
+            stroke={theme.cad.draftStroke}
             strokeDasharray="6 4"
             strokeWidth={1.5}
           />
@@ -144,7 +147,7 @@ export function DraftOverlay({
             y1={p1.y}
             x2={p2.x}
             y2={p2.y}
-            stroke="#2563eb"
+            stroke={theme.cad.draftStroke}
             strokeDasharray="6 4"
             strokeWidth={1.5}
             strokeLinecap="round"
@@ -170,14 +173,14 @@ export function DraftOverlay({
               cx={center.x}
               cy={center.y}
               r={4}
-              fill="#2563eb"
+              fill={theme.cad.draftStroke}
             />
             <line
               x1={center.x}
               y1={center.y}
               x2={end.x}
               y2={end.y}
-              stroke="#2563eb"
+              stroke={theme.cad.draftStroke}
               strokeDasharray="6 4"
               strokeWidth={1.5}
               strokeLinecap="round"
@@ -213,14 +216,14 @@ export function DraftOverlay({
 
         return (
           <>
-            <circle cx={center.x} cy={center.y} r={4} fill="#2563eb" />
+            <circle cx={center.x} cy={center.y} r={4} fill={theme.cad.draftStroke} />
 
             <line
               x1={center.x}
               y1={center.y}
               x2={start.x}
               y2={start.y}
-              stroke="#93c5fd"
+              stroke={theme.cad.draftGuide}
               strokeDasharray="4 4"
               strokeWidth={1.25}
               strokeLinecap="round"
@@ -231,7 +234,7 @@ export function DraftOverlay({
               y1={center.y}
               x2={end.x}
               y2={end.y}
-              stroke="#93c5fd"
+              stroke={theme.cad.draftGuide}
               strokeDasharray="4 4"
               strokeWidth={1.25}
               strokeLinecap="round"
@@ -240,7 +243,7 @@ export function DraftOverlay({
             <polyline
               points={points}
               fill="none"
-              stroke="#2563eb"
+              stroke={theme.cad.draftStroke}
               strokeDasharray="6 4"
               strokeWidth={1.5}
               strokeLinecap="round"

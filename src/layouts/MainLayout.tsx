@@ -1,7 +1,6 @@
 // src/layouts/MainLayout.tsx
-// src/layouts/MainLayout.tsx
 import type { ReactNode } from "react";
-import { ui } from "../styles/ui";
+import { useStyles } from "../styles/useStyles";
 
 type MainLayoutProps = {
   header: ReactNode;
@@ -11,23 +10,25 @@ type MainLayoutProps = {
 };
 
 export function MainLayout({ header, leftPanel, centerPanel, rightPanel }: MainLayoutProps) {
+  const styles = useStyles();
+
   return (
-    <div style={ui.appShell}>
-      <div style={ui.page}>
-        <div style={ui.pageGrid}>
+    <div style={styles.appShell}>
+      <div style={styles.page}>
+        <div style={styles.pageGrid}>
           {/* Левая колонка */}
-          <div style={ui.column}>
+          <div style={styles.column}>
             {leftPanel}
           </div>
 
           {/* Центральная колонка */}
-          <div style={ui.column}>
+          <div style={styles.column}>
             {header}
             {centerPanel}
           </div>
 
           {/* Правая колонка */}
-          <div style={ui.column}>
+          <div style={styles.column}>
             {rightPanel}
           </div>
         </div>

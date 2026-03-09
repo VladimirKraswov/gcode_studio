@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { SketchText } from "../model/types";
@@ -20,6 +21,8 @@ export function TextShapeView({
   polylines,
   onPointerDown,
 }: TextShapeViewProps) {
+  const { theme } = useTheme();
+
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
@@ -38,7 +41,7 @@ export function TextShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? "#1d4ed8" : "#475569"}
+              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"

@@ -1,5 +1,6 @@
 import type { Bounds, PlacementMode, StockDimensions } from "../types/gcode";
 import { getStockPlacement, toSceneCoords } from "../utils";
+import { useTheme } from "../contexts/ThemeContext";
 
 type StockWireframeProps = {
   bounds: Bounds;
@@ -14,11 +15,17 @@ export function StockWireframe({
 }: StockWireframeProps) {
   const placement = getStockPlacement(bounds, stock, placementMode);
   const center = toSceneCoords(placement.centerGcode);
+  const { theme } = useTheme();
 
   return (
     <mesh position={[center.x, center.y, center.z]}>
       <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
-      <meshBasicMaterial color="#94a3b8" wireframe transparent opacity={0.35} />
+      <meshBasicMaterial 
+        color={theme.textMuted} 
+        wireframe 
+        transparent 
+        opacity={0.35} 
+      />
     </mesh>
   );
 }

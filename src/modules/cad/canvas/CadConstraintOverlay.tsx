@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import {
   distanceSignByEdge,
   edgeAxis,
@@ -10,7 +11,6 @@ import {
 import { shapeBounds } from "../model/shapeBounds";
 import type {
   ConstraintEdge,
-  SketchDistanceConstraint,
   SketchDocument,
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
@@ -84,14 +84,17 @@ function labelPosition(
   return { x: mid.x + 18, y: mid.y };
 }
 
-function sourceHandleColor(edge: ConstraintEdge): string {
+function sourceHandleColor(
+  edge: ConstraintEdge,
+  theme: ReturnType<typeof useTheme>["theme"],
+): string {
   switch (edge) {
     case "left":
     case "right":
-      return "#2563eb";
+      return theme.cad.constraintHandleX;
     case "top":
     case "bottom":
-      return "#7c3aed";
+      return theme.cad.constraintHandleY;
   }
 }
 
@@ -104,6 +107,8 @@ export function CadConstraintOverlay({
   onEdgeHandlePointerDown,
   onConstraintLabelPointerDown,
 }: CadConstraintOverlayProps) {
+  const { theme } = useTheme();
+
   const selectedShape =
     document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
@@ -146,7 +151,7 @@ export function CadConstraintOverlay({
               y1={sourceScreen.y}
               x2={targetScreen.x}
               y2={targetScreen.y}
-              stroke={constraint.enabled ? "#0f172a" : "#94a3b8"}
+              stroke={constraint.enabled ? theme.cad.constraintStroke : theme.cad.constraintMuted}
               strokeWidth={1.5}
               strokeDasharray={edgeAxis(constraint.edge) === "x" ? "8 5" : "6 4"}
               opacity={0.9}
@@ -157,8 +162,8 @@ export function CadConstraintOverlay({
               cx={sourceScreen.x}
               cy={sourceScreen.y}
               r={3.5}
-              fill="#ffffff"
-              stroke="#1d4ed8"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintSource}
               strokeWidth={1.5}
               pointerEvents="none"
             />
@@ -167,8 +172,8 @@ export function CadConstraintOverlay({
               cx={targetScreen.x}
               cy={targetScreen.y}
               r={3.5}
-              fill="#ffffff"
-              stroke="#475569"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintTarget}
               strokeWidth={1.5}
               pointerEvents="none"
             />
@@ -180,8 +185,8 @@ export function CadConstraintOverlay({
                 width={64}
                 height={22}
                 rx={11}
-                fill="#ffffff"
-                stroke="#cbd5e1"
+                fill={theme.cad.constraintLabelFill}
+                stroke={theme.cad.constraintLabelStroke}
                 strokeWidth={1}
                 onPointerDown={(event) => onConstraintLabelPointerDown(event, constraint.id)}
                 style={{ cursor: edgeAxis(constraint.edge) === "x" ? "ew-resize" : "ns-resize" }}
@@ -191,7 +196,7 @@ export function CadConstraintOverlay({
                 y={label.y + 4}
                 fontSize="12"
                 fontWeight="700"
-                fill="#0f172a"
+                fill={theme.cad.constraintLabelText}
                 textAnchor="middle"
                 pointerEvents="none"
               >
@@ -206,7 +211,7 @@ export function CadConstraintOverlay({
         (["left", "right", "top", "bottom"] as ConstraintEdge[]).map((edge) => {
           const point = getEdgeMidpoint(selectedBounds, edge);
           const screen = cadToScreenPoint(point, documentHeight, view);
-          const color = sourceHandleColor(edge);
+          const color = sourceHandleColor(edge, theme);
 
           return (
             <g key={`edge-handle-${edge}`}>
@@ -222,7 +227,7 @@ export function CadConstraintOverlay({
                 cx={screen.x}
                 cy={screen.y}
                 r={6}
-                fill="#ffffff"
+                fill={theme.cad.constraintLabelFill}
                 stroke={color}
                 strokeWidth={2}
                 onPointerDown={(event) => onEdgeHandlePointerDown(event, edge)}
@@ -261,7 +266,12 @@ export function CadConstraintOverlay({
             );
           } else {
             const targetShape = document.shapes.find(
-              (item) => item.id === (constraintDraft.hoverTarget as Extract<ConstraintDraftTarget, { kind: "shape" }>).shapeId,
+              (item) =>
+                item.id ===
+                (constraintDraft.hoverTarget as Extract<
+                  ConstraintDraftTarget,
+                  { kind: "shape" }
+                >).shapeId,
             );
             if (targetShape) {
               targetCad = getEdgeMidpoint(
@@ -283,7 +293,12 @@ export function CadConstraintOverlay({
               ? getSheetBounds(document)
               : shapeBounds(
                   document.shapes.find(
-                    (item) => item.id === (constraintDraft.hoverTarget as Extract<ConstraintDraftTarget, { kind: "shape" }>).shapeId,
+                    (item) =>
+                      item.id ===
+                      (constraintDraft.hoverTarget as Extract<
+                        ConstraintDraftTarget,
+                        { kind: "shape" }
+                      >).shapeId,
                   )!,
                 );
 
@@ -314,7 +329,7 @@ export function CadConstraintOverlay({
               y1={sourceScreen.y}
               x2={targetScreen.x}
               y2={targetScreen.y}
-              stroke="#f59e0b"
+              stroke={theme.cad.constraintPreviewStroke}
               strokeWidth={2}
               strokeDasharray="8 5"
               pointerEvents="none"
@@ -324,8 +339,8 @@ export function CadConstraintOverlay({
               cx={sourceScreen.x}
               cy={sourceScreen.y}
               r={4}
-              fill="#ffffff"
-              stroke="#f59e0b"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintPreviewStroke}
               strokeWidth={2}
               pointerEvents="none"
             />
@@ -334,8 +349,8 @@ export function CadConstraintOverlay({
               cx={targetScreen.x}
               cy={targetScreen.y}
               r={4}
-              fill="#ffffff"
-              stroke="#f59e0b"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintPreviewStroke}
               strokeWidth={2}
               pointerEvents="none"
             />
@@ -346,8 +361,8 @@ export function CadConstraintOverlay({
               width={68}
               height={22}
               rx={11}
-              fill="#fff7ed"
-              stroke="#fdba74"
+              fill={theme.cad.constraintPreviewFill}
+              stroke={theme.cad.constraintPreviewBorder}
               strokeWidth={1}
               pointerEvents="none"
             />
@@ -356,7 +371,7 @@ export function CadConstraintOverlay({
               y={label.y + 4}
               fontSize="12"
               fontWeight="700"
-              fill="#9a3412"
+              fill={theme.cad.constraintPreviewText}
               textAnchor="middle"
               pointerEvents="none"
             >

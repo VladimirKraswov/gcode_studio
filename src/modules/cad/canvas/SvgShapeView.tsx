@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchSvg } from "../model/types";
 
@@ -34,6 +35,8 @@ export function SvgShapeView({
   isSelected,
   onPointerDown,
 }: SvgShapeViewProps) {
+  const { theme } = useTheme();
+
   const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
   const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
@@ -68,7 +71,7 @@ export function SvgShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? "#1d4ed8" : "#475569"}
+              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"

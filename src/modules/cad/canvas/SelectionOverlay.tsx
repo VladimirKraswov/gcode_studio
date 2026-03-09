@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import { groupBounds, selectionBounds } from "../model/shapeBounds";
 import type { SketchDocument } from "../model/types";
 import type { SelectionState } from "../model/selection";
@@ -34,6 +35,8 @@ export function SelectionOverlay({
   isHover = false,
   onHoverChange,
 }: SelectionOverlayProps) {
+  const { theme } = useTheme();
+
   if (selection.ids.length === 0) return null;
 
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
@@ -59,23 +62,23 @@ export function SelectionOverlay({
 
   const palette = isDragging
     ? {
-        stroke: "#d97706",
-        fill: "rgba(245, 158, 11, 0.12)",
+        stroke: theme.cad.selectionDragStroke,
+        fill: theme.cad.selectionDragFill,
         dash: "10 6",
         width: 2,
         handleCursor: "grabbing" as const,
       }
     : isHover
       ? {
-          stroke: "#1d4ed8",
-          fill: "rgba(37, 99, 235, 0.12)",
+          stroke: theme.cad.selectionStroke,
+          fill: theme.cad.selectionHoverFill,
           dash: "8 4",
           width: 1.75,
           handleCursor: "grab" as const,
         }
       : {
-          stroke: "#2563eb",
-          fill: "rgba(37, 99, 235, 0.06)",
+          stroke: theme.cad.selectionStroke,
+          fill: theme.cad.selectionFill,
           dash: "6 4",
           width: 1.5,
           handleCursor: "grab" as const,
@@ -149,7 +152,7 @@ export function SelectionOverlay({
         cx={cx}
         cy={rotateHandleY}
         r={5.5}
-        fill="#ffffff"
+        fill={theme.cad.constraintLabelFill}
         stroke={palette.stroke}
         strokeWidth={1.5}
         onPointerDown={onRotateHandlePointerDown}
@@ -172,7 +175,7 @@ export function SelectionOverlay({
               cx={corner.cx}
               cy={corner.cy}
               r={4}
-              fill="#ffffff"
+              fill={theme.cad.constraintLabelFill}
               stroke={palette.stroke}
               strokeWidth={1.5}
               onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}

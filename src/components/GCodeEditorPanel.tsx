@@ -6,7 +6,7 @@ type GCodeEditorPanelProps = {
   fileName: string;
 };
 
-export function GCodeEditorPanel({
+export default function GCodeEditorPanel({
   source,
   setSource,
   fileName,

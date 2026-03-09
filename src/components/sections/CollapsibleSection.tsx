@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
-import { theme, ui } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type CollapsibleSectionProps = {
   title: string;
@@ -18,6 +19,8 @@ export function CollapsibleSection({
   onToggle,
 }: CollapsibleSectionProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const styles = useStyles();
+  const { theme } = useTheme();
 
   const handleToggle = () => {
     const newState = !collapsed;
@@ -26,17 +29,17 @@ export function CollapsibleSection({
   };
 
   return (
-    <section style={{ ...ui.panel, padding: 16 }}>
+    <section style={{ ...styles.panel, padding: 16 }}>
       <div
         onClick={handleToggle}
         style={{
-          ...ui.panelHeader,
+          ...styles.panelHeader,
           cursor: "pointer",
           marginBottom: collapsed ? 0 : 14,
         }}
       >
-        <h3 style={ui.sectionTitle}>
-          <div style={ui.iconBadge}>{icon}</div>
+        <h3 style={styles.sectionTitle}>
+          <div style={styles.iconBadge}>{icon}</div>
           <span>{title}</span>
         </h3>
         <div style={{ color: theme.textSoft }}>

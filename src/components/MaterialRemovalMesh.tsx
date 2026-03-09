@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { useTheme } from "../contexts/ThemeContext";
 import type { ParsedGCode, PlacementMode, StockDimensions } from "../types/gcode";
 import { clamp, getStockPlacement, toSceneCoords } from "../utils";
 
@@ -24,6 +25,7 @@ export function MaterialRemovalMesh({
   toolDiameter = 1,
   mirrorX = true,
 }: MaterialRemovalMeshProps) {
+  const { theme, isDark } = useTheme();
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
 
@@ -62,6 +64,9 @@ export function MaterialRemovalMesh({
         side: THREE.FrontSide,
         flatShading: true,
         vertexColors: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -2,
+        polygonOffsetUnits: -2,
       }),
     [],
   );
@@ -69,6 +74,15 @@ export function MaterialRemovalMesh({
   useEffect(() => {
     return () => material.dispose();
   }, [material]);
+
+  const baseWoodColor = useMemo(
+    () => new THREE.Color(isDark ? theme.panelMuted : "#d8b17b"),
+    [isDark, theme.panelMuted],
+  );
+  const cutWoodColor = useMemo(
+    () => new THREE.Color(isDark ? theme.borderStrong : "#5a3e2a"),
+    [isDark, theme.borderStrong],
+  );
 
   useEffect(() => {
     const targetLength = (progress / 100) * totalLength;
@@ -81,8 +95,6 @@ export function MaterialRemovalMesh({
     const cellSizeX = width / Math.max(1, gridX - 1);
     const cellSizeY = depth / Math.max(1, gridY - 1);
 
-    // Главное исправление: расширяем эффективный радиус,
-    // чтобы траектория не пропадала между вершинами сетки.
     const cellDiagonal = Math.sqrt(cellSizeX * cellSizeX + cellSizeY * cellSizeY);
     const effectiveRadius = toolRadius + cellDiagonal * 0.5;
     const effectiveRadiusSq = effectiveRadius * effectiveRadius;
@@ -96,7 +108,6 @@ export function MaterialRemovalMesh({
         centerX = width - localX;
       }
 
-      // Не прижимаем жестко к краю, оставляем запас по effectiveRadius
       centerX = Math.min(width + effectiveRadius, Math.max(-effectiveRadius, centerX));
 
       const minGX = Math.floor((centerX - effectiveRadius) / cellSizeX);
@@ -159,8 +170,6 @@ export function MaterialRemovalMesh({
 
       if (limitT < 0) break;
 
-      // Небольшая страховка: шаг берем не только от stepDensity,
-      // но и от размера ячейки, чтобы не было дыр на длинных сегментах.
       const maxStepLen = Math.max(Math.min(cellSizeX, cellSizeY) * 0.75, 0.05);
       const stepsByDensity = Math.ceil(distance * stepDensity);
       const stepsByGrid = Math.ceil(distance / maxStepLen);
@@ -194,14 +203,11 @@ export function MaterialRemovalMesh({
     const colorAttr = geometry.attributes.color as THREE.BufferAttribute;
     const colors = colorAttr.array as Float32Array;
 
-    const baseColor = new THREE.Color("#d8b17b");
-    const darkColor = new THREE.Color("#5a3e2a");
-
     for (let i = 0; i < shade.length; i++) {
       const k = clamp(shade[i], 0, 1);
-      colors[i * 3] = THREE.MathUtils.lerp(baseColor.r, darkColor.r, k);
-      colors[i * 3 + 1] = THREE.MathUtils.lerp(baseColor.g, darkColor.g, k);
-      colors[i * 3 + 2] = THREE.MathUtils.lerp(baseColor.b, darkColor.b, k);
+      colors[i * 3] = THREE.MathUtils.lerp(baseWoodColor.r, cutWoodColor.r, k);
+      colors[i * 3 + 1] = THREE.MathUtils.lerp(baseWoodColor.g, cutWoodColor.g, k);
+      colors[i * 3 + 2] = THREE.MathUtils.lerp(baseWoodColor.b, cutWoodColor.b, k);
     }
     colorAttr.needsUpdate = true;
 
@@ -209,6 +215,8 @@ export function MaterialRemovalMesh({
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
   }, [
+    baseWoodColor,
+    cutWoodColor,
     depth,
     geometry,
     gridX,
@@ -236,6 +244,7 @@ export function MaterialRemovalMesh({
         material={material}
         castShadow={false}
         receiveShadow={false}
+        renderOrder={2}
       />
     </group>
   );

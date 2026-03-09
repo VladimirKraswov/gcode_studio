@@ -1,7 +1,8 @@
 import { FiActivity, FiFileText, FiMove, FiScissors, FiTrendingUp } from "react-icons/fi";
 import type { ParsedStats } from "../../types/gcode";
 import { fmt } from "../../utils";
-import { ui, theme } from "../../styles/ui";
+import { useStyles } from "../../styles/useStyles";
+import { useTheme } from "../../contexts/ThemeContext";
 
 type GCodeStatsSectionProps = {
   stats: ParsedStats;
@@ -9,10 +10,13 @@ type GCodeStatsSectionProps = {
 };
 
 function StatItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: number | string }) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   return (
     <div
       style={{
-        ...ui.statCard,
+        ...styles.statCard,
         display: "flex",
         alignItems: "center",
         gap: 12,
@@ -33,19 +37,22 @@ function StatItem({ icon, label, value }: { icon: React.ReactNode; label: string
         {icon}
       </div>
       <div style={{ minWidth: 0 }}>
-        <div style={ui.statLabel}>{label}</div>
-        <div style={{ ...ui.statValue, fontSize: 16 }}>{value}</div>
+        <div style={styles.statLabel}>{label}</div>
+        <div style={{ ...styles.statValue, fontSize: 16 }}>{value}</div>
       </div>
     </div>
   );
 }
 
 export function GCodeStatsSection({ stats, totalLength }: GCodeStatsSectionProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   return (
-    <div style={{ ...ui.panel, padding: 16 }}>
-      <div style={ui.panelHeader}>
-        <h3 style={ui.sectionTitle}>
-          <div style={ui.iconBadge}>
+    <div style={{ ...styles.panel, padding: 16 }}>
+      <div style={styles.panelHeader}>
+        <h3 style={styles.sectionTitle}>
+          <div style={styles.iconBadge}>
             <FiActivity size={18} />
           </div>
           <span>Статистика G‑code</span>
@@ -63,7 +70,7 @@ export function GCodeStatsSection({ stats, totalLength }: GCodeStatsSectionProps
 
       <div
         style={{
-          ...ui.panelInset,
+          ...styles.panelInset,
           marginTop: 14,
           padding: 12,
           color: theme.textMuted,

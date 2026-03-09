@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
@@ -90,6 +91,8 @@ function ArrayPreviewOverlay({
   documentHeight: number;
   view: ViewTransform;
 }) {
+  const { theme } = useTheme();
+
   if (shapes.length === 0) return null;
 
   return (
@@ -113,8 +116,8 @@ function ArrayPreviewOverlay({
               width={width}
               height={height}
               rx={8}
-              fill="rgba(34,197,94,0.08)"
-              stroke="#22c55e"
+              fill={theme.cad.arrayPreviewFill}
+              stroke={theme.cad.arrayPreviewStroke}
               strokeWidth={1.5}
               strokeDasharray="8 4"
             />
@@ -124,7 +127,7 @@ function ArrayPreviewOverlay({
               y1={topLeft.y}
               x2={topLeft.x + width}
               y2={topLeft.y + height}
-              stroke="rgba(34,197,94,0.35)"
+              stroke={theme.cad.arrayPreviewGuide}
               strokeWidth={1}
               strokeDasharray="4 6"
             />
@@ -133,7 +136,7 @@ function ArrayPreviewOverlay({
               y1={topLeft.y}
               x2={topLeft.x}
               y2={topLeft.y + height}
-              stroke="rgba(34,197,94,0.35)"
+              stroke={theme.cad.arrayPreviewGuide}
               strokeWidth={1}
               strokeDasharray="4 6"
             />
@@ -175,6 +178,8 @@ export function CadCanvas({
   onConstraintEdgeHandlePointerDown,
   onConstraintLabelPointerDown,
 }: CadCanvasProps) {
+  const { theme } = useTheme();
+
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
   const showSelection = tool === "select";
 
@@ -220,6 +225,7 @@ export function CadCanvas({
         touchAction: "none",
         userSelect: "none",
         cursor: resolveCanvasCursor(),
+        background: theme.cad.canvasBg,
       }}
     >
       <CadGrid document={document} view={view} />

@@ -38,6 +38,7 @@ export function LeftPanelContainer() {
     setCadView,
     setCameraResetKey,
     resetPlayback,
+    checkpointHistory, // Добавляем checkpointHistory из контекста
   } = useApp();
 
   const { saveProject, handleFileChange, handleProjectFileChange, loadDemo } = useProject(
@@ -54,7 +55,7 @@ export function LeftPanelContainer() {
     resetPlayback,
     setCameraResetKey,
     fileName,
-    '', // source не нужен для saveProject, но можно передать, если нужно
+    '', // source не нужен для saveProject
     stock,
     showMaterialRemoval,
     placementMode,
@@ -62,7 +63,7 @@ export function LeftPanelContainer() {
     activeTab,
     editDocument,
     selection,
-    {} as any // cadView – можно не использовать
+    {} as any // cadView не используется в useProject
   );
 
   const renameShape = (shapeId: string, name: string) => {
@@ -83,10 +84,7 @@ export function LeftPanelContainer() {
   };
 
   const toggleShapeVisibility = (shapeId: string) => {
-    // checkpointHistory доступен через useApp, но здесь не нужен?
-    // Для простоты оставим, но можно добавить checkpointHistory из контекста
-    // const { checkpointHistory } = useApp();
-    // checkpointHistory();
+    checkpointHistory(); // Добавляем checkpoint перед изменением
     setEditDocument((prev) => ({
       ...prev,
       shapes: prev.shapes.map((shape) =>
@@ -96,7 +94,7 @@ export function LeftPanelContainer() {
   };
 
   const deleteShape = (shapeId: string) => {
-    // checkpointHistory();
+    checkpointHistory(); // Добавляем checkpoint перед удалением
     setEditDocument((prev) => {
       const nextDocument = {
         ...prev,
@@ -113,7 +111,7 @@ export function LeftPanelContainer() {
   };
 
   const reorderDocumentShapes = (orderedIds: string[]) => {
-    // checkpointHistory();
+    checkpointHistory(); // Добавляем checkpoint перед изменением порядка
     setEditDocument((prev) => reorderShapes(prev, orderedIds));
   };
 

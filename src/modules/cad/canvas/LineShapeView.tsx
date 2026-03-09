@@ -1,4 +1,5 @@
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchLine } from "../model/types";
 
@@ -17,6 +18,8 @@ export function LineShapeView({
   isSelected,
   onPointerDown,
 }: LineShapeViewProps) {
+  const { theme } = useTheme();
+
   const p1 = cadToScreenPoint({ x: shape.x1, y: shape.y1 }, documentHeight, view);
   const p2 = cadToScreenPoint({ x: shape.x2, y: shape.y2 }, documentHeight, view);
 
@@ -30,7 +33,7 @@ export function LineShapeView({
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         pointerEvents="none"

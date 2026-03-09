@@ -6,7 +6,11 @@ import { AppHeader } from "./components/AppHeader";
 import { LeftPanelContainer } from "./containers/LeftPanelContainer";
 import { CenterPanelContainer } from "./containers/CenterPanelContainer";
 import { RightPanelContainer } from "./containers/RightPanelContainer";
-import { theme, ui } from "./styles/ui";
+import { NotificationProvider } from "./contexts/NotificationContext";
+import { NotificationToast } from "./components/NotificationToast";
+import { useStyles } from "./styles/useStyles";
+import { useTheme } from "./contexts/ThemeContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 const TAB_META = {
   view: {
@@ -28,11 +32,13 @@ const TAB_META = {
 
 function AppContent() {
   const { parsed, isParsing, fileName, activeTab, setActiveTab, handleFileChange } = useApp();
+  const styles = useStyles();
+  const { theme } = useTheme();
   const tabMeta = TAB_META[activeTab];
 
   if (!parsed || isParsing) {
     return (
-      <div style={ui.appShell}>
+      <div style={styles.appShell}>
         <div
           style={{
             height: "100vh",
@@ -43,7 +49,7 @@ function AppContent() {
         >
           <div
             style={{
-              ...ui.panel,
+              ...styles.panel,
               width: "min(520px, 100%)",
               padding: 28,
               textAlign: "center",
@@ -75,7 +81,7 @@ function AppContent() {
                 type="file"
                 accept=".gcode,.nc,.tap,.txt"
                 onChange={handleFileChange}
-                style={ui.input}
+                style={styles.input}
               />
             )}
           </div>
@@ -96,8 +102,13 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        <NotificationProvider>
+          <AppContent />
+          <NotificationToast />
+        </NotificationProvider>
+      </AppProvider>
+    </ThemeProvider>
   );
 }

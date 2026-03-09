@@ -4,7 +4,8 @@ import { ShapePropertiesPanel } from "../modules/cad/panels/ShapePropertiesPanel
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
 import type { CadPanButtonMode } from "../utils/settings";
-import { theme, ui } from "../styles/ui";
+import { useStyles } from "../styles/useStyles";
+import { useTheme } from "../contexts/ThemeContext";
 
 type EditRightPanelProps = {
   document: SketchDocument;
@@ -21,13 +22,16 @@ export function EditRightPanel({
   panButtonMode,
   onPanButtonModeChange,
 }: EditRightPanelProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
   const selectedShape =
     document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
   return (
     <div
       style={{
-        ...ui.panel,
+        ...styles.panel,
         padding: 16,
         height: "100%",
         minHeight: 0,
@@ -37,7 +41,7 @@ export function EditRightPanel({
       className="scrollbar-thin"
     >
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-        <div style={ui.iconBadge}>
+        <div style={styles.iconBadge}>
           <FiSliders size={18} />
         </div>
         <div>
@@ -59,12 +63,12 @@ export function EditRightPanel({
           Управление
         </div>
 
-        <label style={ui.inputLabel}>
+        <label style={styles.inputLabel}>
           Кнопка панорамы
           <select
             value={panButtonMode}
             onChange={(e) => onPanButtonModeChange(e.target.value as CadPanButtonMode)}
-            style={ui.select}
+            style={styles.select}
           >
             <option value="right">Правая кнопка</option>
             <option value="middle">Средняя кнопка</option>

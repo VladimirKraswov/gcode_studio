@@ -1,4 +1,4 @@
-import { ui } from "../styles/ui";
+import { useStyles } from "../styles/useStyles";
 
 type StatCardProps = {
   label: string;
@@ -7,12 +7,14 @@ type StatCardProps = {
 };
 
 export function StatCard({ label, value, mono = false }: StatCardProps) {
+  const styles = useStyles();
+
   return (
-    <div style={ui.statCard}>
-      <div style={ui.statLabel}>{label}</div>
+    <div style={styles.statCard}>
+      <div style={styles.statLabel}>{label}</div>
       <div
         style={{
-          ...ui.statValue,
+          ...styles.statValue,
           fontFamily: mono
             ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
             : "inherit",
