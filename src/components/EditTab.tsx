@@ -1,4 +1,4 @@
-// src/components/EditTab.tsx
+import { useMemo } from "react";
 import { SvgImportModal } from "./SvgImportModal";
 import {
   CadCanvas,
@@ -10,6 +10,8 @@ import {
   type SketchDocument,
   type SelectionState,
   type ViewTransform,
+  createDefaultCadRegistry,
+  CadRegistryProvider,
 } from "../modules/cad";
 import type { CadPanButtonMode } from "../utils/settings";
 import { useStyles } from "../styles/useStyles";
@@ -38,6 +40,8 @@ export default function EditTab(props: EditTabProps) {
   const styles = useStyles();
   const { theme } = useTheme();
 
+  const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
+
   const editor = useCadEditor({
     document: props.document,
     setDocument: props.setDocument,
@@ -53,121 +57,155 @@ export default function EditTab(props: EditTabProps) {
     panButtonMode: props.panButtonMode,
   });
 
-  const primaryShape = props.document.shapes.find((shape) => shape.id === props.selection.primaryId) ?? null;
+  const primaryShape =
+    props.document.shapes.find((shape) => shape.id === props.selection.primaryId) ?? null;
   const canGroupSelected = props.selection.ids.length > 1;
   const canUngroupSelected = Boolean(primaryShape?.groupId);
   const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
 
   return (
-    <>
-      <div style={{ ...styles.panel, padding: 16, height: "100%", minHeight: 0, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", width: "100%" }}>
-        <EditToolbar
-          tool={editor.tool}
-          onToolChange={editor.setTool}
-          onStartLinearArray={editor.startLinearArray}
-          onStartCircularArray={editor.startCircularArray}
-          onCommitPolyline={editor.commitPolyline}
-          onCancelDraft={editor.cancelCurrentDraft}
-          onDeleteSelected={editor.deleteSelected}
-          onResetView={editor.resetView}
-          onGenerate={editor.handleGenerateClick}
-          isGenerating={editor.isGenerating}
-          onUndo={props.onUndo}
-          onRedo={props.onRedo}
-          canUndo={props.canUndo}
-          canRedo={props.canRedo}
-          onImportSvg={editor.startSvgImport}
-          onGroupSelected={editor.groupSelected}
-          onUngroupSelected={editor.ungroupSelected}
-          onCloneSelected={editor.cloneSelected}
-          onMirrorSelected={editor.mirrorSelected}
-          canGroupSelected={canGroupSelected}
-          canUngroupSelected={canUngroupSelected}
-          hasSelection={props.selection.ids.length > 0}
-          hasDraft={hasDraft}
-        />
-
-        {editor.arrayTool.mode && (
-          <ArrayToolPanel
-            mode={editor.arrayTool.mode}
-            linear={editor.arrayTool.linear}
-            circular={editor.arrayTool.circular}
-            onLinearChange={editor.updateLinearArrayParams}
-            onCircularChange={editor.updateCircularArrayParams}
-            onApply={editor.applyArray}
-            onClose={editor.closeArrayTool}
+    <CadRegistryProvider registry={cadRegistry}>
+      <>
+        <div
+          style={{
+            ...styles.panel,
+            padding: 16,
+            height: "100%",
+            minHeight: 0,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            width: "100%",
+          }}
+        >
+          <EditToolbar
+            tool={editor.tool}
+            onToolChange={editor.setTool}
+            onStartLinearArray={editor.startLinearArray}
+            onStartCircularArray={editor.startCircularArray}
+            onCommitPolyline={editor.commitPolyline}
+            onCancelDraft={editor.cancelCurrentDraft}
+            onDeleteSelected={editor.deleteSelected}
+            onResetView={editor.resetView}
+            onGenerate={editor.handleGenerateClick}
+            isGenerating={editor.isGenerating}
+            onUndo={props.onUndo}
+            onRedo={props.onRedo}
+            canUndo={props.canUndo}
+            canRedo={props.canRedo}
+            onImportSvg={editor.startSvgImport}
+            onGroupSelected={editor.groupSelected}
+            onUngroupSelected={editor.ungroupSelected}
+            onCloneSelected={editor.cloneSelected}
+            onMirrorSelected={editor.mirrorSelected}
+            canGroupSelected={canGroupSelected}
+            canUngroupSelected={canUngroupSelected}
+            hasSelection={props.selection.ids.length > 0}
+            hasDraft={hasDraft}
           />
-        )}
 
-        {editor.tool === "text" && (
-          <TextToolPanel
-            value={editor.textTool}
-            fontOptions={editor.fontOptions}
-            onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
-          />
-        )}
+          {editor.arrayTool.mode && (
+            <ArrayToolPanel
+              mode={editor.arrayTool.mode}
+              linear={editor.arrayTool.linear}
+              circular={editor.arrayTool.circular}
+              onLinearChange={editor.updateLinearArrayParams}
+              onCircularChange={editor.updateCircularArrayParams}
+              onApply={editor.applyArray}
+              onClose={editor.closeArrayTool}
+            />
+          )}
 
-        <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", gap: 12, overflow: "hidden" }}>
-          <div style={{ ...styles.panelInset, flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden", background: theme.panelMuted, display: "flex" }}>
-            <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
-              <CadCanvas
-                svgRef={editor.svgRef}
-                document={props.document}
-                selection={props.selection}
-                view={editor.view}
-                draft={editor.draft}
-                polylineDraft={editor.polylineDraft}
-                polylineHoverPoint={editor.polylineHoverPoint}
-                textPreviewMap={editor.textPreviewMap}
-                tool={editor.tool}
-                isDragging={editor.isDragging}
-                isPanning={editor.isPanning}
-                isSelectionHover={editor.isSelectionHover}
-                constraintDraft={editor.constraintDraft}
-                arrayPreviewShapes={editor.arrayPreviewShapes}
-                onSelectionHoverChange={editor.setIsSelectionHover}
-                onPointerDown={editor.handleCanvasPointerDown}
-                onPointerMove={editor.handleCanvasPointerMove}
-                onPointerUp={editor.handleCanvasPointerUp}
-                onPointerLeave={editor.handleCanvasPointerLeave}
-                onDoubleClick={editor.handleCanvasDoubleClick}
-                onWheel={editor.handleCanvasWheel}
-                onContextMenu={editor.handleCanvasContextMenu}
-                onShapePointerDown={editor.bindSelectStart}
-                onSelectionPointerDown={editor.bindSelectionDragStart}
-                onScaleHandlePointerDown={editor.bindScaleHandleStart}
-                onRotateHandlePointerDown={editor.bindRotateHandleStart}
-                onConstraintEdgeHandlePointerDown={editor.bindConstraintEdgeHandleStart}
-                onConstraintLabelPointerDown={editor.bindConstraintLabelDragStart}
-                isTransforming={editor.isTransforming}
-              />
+          {editor.tool === "text" && (
+            <TextToolPanel
+              value={editor.textTool}
+              fontOptions={editor.fontOptions}
+              onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
+            />
+          )}
+
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              minWidth: 0,
+              display: "flex",
+              gap: 12,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                ...styles.panelInset,
+                flex: 1,
+                minHeight: 0,
+                minWidth: 0,
+                overflow: "hidden",
+                background: theme.panelMuted,
+                display: "flex",
+              }}
+            >
+              <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
+                <CadCanvas
+                  svgRef={editor.svgRef}
+                  document={props.document}
+                  selection={props.selection}
+                  view={editor.view}
+                  draft={editor.draft}
+                  polylineDraft={editor.polylineDraft}
+                  polylineHoverPoint={editor.polylineHoverPoint}
+                  textPreviewMap={editor.textPreviewMap}
+                  tool={editor.tool}
+                  isDragging={editor.isDragging}
+                  isPanning={editor.isPanning}
+                  isSelectionHover={editor.isSelectionHover}
+                  constraintDraft={editor.constraintDraft}
+                  arrayPreviewShapes={editor.arrayPreviewShapes}
+                  onSelectionHoverChange={editor.setIsSelectionHover}
+                  onPointerDown={editor.handleCanvasPointerDown}
+                  onPointerMove={editor.handleCanvasPointerMove}
+                  onPointerUp={editor.handleCanvasPointerUp}
+                  onPointerLeave={editor.handleCanvasPointerLeave}
+                  onDoubleClick={editor.handleCanvasDoubleClick}
+                  onWheel={editor.handleCanvasWheel}
+                  onContextMenu={editor.handleCanvasContextMenu}
+                  onShapePointerDown={editor.bindSelectStart}
+                  onSelectionPointerDown={editor.bindSelectionDragStart}
+                  onScaleHandlePointerDown={editor.bindScaleHandleStart}
+                  onRotateHandlePointerDown={editor.bindRotateHandleStart}
+                  onConstraintEdgeHandlePointerDown={editor.bindConstraintEdgeHandleStart}
+                  onConstraintLabelPointerDown={editor.bindConstraintLabelDragStart}
+                  isTransforming={editor.isTransforming}
+                />
+              </div>
             </div>
           </div>
+
+          <EditStatusBar
+            objectCount={props.document.shapes.length}
+            tool={editor.tool}
+            isDragging={editor.isDragging}
+            isPanning={editor.isPanning}
+            isTransforming={editor.isTransforming}
+            hasDraft={hasDraft}
+          />
         </div>
 
-        <EditStatusBar
-          objectCount={props.document.shapes.length}
-          tool={editor.tool}
-          isDragging={editor.isDragging}
-          isPanning={editor.isPanning}
-          isTransforming={editor.isTransforming}
-          hasDraft={hasDraft}
+        <SvgImportModal
+          open={editor.svgImport.open}
+          fileName={editor.svgImport.fileName}
+          stage={editor.svgImport.stage}
+          progress={editor.svgImport.progress}
+          message={editor.svgImport.message}
+          error={editor.svgImport.error}
+          draft={editor.svgImport.draft}
+          onClose={editor.closeSvgImport}
+          onAbort={editor.abortSvgImport}
+          onChangeDraft={editor.updateSvgImportDraft}
+          onConfirm={editor.confirmSvgImport}
         />
-      </div>
-
-      <SvgImportModal
-        open={editor.svgImport.open}
-        fileName={editor.svgImport.fileName}
-        stage={editor.svgImport.stage}
-        progress={editor.svgImport.progress}
-        message={editor.svgImport.message}
-        error={editor.svgImport.error}
-        draft={editor.svgImport.draft}
-        onClose={editor.closeSvgImport}
-        onAbort={editor.abortSvgImport}
-        onChangeDraft={editor.updateSvgImportDraft}
-        onConfirm={editor.confirmSvgImport}
-      />
-    </>
+      </>
+    </CadRegistryProvider>
   );
 }

@@ -2,27 +2,21 @@ import { useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
   FiCheck,
-  FiCircle,
   FiCopy,
   FiCornerUpLeft,
   FiCornerUpRight,
-  FiGitCommit,
   FiImage,
   FiLayers,
   FiMaximize,
-  FiMinus,
-  FiMousePointer,
-  FiPenTool,
   FiPlay,
   FiRefreshCw,
-  FiSquare,
   FiTrash2,
-  FiType,
   FiX,
 } from "react-icons/fi";
 import { useStyles } from "../../../styles/useStyles";
 import { useTheme } from "../../../contexts/ThemeContext";
 import type { MirrorAxis, SketchTool } from "../model/types";
+import { useToolPlugins } from "../plugins/registry";
 
 type EditToolbarProps = {
   tool: SketchTool;
@@ -49,58 +43,6 @@ type EditToolbarProps = {
   hasSelection: boolean;
   hasDraft: boolean;
 };
-
-type ToolItem = {
-  id: SketchTool;
-  label: string;
-  hint: string;
-  icon: ReactNode;
-};
-
-const tools: ToolItem[] = [
-  {
-    id: "select",
-    label: "Выбор",
-    hint: "Выделение и перемещение",
-    icon: <FiMousePointer size={14} />,
-  },
-  {
-    id: "rectangle",
-    label: "Прямоугольник",
-    hint: "Построить прямоугольник",
-    icon: <FiSquare size={14} />,
-  },
-  {
-    id: "circle",
-    label: "Окружность",
-    hint: "Построить окружность",
-    icon: <FiCircle size={14} />,
-  },
-  {
-    id: "line",
-    label: "Линия",
-    hint: "Построить линию",
-    icon: <FiMinus size={14} />,
-  },
-  {
-    id: "arc",
-    label: "Дуга",
-    hint: "Дуга: центр → старт → конец",
-    icon: <FiGitCommit size={14} />,
-  },
-  {
-    id: "polyline",
-    label: "Ломаная",
-    hint: "Построить ломаную",
-    icon: <FiPenTool size={14} />,
-  },
-  {
-    id: "text",
-    label: "Текст",
-    hint: "Добавить текст",
-    icon: <FiType size={14} />,
-  },
-];
 
 type ToolbarButtonProps = {
   title: string;
@@ -247,8 +189,9 @@ export function EditToolbar({
   hasDraft,
 }: EditToolbarProps) {
   const styles = useStyles();
-  const { theme } = useTheme();
   const svgInputRef = useRef<HTMLInputElement>(null);
+
+  const tools = useToolPlugins();
 
   const primaryButtonStyle: CSSProperties = {
     ...styles.buttonPrimary,

@@ -2,30 +2,25 @@
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
-
-export type SketchShapeType =
-  | "rectangle"
-  | "circle"
-  | "line"
-  | "arc"
-  | "polyline"
-  | "text"
-  | "svg";
+export type SketchPolylinePoint = {
+  x: number;
+  y: number;
+};
 
 export type SketchLinearArrayParams = {
-  count: number;          // общее количество копий (включая оригинал)
-  spacing: number;        // расстояние между копиями
-  axis: "x" | "y";        // ось, вдоль которой размещаются копии
-  direction: "positive" | "negative"; // направление относительно оригинала
+  count: number;
+  spacing: number;
+  axis: "x" | "y";
+  direction: "positive" | "negative";
 };
 
 export type SketchCircularArrayParams = {
-  count: number;          // общее количество копий
-  centerX: number;        // центр окружности
+  count: number;
+  centerX: number;
   centerY: number;
-  radius: number;         // радиус окружности (расстояние от центра до центров объектов)
-  totalAngle: number;     // полный угол, на который размещаются копии (обычно 360)
-  rotateItems: boolean;   // поворачивать ли объекты вслед за окружностью
+  radius: number;
+  totalAngle: number;
+  rotateItems: boolean;
 };
 
 export type SketchArrayDefinition =
@@ -47,13 +42,11 @@ export type SketchGroup = {
   array?: SketchArrayDefinition | null;
 };
 
-
-// Настройки CAM для фигуры
 export type CamOperationType =
-  | "follow-path"          // обычное движение по контуру (без смещения)
-  | "profile-inside"       // обработка внутри контура (отверстие)
-  | "profile-outside"      // обработка снаружи контура (внешний обход)
-  | "pocket";              // зачистка области (карман)
+  | "follow-path"
+  | "profile-inside"
+  | "profile-outside"
+  | "pocket";
 
 export type CamCutDirection = "climb" | "conventional";
 
@@ -66,26 +59,27 @@ export type CamTabsSettings = {
 
 export type CamRampingSettings = {
   enabled: boolean;
-  turns: number;           // количество витков спирали для выхода на глубину
+  turns: number;
 };
 
 export type SketchCamSettings = {
   operation: CamOperationType;
   direction: CamCutDirection;
-  stepdown: number | null;     // если null, используется глобальный passDepth
-  stepover: number | null;     // если null, используется глобальный stepover
+  stepdown: number | null;
+  stepover: number | null;
   tabs: CamTabsSettings;
   ramping: CamRampingSettings;
 };
 
 export type SketchBase = {
   id: string;
+  type: string;
   name: string;
   cutZ?: number | null;
   strokeWidth?: number;
   visible: boolean;
   groupId: string | null;
-  camSettings?: Partial<SketchCamSettings>; // индивидуальные настройки CAM
+  camSettings?: Partial<SketchCamSettings>;
 };
 
 export type SketchRectangle = SketchBase & {
@@ -122,11 +116,6 @@ export type SketchArc = SketchBase & {
   clockwise: boolean;
 };
 
-export type SketchPolylinePoint = {
-  x: number;
-  y: number;
-};
-
 export type SketchPolyline = SketchBase & {
   type: "polyline";
   points: SketchPolylinePoint[];
@@ -159,14 +148,18 @@ export type SketchSvg = SketchBase & {
   rotation?: number;
 };
 
-export type SketchShape =
-  | SketchRectangle
-  | SketchCircle
-  | SketchLine
-  | SketchArc
-  | SketchPolyline
-  | SketchText
-  | SketchSvg;
+export interface CadShapeRegistry {
+  rectangle: SketchRectangle;
+  circle: SketchCircle;
+  line: SketchLine;
+  arc: SketchArc;
+  polyline: SketchPolyline;
+  text: SketchText;
+  svg: SketchSvg;
+}
+
+export type SketchShapeType = keyof CadShapeRegistry;
+export type SketchShape = CadShapeRegistry[keyof CadShapeRegistry];
 
 export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
 export type UnitsMode = "mm" | "inch";
@@ -233,27 +226,15 @@ export type SketchDocument = {
   constraints: SketchDistanceConstraint[];
 };
 
-export type SketchTool =
-  | "select"
-  | "rectangle"
-  | "circle"
-  | "line"
-  | "arc"
-  | "polyline"
-  | "text"
-  | "pan";
+export interface CadToolRegistry {
+  select: { id: "select" };
+  rectangle: { id: "rectangle" };
+  circle: { id: "circle" };
+  line: { id: "line" };
+  arc: { id: "arc" };
+  polyline: { id: "polyline" };
+  text: { id: "text" };
+  pan: { id: "pan" };
+}
 
-
-
-
-
-  
-
-
-  
-
-
-
-
-
-  
+export type SketchTool = keyof CadToolRegistry;

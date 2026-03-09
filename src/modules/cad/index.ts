@@ -17,6 +17,11 @@ export { DocumentSettingsPanel } from "./panels/DocumentSettingsPanel";
 export { ShapePropertiesPanel } from "./panels/ShapePropertiesPanel";
 export { ObjectListPanel } from "./panels/ObjectListPanel";
 
+// Plugins
+export * from "./plugins/types";
+export * from "./plugins/registry";
+export * from "./plugins/defaultRegistry";
+
 // Model
 export * from "./model/types";
 export * from "./model/selection";

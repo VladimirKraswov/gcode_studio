@@ -1,7 +1,7 @@
 === CODE BUNDLE ===
 root: /Volumes/Extend/work/gcode_studio/src/modules/cad
 ignore: .codebundleignore
-generated: 2026-03-09T13:05:23.590Z
+generated: 2026-03-09T18:57:08.801Z
 
 
 
@@ -269,6 +269,7 @@ path: /canvas/ArcShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
 import { sampleArcPoints } from "../../geometry/geometryEngine";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchArc } from "../model/types";
 
@@ -287,6 +288,8 @@ export function ArcShapeView({
   isSelected,
   onPointerDown,
 }: ArcShapeViewProps) {
+  const { theme } = useTheme();
+
   const points = sampleArcPoints(
     { x: shape.cx, y: shape.cy },
     shape.radius,
@@ -309,7 +312,7 @@ export function ArcShapeView({
       <polyline
         points={points}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -333,6 +336,7 @@ export function ArcShapeView({
 path: /canvas/CadCanvas.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
@@ -424,6 +428,8 @@ function ArrayPreviewOverlay({
   documentHeight: number;
   view: ViewTransform;
 }) {
+  const { theme } = useTheme();
+
   if (shapes.length === 0) return null;
 
   return (
@@ -447,8 +453,8 @@ function ArrayPreviewOverlay({
               width={width}
               height={height}
               rx={8}
-              fill="rgba(34,197,94,0.08)"
-              stroke="#22c55e"
+              fill={theme.cad.arrayPreviewFill}
+              stroke={theme.cad.arrayPreviewStroke}
               strokeWidth={1.5}
               strokeDasharray="8 4"
             />
@@ -458,7 +464,7 @@ function ArrayPreviewOverlay({
               y1={topLeft.y}
               x2={topLeft.x + width}
               y2={topLeft.y + height}
-              stroke="rgba(34,197,94,0.35)"
+              stroke={theme.cad.arrayPreviewGuide}
               strokeWidth={1}
               strokeDasharray="4 6"
             />
@@ -467,7 +473,7 @@ function ArrayPreviewOverlay({
               y1={topLeft.y}
               x2={topLeft.x}
               y2={topLeft.y + height}
-              stroke="rgba(34,197,94,0.35)"
+              stroke={theme.cad.arrayPreviewGuide}
               strokeWidth={1}
               strokeDasharray="4 6"
             />
@@ -509,6 +515,8 @@ export function CadCanvas({
   onConstraintEdgeHandlePointerDown,
   onConstraintLabelPointerDown,
 }: CadCanvasProps) {
+  const { theme } = useTheme();
+
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
   const showSelection = tool === "select";
 
@@ -554,6 +562,7 @@ export function CadCanvas({
         touchAction: "none",
         userSelect: "none",
         cursor: resolveCanvasCursor(),
+        background: theme.cad.canvasBg,
       }}
     >
       <CadGrid document={document} view={view} />
@@ -623,6 +632,7 @@ export function CadCanvas({
 path: /canvas/CadConstraintOverlay.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import {
   distanceSignByEdge,
   edgeAxis,
@@ -634,7 +644,6 @@ import {
 import { shapeBounds } from "../model/shapeBounds";
 import type {
   ConstraintEdge,
-  SketchDistanceConstraint,
   SketchDocument,
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
@@ -708,14 +717,17 @@ function labelPosition(
   return { x: mid.x + 18, y: mid.y };
 }
 
-function sourceHandleColor(edge: ConstraintEdge): string {
+function sourceHandleColor(
+  edge: ConstraintEdge,
+  theme: ReturnType<typeof useTheme>["theme"],
+): string {
   switch (edge) {
     case "left":
     case "right":
-      return "#2563eb";
+      return theme.cad.constraintHandleX;
     case "top":
     case "bottom":
-      return "#7c3aed";
+      return theme.cad.constraintHandleY;
   }
 }
 
@@ -728,6 +740,8 @@ export function CadConstraintOverlay({
   onEdgeHandlePointerDown,
   onConstraintLabelPointerDown,
 }: CadConstraintOverlayProps) {
+  const { theme } = useTheme();
+
   const selectedShape =
     document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
@@ -770,7 +784,7 @@ export function CadConstraintOverlay({
               y1={sourceScreen.y}
               x2={targetScreen.x}
               y2={targetScreen.y}
-              stroke={constraint.enabled ? "#0f172a" : "#94a3b8"}
+              stroke={constraint.enabled ? theme.cad.constraintStroke : theme.cad.constraintMuted}
               strokeWidth={1.5}
               strokeDasharray={edgeAxis(constraint.edge) === "x" ? "8 5" : "6 4"}
               opacity={0.9}
@@ -781,8 +795,8 @@ export function CadConstraintOverlay({
               cx={sourceScreen.x}
               cy={sourceScreen.y}
               r={3.5}
-              fill="#ffffff"
-              stroke="#1d4ed8"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintSource}
               strokeWidth={1.5}
               pointerEvents="none"
             />
@@ -791,8 +805,8 @@ export function CadConstraintOverlay({
               cx={targetScreen.x}
               cy={targetScreen.y}
               r={3.5}
-              fill="#ffffff"
-              stroke="#475569"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintTarget}
               strokeWidth={1.5}
               pointerEvents="none"
             />
@@ -804,8 +818,8 @@ export function CadConstraintOverlay({
                 width={64}
                 height={22}
                 rx={11}
-                fill="#ffffff"
-                stroke="#cbd5e1"
+                fill={theme.cad.constraintLabelFill}
+                stroke={theme.cad.constraintLabelStroke}
                 strokeWidth={1}
                 onPointerDown={(event) => onConstraintLabelPointerDown(event, constraint.id)}
                 style={{ cursor: edgeAxis(constraint.edge) === "x" ? "ew-resize" : "ns-resize" }}
@@ -815,7 +829,7 @@ export function CadConstraintOverlay({
                 y={label.y + 4}
                 fontSize="12"
                 fontWeight="700"
-                fill="#0f172a"
+                fill={theme.cad.constraintLabelText}
                 textAnchor="middle"
                 pointerEvents="none"
               >
@@ -830,7 +844,7 @@ export function CadConstraintOverlay({
         (["left", "right", "top", "bottom"] as ConstraintEdge[]).map((edge) => {
           const point = getEdgeMidpoint(selectedBounds, edge);
           const screen = cadToScreenPoint(point, documentHeight, view);
-          const color = sourceHandleColor(edge);
+          const color = sourceHandleColor(edge, theme);
 
           return (
             <g key={`edge-handle-${edge}`}>
@@ -846,7 +860,7 @@ export function CadConstraintOverlay({
                 cx={screen.x}
                 cy={screen.y}
                 r={6}
-                fill="#ffffff"
+                fill={theme.cad.constraintLabelFill}
                 stroke={color}
                 strokeWidth={2}
                 onPointerDown={(event) => onEdgeHandlePointerDown(event, edge)}
@@ -885,7 +899,12 @@ export function CadConstraintOverlay({
             );
           } else {
             const targetShape = document.shapes.find(
-              (item) => item.id === (constraintDraft.hoverTarget as Extract<ConstraintDraftTarget, { kind: "shape" }>).shapeId,
+              (item) =>
+                item.id ===
+                (constraintDraft.hoverTarget as Extract<
+                  ConstraintDraftTarget,
+                  { kind: "shape" }
+                >).shapeId,
             );
             if (targetShape) {
               targetCad = getEdgeMidpoint(
@@ -907,7 +926,12 @@ export function CadConstraintOverlay({
               ? getSheetBounds(document)
               : shapeBounds(
                   document.shapes.find(
-                    (item) => item.id === (constraintDraft.hoverTarget as Extract<ConstraintDraftTarget, { kind: "shape" }>).shapeId,
+                    (item) =>
+                      item.id ===
+                      (constraintDraft.hoverTarget as Extract<
+                        ConstraintDraftTarget,
+                        { kind: "shape" }
+                      >).shapeId,
                   )!,
                 );
 
@@ -938,7 +962,7 @@ export function CadConstraintOverlay({
               y1={sourceScreen.y}
               x2={targetScreen.x}
               y2={targetScreen.y}
-              stroke="#f59e0b"
+              stroke={theme.cad.constraintPreviewStroke}
               strokeWidth={2}
               strokeDasharray="8 5"
               pointerEvents="none"
@@ -948,8 +972,8 @@ export function CadConstraintOverlay({
               cx={sourceScreen.x}
               cy={sourceScreen.y}
               r={4}
-              fill="#ffffff"
-              stroke="#f59e0b"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintPreviewStroke}
               strokeWidth={2}
               pointerEvents="none"
             />
@@ -958,8 +982,8 @@ export function CadConstraintOverlay({
               cx={targetScreen.x}
               cy={targetScreen.y}
               r={4}
-              fill="#ffffff"
-              stroke="#f59e0b"
+              fill={theme.cad.constraintLabelFill}
+              stroke={theme.cad.constraintPreviewStroke}
               strokeWidth={2}
               pointerEvents="none"
             />
@@ -970,8 +994,8 @@ export function CadConstraintOverlay({
               width={68}
               height={22}
               rx={11}
-              fill="#fff7ed"
-              stroke="#fdba74"
+              fill={theme.cad.constraintPreviewFill}
+              stroke={theme.cad.constraintPreviewBorder}
               strokeWidth={1}
               pointerEvents="none"
             />
@@ -980,7 +1004,7 @@ export function CadConstraintOverlay({
               y={label.y + 4}
               fontSize="12"
               fontWeight="700"
-              fill="#9a3412"
+              fill={theme.cad.constraintPreviewText}
               textAnchor="middle"
               pointerEvents="none"
             >
@@ -996,6 +1020,7 @@ export function CadConstraintOverlay({
 
 path: /canvas/CadGrid.tsx
 ----------------------------------------
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchDocument } from "../model/types";
 import type { ViewTransform } from "../model/view";
 
@@ -1025,6 +1050,8 @@ function chooseMajorCadStep(baseStep: number, scale: number): number {
 }
 
 export function CadGrid({ document, view }: CadGridProps) {
+  const { theme } = useTheme();
+
   const baseStep = Math.max(1, document.snapStep || 1);
   const minorCadStep = baseStep;
   const majorCadStep = chooseMajorCadStep(baseStep, view.scale);
@@ -1054,14 +1081,14 @@ export function CadGrid({ document, view }: CadGridProps) {
           y1={bottom}
           x2={sx}
           y2={bottom + tickMajor}
-          stroke="#64748b"
+          stroke={theme.cad.rulerTickMajor}
           strokeWidth={1}
         />
         <text
           x={sx}
           y={bottom + rulerOffset}
           fontSize="11"
-          fill="#475569"
+          fill={theme.cad.rulerText}
           textAnchor="middle"
         >
           {x}
@@ -1080,14 +1107,14 @@ export function CadGrid({ document, view }: CadGridProps) {
           y1={sy}
           x2={left}
           y2={sy}
-          stroke="#64748b"
+          stroke={theme.cad.rulerTickMajor}
           strokeWidth={1}
         />
         <text
           x={left - rulerOffset}
           y={sy + 4}
           fontSize="11"
-          fill="#475569"
+          fill={theme.cad.rulerText}
           textAnchor="end"
         >
           {y}
@@ -1107,7 +1134,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={sx}
         y2={bottom + tickMinor}
-        stroke="#94a3b8"
+        stroke={theme.cad.rulerTickMinor}
         strokeWidth={1}
       />,
     );
@@ -1124,7 +1151,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={sy}
         x2={left}
         y2={sy}
-        stroke="#94a3b8"
+        stroke={theme.cad.rulerTickMinor}
         strokeWidth={1}
       />,
     );
@@ -1144,7 +1171,7 @@ export function CadGrid({ document, view }: CadGridProps) {
           <path
             d={`M ${minorStep} 0 L 0 0 0 ${minorStep}`}
             fill="none"
-            stroke="#e2e8f0"
+            stroke={theme.cad.gridMinor}
             strokeWidth="1"
           />
         </pattern>
@@ -1161,7 +1188,7 @@ export function CadGrid({ document, view }: CadGridProps) {
           <path
             d={`M ${majorStep} 0 L 0 0 0 ${majorStep}`}
             fill="none"
-            stroke="#cbd5e1"
+            stroke={theme.cad.gridMajor}
             strokeWidth="1.2"
           />
         </pattern>
@@ -1181,7 +1208,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={right}
         y2={bottom}
-        stroke="#ef4444"
+        stroke={theme.cad.axisX}
         strokeWidth={1.5}
       />
       <line
@@ -1189,18 +1216,18 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={left}
         y2={top}
-        stroke="#2563eb"
+        stroke={theme.cad.axisY}
         strokeWidth={1.5}
       />
 
       {/* Стрелки направлений */}
       <polygon
         points={`${right + 10},${bottom} ${right + 2},${bottom - 4} ${right + 2},${bottom + 4}`}
-        fill="#ef4444"
+        fill={theme.cad.axisX}
       />
       <polygon
         points={`${left},${top - 10} ${left - 4},${top - 2} ${left + 4},${top - 2}`}
-        fill="#2563eb"
+        fill={theme.cad.axisY}
       />
 
       {/* Линейка X */}
@@ -1209,7 +1236,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom + 14}
         x2={right}
         y2={bottom + 14}
-        stroke="#cbd5e1"
+        stroke={theme.cad.ruler}
         strokeWidth={1}
       />
       {xMinorTicks}
@@ -1221,7 +1248,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y1={bottom}
         x2={left - 14}
         y2={top}
-        stroke="#cbd5e1"
+        stroke={theme.cad.ruler}
         strokeWidth={1}
       />
       {yMinorTicks}
@@ -1233,7 +1260,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 4}
         fontSize="12"
         fontWeight="700"
-        fill="#ef4444"
+        fill={theme.cad.axisX}
       >
         +X
       </text>
@@ -1243,7 +1270,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 4}
         fontSize="12"
         fontWeight="700"
-        fill="#ef4444"
+        fill={theme.cad.axisX}
         textAnchor="end"
       >
         -X
@@ -1254,7 +1281,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={top - 14}
         fontSize="12"
         fontWeight="700"
-        fill="#2563eb"
+        fill={theme.cad.axisY}
       >
         +Y
       </text>
@@ -1264,7 +1291,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 28}
         fontSize="12"
         fontWeight="700"
-        fill="#2563eb"
+        fill={theme.cad.axisY}
       >
         -Y
       </text>
@@ -1275,7 +1302,7 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={bottom + 22}
         fontSize="11"
         fontWeight="700"
-        fill="#0f172a"
+        fill={theme.cad.axisText}
       >
         X
       </text>
@@ -1285,20 +1312,20 @@ export function CadGrid({ document, view }: CadGridProps) {
         y={top - 18}
         fontSize="11"
         fontWeight="700"
-        fill="#0f172a"
+        fill={theme.cad.axisText}
         textAnchor="middle"
       >
         Y
       </text>
 
       {/* Ноль */}
-      <circle cx={left} cy={bottom} r={3.5} fill="#0f172a" />
+      <circle cx={left} cy={bottom} r={3.5} fill={theme.cad.axisText} />
       <text
         x={left + 8}
         y={bottom - 8}
         fontSize="11"
         fontWeight="700"
-        fill="#0f172a"
+        fill={theme.cad.axisText}
       >
         0,0
       </text>
@@ -1310,6 +1337,7 @@ export function CadGrid({ document, view }: CadGridProps) {
 path: /canvas/CadOriginMarker.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 
 type CadOriginMarkerProps = {
@@ -1318,12 +1346,13 @@ type CadOriginMarkerProps = {
 };
 
 export function CadOriginMarker({ documentHeight, view }: CadOriginMarkerProps) {
+  const { theme } = useTheme();
   const origin = cadToScreenPoint({ x: 0, y: 0 }, documentHeight, view);
 
   return (
     <g>
-      <circle cx={origin.x} cy={origin.y} r={4} fill="#ef4444" />
-      <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill="#0f172a">
+      <circle cx={origin.x} cy={origin.y} r={4} fill={theme.cad.origin} />
+      <text x={origin.x + 8} y={origin.y - 8} fontSize="12" fill={theme.cad.originText}>
         X0 Y0
       </text>
     </g>
@@ -1333,6 +1362,7 @@ export function CadOriginMarker({ documentHeight, view }: CadOriginMarkerProps) 
 
 path: /canvas/CadSheet.tsx
 ----------------------------------------
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchDocument } from "../model/types";
 import type { ViewTransform } from "../model/view";
 
@@ -1342,14 +1372,16 @@ type CadSheetProps = {
 };
 
 export function CadSheet({ document, view }: CadSheetProps) {
+  const { theme } = useTheme();
+
   return (
     <rect
       x={view.offsetX}
       y={view.offsetY}
       width={document.width * view.scale}
       height={document.height * view.scale}
-      fill="rgba(255,255,255,0.86)"
-      stroke="#cbd5e1"
+      fill={theme.cad.sheetFill}
+      stroke={theme.cad.sheetStroke}
       strokeWidth={1.5}
     />
   );
@@ -1366,6 +1398,7 @@ export function CadViewport({ children }: { children: React.ReactNode }) {
 path: /canvas/CircleShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchCircle } from "../model/types";
 
@@ -1384,6 +1417,8 @@ export function CircleShapeView({
   isSelected,
   onPointerDown,
 }: CircleShapeViewProps) {
+  const { theme } = useTheme();
+
   const p = cadToScreenPoint({ x: shape.cx, y: shape.cy }, documentHeight, view);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
@@ -1395,7 +1430,7 @@ export function CircleShapeView({
         cy={p.y}
         r={shape.radius * view.scale}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         pointerEvents="none"
       />
@@ -1417,6 +1452,7 @@ export function CircleShapeView({
 path: /canvas/DraftOverlay.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchPolylinePoint } from "../model/types";
 import type { DraftShape } from "../geometry/draftGeometry";
@@ -1443,6 +1479,8 @@ export function DraftOverlay({
   documentHeight,
   view,
 }: DraftOverlayProps) {
+  const { theme } = useTheme();
+
   const polylinePreview = getPolylinePreviewPoints(
     polylineDraft,
     polylineHoverPoint,
@@ -1461,7 +1499,7 @@ export function DraftOverlay({
                 })
                 .join(" ")}
               fill="none"
-              stroke="#ef4444"
+              stroke={theme.cad.draftAccent}
               strokeWidth={1.5}
               strokeDasharray="6 4"
               strokeLinecap="round"
@@ -1477,8 +1515,8 @@ export function DraftOverlay({
                 cx={p.x}
                 cy={p.y}
                 r={3.5}
-                fill="#ffffff"
-                stroke="#ef4444"
+                fill={theme.cad.constraintLabelFill}
+                stroke={theme.cad.draftAccent}
                 strokeWidth={1.5}
               />
             );
@@ -1491,7 +1529,7 @@ export function DraftOverlay({
                 cx={p.x}
                 cy={p.y}
                 r={3}
-                fill="#ef4444"
+                fill={theme.cad.draftAccent}
                 opacity={0.85}
               />
             );
@@ -1513,8 +1551,8 @@ export function DraftOverlay({
             y={p.y}
             width={rect.width * view.scale}
             height={rect.height * view.scale}
-            fill="rgba(37,99,235,0.12)"
-            stroke="#2563eb"
+            fill={theme.cad.draftFill}
+            stroke={theme.cad.draftStroke}
             strokeDasharray="6 4"
             strokeWidth={1.5}
             rx={8}
@@ -1535,8 +1573,8 @@ export function DraftOverlay({
             cx={p.x}
             cy={p.y}
             r={circle.radius * view.scale}
-            fill="rgba(37,99,235,0.12)"
-            stroke="#2563eb"
+            fill={theme.cad.draftFill}
+            stroke={theme.cad.draftStroke}
             strokeDasharray="6 4"
             strokeWidth={1.5}
           />
@@ -1562,7 +1600,7 @@ export function DraftOverlay({
             y1={p1.y}
             x2={p2.x}
             y2={p2.y}
-            stroke="#2563eb"
+            stroke={theme.cad.draftStroke}
             strokeDasharray="6 4"
             strokeWidth={1.5}
             strokeLinecap="round"
@@ -1588,14 +1626,14 @@ export function DraftOverlay({
               cx={center.x}
               cy={center.y}
               r={4}
-              fill="#2563eb"
+              fill={theme.cad.draftStroke}
             />
             <line
               x1={center.x}
               y1={center.y}
               x2={end.x}
               y2={end.y}
-              stroke="#2563eb"
+              stroke={theme.cad.draftStroke}
               strokeDasharray="6 4"
               strokeWidth={1.5}
               strokeLinecap="round"
@@ -1631,14 +1669,14 @@ export function DraftOverlay({
 
         return (
           <>
-            <circle cx={center.x} cy={center.y} r={4} fill="#2563eb" />
+            <circle cx={center.x} cy={center.y} r={4} fill={theme.cad.draftStroke} />
 
             <line
               x1={center.x}
               y1={center.y}
               x2={start.x}
               y2={start.y}
-              stroke="#93c5fd"
+              stroke={theme.cad.draftGuide}
               strokeDasharray="4 4"
               strokeWidth={1.25}
               strokeLinecap="round"
@@ -1649,7 +1687,7 @@ export function DraftOverlay({
               y1={center.y}
               x2={end.x}
               y2={end.y}
-              stroke="#93c5fd"
+              stroke={theme.cad.draftGuide}
               strokeDasharray="4 4"
               strokeWidth={1.25}
               strokeLinecap="round"
@@ -1658,7 +1696,7 @@ export function DraftOverlay({
             <polyline
               points={points}
               fill="none"
-              stroke="#2563eb"
+              stroke={theme.cad.draftStroke}
               strokeDasharray="6 4"
               strokeWidth={1.5}
               strokeLinecap="round"
@@ -1675,6 +1713,7 @@ export function DraftOverlay({
 path: /canvas/LineShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchLine } from "../model/types";
 
@@ -1693,6 +1732,8 @@ export function LineShapeView({
   isSelected,
   onPointerDown,
 }: LineShapeViewProps) {
+  const { theme } = useTheme();
+
   const p1 = cadToScreenPoint({ x: shape.x1, y: shape.y1 }, documentHeight, view);
   const p2 = cadToScreenPoint({ x: shape.x2, y: shape.y2 }, documentHeight, view);
 
@@ -1706,7 +1747,7 @@ export function LineShapeView({
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         pointerEvents="none"
@@ -1730,6 +1771,7 @@ export function LineShapeView({
 path: /canvas/PolylineShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchPolyline } from "../model/types";
 
@@ -1748,6 +1790,8 @@ export function PolylineShapeView({
   isSelected,
   onPointerDown,
 }: PolylineShapeViewProps) {
+  const { theme } = useTheme();
+
   const points = shape.points
     .map((point) => {
       const p = cadToScreenPoint(point, documentHeight, view);
@@ -1763,7 +1807,7 @@ export function PolylineShapeView({
       <polyline
         points={points}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -1787,6 +1831,7 @@ export function PolylineShapeView({
 path: /canvas/RectangleShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchRectangle } from "../model/types";
 
@@ -1805,6 +1850,8 @@ export function RectangleShapeView({
   isSelected,
   onPointerDown,
 }: RectangleShapeViewProps) {
+  const { theme } = useTheme();
+
   const p = cadToScreenPoint({ x: shape.x, y: shape.y + shape.height }, documentHeight, view);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
@@ -1823,7 +1870,7 @@ export function RectangleShapeView({
         width={rectWidth}
         height={rectHeight}
         fill="none"
-        stroke={isSelected ? "#1d4ed8" : "#475569"}
+        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         opacity={0.95}
         pointerEvents="none"
@@ -1849,6 +1896,7 @@ export function RectangleShapeView({
 path: /canvas/SelectionOverlay.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import { groupBounds, selectionBounds } from "../model/shapeBounds";
 import type { SketchDocument } from "../model/types";
 import type { SelectionState } from "../model/selection";
@@ -1884,6 +1932,8 @@ export function SelectionOverlay({
   isHover = false,
   onHoverChange,
 }: SelectionOverlayProps) {
+  const { theme } = useTheme();
+
   if (selection.ids.length === 0) return null;
 
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
@@ -1909,23 +1959,23 @@ export function SelectionOverlay({
 
   const palette = isDragging
     ? {
-        stroke: "#d97706",
-        fill: "rgba(245, 158, 11, 0.12)",
+        stroke: theme.cad.selectionDragStroke,
+        fill: theme.cad.selectionDragFill,
         dash: "10 6",
         width: 2,
         handleCursor: "grabbing" as const,
       }
     : isHover
       ? {
-          stroke: "#1d4ed8",
-          fill: "rgba(37, 99, 235, 0.12)",
+          stroke: theme.cad.selectionStroke,
+          fill: theme.cad.selectionHoverFill,
           dash: "8 4",
           width: 1.75,
           handleCursor: "grab" as const,
         }
       : {
-          stroke: "#2563eb",
-          fill: "rgba(37, 99, 235, 0.06)",
+          stroke: theme.cad.selectionStroke,
+          fill: theme.cad.selectionFill,
           dash: "6 4",
           width: 1.5,
           handleCursor: "grab" as const,
@@ -1999,7 +2049,7 @@ export function SelectionOverlay({
         cx={cx}
         cy={rotateHandleY}
         r={5.5}
-        fill="#ffffff"
+        fill={theme.cad.constraintLabelFill}
         stroke={palette.stroke}
         strokeWidth={1.5}
         onPointerDown={onRotateHandlePointerDown}
@@ -2022,7 +2072,7 @@ export function SelectionOverlay({
               cx={corner.cx}
               cy={corner.cy}
               r={4}
-              fill="#ffffff"
+              fill={theme.cad.constraintLabelFill}
               stroke={palette.stroke}
               strokeWidth={1.5}
               onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
@@ -2040,13 +2090,7 @@ path: /canvas/ShapeRenderer.tsx
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { ViewTransform } from "../model/view";
 import type { SketchShape } from "../model/types";
-import { RectangleShapeView } from "./RectangleShapeView";
-import { CircleShapeView } from "./CircleShapeView";
-import { LineShapeView } from "./LineShapeView";
-import { ArcShapeView } from "./ArcShapeView";
-import { PolylineShapeView } from "./PolylineShapeView";
-import { TextShapeView } from "./TextShapeView";
-import { SvgShapeView } from "./SvgShapeView";
+import { useShapePlugin } from "../plugins/registry";
 
 type ShapeRendererProps = {
   shape: SketchShape;
@@ -2065,91 +2109,32 @@ export function ShapeRenderer({
   textPreviewMap,
   onPointerDown,
 }: ShapeRendererProps) {
-  switch (shape.type) {
-    case "rectangle":
-      return (
-        <RectangleShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
+  const plugin = useShapePlugin(shape);
 
-    case "circle":
-      return (
-        <CircleShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
-
-    case "line":
-      return (
-        <LineShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
-
-    case "arc":
-      return (
-        <ArcShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
-
-    case "polyline":
-      return (
-        <PolylineShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
-
-    case "text":
-      return (
-        <TextShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          polylines={textPreviewMap[shape.id] ?? []}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
-
-    case "svg":
-      return (
-        <SvgShapeView
-          shape={shape}
-          documentHeight={documentHeight}
-          view={view}
-          isSelected={isSelected}
-          onPointerDown={(event) => onPointerDown(event, shape.id)}
-        />
-      );
+  if (!plugin) {
+    console.warn(`No shape plugin registered for type "${shape.type}"`);
+    return null;
   }
+
+  return (
+    <>
+      {plugin.render({
+        shape,
+        documentHeight,
+        view,
+        isSelected,
+        textPreviewMap,
+        onPointerDown,
+      })}
+    </>
+  );
 }
 
 
 path: /canvas/SvgShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { SketchSvg } from "../model/types";
 
@@ -2185,6 +2170,8 @@ export function SvgShapeView({
   isSelected,
   onPointerDown,
 }: SvgShapeViewProps) {
+  const { theme } = useTheme();
+
   const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
   const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
@@ -2219,7 +2206,7 @@ export function SvgShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? "#1d4ed8" : "#475569"}
+              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -2244,6 +2231,7 @@ export function SvgShapeView({
 path: /canvas/TextShapeView.tsx
 ----------------------------------------
 import { cadToScreenPoint } from "../../../utils/coordinates";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { ViewTransform } from "../model/view";
 import type { CadPoint } from "../../../utils/fontGeometry";
 import type { SketchText } from "../model/types";
@@ -2265,6 +2253,8 @@ export function TextShapeView({
   polylines,
   onPointerDown,
 }: TextShapeViewProps) {
+  const { theme } = useTheme();
+
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
@@ -2283,7 +2273,7 @@ export function TextShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? "#1d4ed8" : "#475569"}
+              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -5349,6 +5339,11 @@ export { DocumentSettingsPanel } from "./panels/DocumentSettingsPanel";
 export { ShapePropertiesPanel } from "./panels/ShapePropertiesPanel";
 export { ObjectListPanel } from "./panels/ObjectListPanel";
 
+// Plugins
+export * from "./plugins/types";
+export * from "./plugins/registry";
+export * from "./plugins/defaultRegistry";
+
 // Model
 export * from "./model/types";
 export * from "./model/selection";
@@ -7301,30 +7296,25 @@ path: /model/types.ts
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
-
-export type SketchShapeType =
-  | "rectangle"
-  | "circle"
-  | "line"
-  | "arc"
-  | "polyline"
-  | "text"
-  | "svg";
+export type SketchPolylinePoint = {
+  x: number;
+  y: number;
+};
 
 export type SketchLinearArrayParams = {
-  count: number;          // общее количество копий (включая оригинал)
-  spacing: number;        // расстояние между копиями
-  axis: "x" | "y";        // ось, вдоль которой размещаются копии
-  direction: "positive" | "negative"; // направление относительно оригинала
+  count: number;
+  spacing: number;
+  axis: "x" | "y";
+  direction: "positive" | "negative";
 };
 
 export type SketchCircularArrayParams = {
-  count: number;          // общее количество копий
-  centerX: number;        // центр окружности
+  count: number;
+  centerX: number;
   centerY: number;
-  radius: number;         // радиус окружности (расстояние от центра до центров объектов)
-  totalAngle: number;     // полный угол, на который размещаются копии (обычно 360)
-  rotateItems: boolean;   // поворачивать ли объекты вслед за окружностью
+  radius: number;
+  totalAngle: number;
+  rotateItems: boolean;
 };
 
 export type SketchArrayDefinition =
@@ -7346,13 +7336,11 @@ export type SketchGroup = {
   array?: SketchArrayDefinition | null;
 };
 
-
-// Настройки CAM для фигуры
 export type CamOperationType =
-  | "follow-path"          // обычное движение по контуру (без смещения)
-  | "profile-inside"       // обработка внутри контура (отверстие)
-  | "profile-outside"      // обработка снаружи контура (внешний обход)
-  | "pocket";              // зачистка области (карман)
+  | "follow-path"
+  | "profile-inside"
+  | "profile-outside"
+  | "pocket";
 
 export type CamCutDirection = "climb" | "conventional";
 
@@ -7365,26 +7353,27 @@ export type CamTabsSettings = {
 
 export type CamRampingSettings = {
   enabled: boolean;
-  turns: number;           // количество витков спирали для выхода на глубину
+  turns: number;
 };
 
 export type SketchCamSettings = {
   operation: CamOperationType;
   direction: CamCutDirection;
-  stepdown: number | null;     // если null, используется глобальный passDepth
-  stepover: number | null;     // если null, используется глобальный stepover
+  stepdown: number | null;
+  stepover: number | null;
   tabs: CamTabsSettings;
   ramping: CamRampingSettings;
 };
 
 export type SketchBase = {
   id: string;
+  type: string;
   name: string;
   cutZ?: number | null;
   strokeWidth?: number;
   visible: boolean;
   groupId: string | null;
-  camSettings?: Partial<SketchCamSettings>; // индивидуальные настройки CAM
+  camSettings?: Partial<SketchCamSettings>;
 };
 
 export type SketchRectangle = SketchBase & {
@@ -7421,11 +7410,6 @@ export type SketchArc = SketchBase & {
   clockwise: boolean;
 };
 
-export type SketchPolylinePoint = {
-  x: number;
-  y: number;
-};
-
 export type SketchPolyline = SketchBase & {
   type: "polyline";
   points: SketchPolylinePoint[];
@@ -7458,14 +7442,18 @@ export type SketchSvg = SketchBase & {
   rotation?: number;
 };
 
-export type SketchShape =
-  | SketchRectangle
-  | SketchCircle
-  | SketchLine
-  | SketchArc
-  | SketchPolyline
-  | SketchText
-  | SketchSvg;
+export interface CadShapeRegistry {
+  rectangle: SketchRectangle;
+  circle: SketchCircle;
+  line: SketchLine;
+  arc: SketchArc;
+  polyline: SketchPolyline;
+  text: SketchText;
+  svg: SketchSvg;
+}
+
+export type SketchShapeType = keyof CadShapeRegistry;
+export type SketchShape = CadShapeRegistry[keyof CadShapeRegistry];
 
 export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
 export type UnitsMode = "mm" | "inch";
@@ -7532,30 +7520,18 @@ export type SketchDocument = {
   constraints: SketchDistanceConstraint[];
 };
 
-export type SketchTool =
-  | "select"
-  | "rectangle"
-  | "circle"
-  | "line"
-  | "arc"
-  | "polyline"
-  | "text"
-  | "pan";
+export interface CadToolRegistry {
+  select: { id: "select" };
+  rectangle: { id: "rectangle" };
+  circle: { id: "circle" };
+  line: { id: "line" };
+  arc: { id: "arc" };
+  polyline: { id: "polyline" };
+  text: { id: "text" };
+  pan: { id: "pan" };
+}
 
-
-
-
-
-  
-
-
-  
-
-
-
-
-
-  
+export type SketchTool = keyof CadToolRegistry;
 
 
 path: /model/view.ts
@@ -8662,28 +8638,24 @@ export function EditStatusBar({
 path: /panels/EditToolbar.tsx
 ----------------------------------------
 import { useRef } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   FiCheck,
-  FiCircle,
   FiCopy,
   FiCornerUpLeft,
   FiCornerUpRight,
-  FiGitCommit,
   FiImage,
   FiLayers,
   FiMaximize,
-  FiMinus,
-  FiMousePointer,
-  FiPenTool,
   FiPlay,
   FiRefreshCw,
-  FiSquare,
   FiTrash2,
-  FiType,
   FiX,
 } from "react-icons/fi";
 import { useStyles } from "../../../styles/useStyles";
+import { useTheme } from "../../../contexts/ThemeContext";
 import type { MirrorAxis, SketchTool } from "../model/types";
+import { useToolPlugins } from "../plugins/registry";
 
 type EditToolbarProps = {
   tool: SketchTool;
@@ -8711,50 +8683,124 @@ type EditToolbarProps = {
   hasDraft: boolean;
 };
 
-const tools: Array<{ id: SketchTool; label: string; hint: string; icon: React.ReactNode }> = [
-  {
-    id: "select",
-    label: "Выбор",
-    hint: "Выделение и перетаскивание объектов",
-    icon: <FiMousePointer size={16} />,
-  },
-  {
-    id: "rectangle",
-    label: "Прямоуг.",
-    hint: "Нарисовать прямоугольник",
-    icon: <FiSquare size={16} />,
-  },
-  {
-    id: "circle",
-    label: "Окружн.",
-    hint: "Нарисовать окружность",
-    icon: <FiCircle size={16} />,
-  },
-  {
-    id: "line",
-    label: "Линия",
-    hint: "Нарисовать линию",
-    icon: <FiMinus size={16} />,
-  },
-  {
-    id: "arc",
-    label: "Дуга",
-    hint: "Дуга: центр → старт → конец",
-    icon: <FiGitCommit size={16} />,
-  },
-  {
-    id: "polyline",
-    label: "Ломаная",
-    hint: "Добавление точек полилинии",
-    icon: <FiPenTool size={16} />,
-  },
-  {
-    id: "text",
-    label: "Текст",
-    hint: "Вставка текстового объекта",
-    icon: <FiType size={16} />,
-  },
-];
+type ToolbarButtonProps = {
+  title: string;
+  ariaLabel?: string;
+  active?: boolean;
+  success?: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  style?: CSSProperties;
+};
+
+function ToolbarButton({
+  title,
+  ariaLabel,
+  active = false,
+  success = false,
+  disabled = false,
+  danger = false,
+  onClick,
+  children,
+  style,
+}: ToolbarButtonProps) {
+  const styles = useStyles();
+  const { theme } = useTheme();
+
+  const baseStyle: CSSProperties = {
+    ...styles.buttonGhost,
+    width: 30,
+    height: 30,
+    minWidth: 30,
+    padding: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 8,
+    fontSize: 12,
+    flexShrink: 0,
+    opacity: disabled ? 0.4 : 1,
+    cursor: disabled ? "not-allowed" : "pointer",
+    border: active
+      ? `1px solid ${theme.primary}`
+      : success
+        ? `1px solid ${theme.success}`
+        : danger
+          ? `1px solid ${theme.danger}`
+          : `1px solid ${theme.border}`,
+    background: active
+      ? theme.primarySoft
+      : success
+        ? theme.successSoft
+        : danger
+          ? "transparent"
+          : theme.panel,
+    color: active
+      ? theme.primaryText
+      : success
+        ? theme.success
+        : danger
+          ? theme.danger
+          : theme.text,
+    boxShadow: "none",
+  };
+
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={ariaLabel ?? title}
+      aria-pressed={active || undefined}
+      disabled={disabled}
+      onClick={onClick}
+      style={{ ...baseStyle, ...style }}
+    >
+      {children}
+    </button>
+  );
+}
+
+type ToolbarGroupProps = {
+  children: ReactNode;
+};
+
+function ToolbarGroup({ children }: ToolbarGroupProps) {
+  const { theme } = useTheme();
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        padding: 3,
+        borderRadius: 10,
+        border: `1px solid ${theme.border}`,
+        background: theme.panel,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ToolbarDivider() {
+  const { theme } = useTheme();
+
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: 1,
+        height: 18,
+        background: theme.border,
+        margin: "0 2px",
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 export function EditToolbar({
   tool,
@@ -8782,247 +8828,229 @@ export function EditToolbar({
   hasDraft,
 }: EditToolbarProps) {
   const styles = useStyles();
-  const svgInputRef = useRef<HTMLInputElement | null>(null);
+  const svgInputRef = useRef<HTMLInputElement>(null);
+
+  const tools = useToolPlugins();
+
+  const primaryButtonStyle: CSSProperties = {
+    ...styles.buttonPrimary,
+    height: 32,
+    width: 32,
+    minWidth: 32,
+    padding: 0,
+    borderRadius: 10,
+    display: "grid",
+    placeItems: "center",
+    flexShrink: 0,
+    cursor: isGenerating ? "wait" : "pointer",
+    opacity: isGenerating ? 0.8 : 1,
+  };
 
   return (
     <div
       style={{
         ...styles.panelInset,
-        padding: 10,
+        padding: 6,
         marginBottom: 12,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        gap: 10,
+        gap: 8,
         flexWrap: "wrap",
         flexShrink: 0,
+        borderRadius: 14,
       }}
     >
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        {tools.map((item) => {
-          const active = tool === item.id;
-          return (
-            <button
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          flexWrap: "wrap",
+          minWidth: 0,
+          flex: 1,
+        }}
+      >
+        <ToolbarGroup>
+          {tools.map((item) => (
+            <ToolbarButton
               key={item.id}
-              type="button"
               title={`${item.label} — ${item.hint}`}
+              ariaLabel={item.label}
+              active={tool === item.id}
               onClick={() => onToolChange(item.id)}
-              style={active ? styles.buttonPrimary : styles.buttonGhost}
             >
               {item.icon}
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
+            </ToolbarButton>
+          ))}
+        </ToolbarGroup>
 
-        {(tool === "polyline" || hasDraft) && (
-          <button
-            type="button"
-            title="Завершить текущий объект"
-            onClick={onCommitPolyline}
-            style={styles.buttonGhost}
-            disabled={tool !== "polyline"}
+        <ToolbarGroup>
+          <ToolbarButton
+            title="Импортировать SVG"
+            ariaLabel="Импортировать SVG"
+            onClick={() => svgInputRef.current?.click()}
           >
-            <FiCheck size={16} />
-            <span>Завершить</span>
-          </button>
-        )}
+            <FiImage size={14} />
+          </ToolbarButton>
+
+          <input
+            ref={svgInputRef}
+            type="file"
+            accept=".svg,image/svg+xml"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onImportSvg(file);
+              e.target.value = "";
+            }}
+          />
+        </ToolbarGroup>
+
+        <ToolbarGroup>
+          <ToolbarButton
+            title="Отменить"
+            ariaLabel="Отменить"
+            disabled={!canUndo}
+            onClick={onUndo}
+          >
+            <FiCornerUpLeft size={14} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            title="Повторить"
+            ariaLabel="Повторить"
+            disabled={!canRedo}
+            onClick={onRedo}
+          >
+            <FiCornerUpRight size={14} />
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <ToolbarButton
+            title="Сбросить вид"
+            ariaLabel="Сбросить вид"
+            onClick={onResetView}
+          >
+            <FiMaximize size={14} />
+          </ToolbarButton>
+        </ToolbarGroup>
+
+        <ToolbarGroup>
+          <ToolbarButton
+            title="Клонировать"
+            ariaLabel="Клонировать"
+            disabled={!hasSelection}
+            onClick={onCloneSelected}
+          >
+            <FiCopy size={14} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            title="Сгруппировать"
+            ariaLabel="Сгруппировать"
+            disabled={!canGroupSelected}
+            onClick={onGroupSelected}
+          >
+            <FiLayers size={14} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            title="Разгруппировать"
+            ariaLabel="Разгруппировать"
+            disabled={!canUngroupSelected}
+            onClick={onUngroupSelected}
+          >
+            <FiX size={14} />
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <ToolbarButton
+            title="Линейный массив"
+            ariaLabel="Линейный массив"
+            disabled={!hasSelection}
+            onClick={onStartLinearArray}
+          >
+            <FiCopy size={14} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            title="Круговой массив"
+            ariaLabel="Круговой массив"
+            disabled={!hasSelection}
+            onClick={onStartCircularArray}
+          >
+            <FiRefreshCw size={14} />
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <ToolbarButton
+            title="Отразить по оси X"
+            ariaLabel="Отразить по оси X"
+            disabled={!hasSelection}
+            onClick={() => onMirrorSelected("x")}
+          >
+            <FiRefreshCw size={14} style={{ transform: "scaleX(-1)" }} />
+          </ToolbarButton>
+
+          <ToolbarButton
+            title="Отразить по оси Y"
+            ariaLabel="Отразить по оси Y"
+            disabled={!hasSelection}
+            onClick={() => onMirrorSelected("y")}
+          >
+            <FiRefreshCw size={14} style={{ transform: "scaleY(-1)" }} />
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <ToolbarButton
+            title="Удалить выбранные объекты"
+            ariaLabel="Удалить"
+            danger
+            disabled={!hasSelection}
+            onClick={onDeleteSelected}
+          >
+            <FiTrash2 size={14} />
+          </ToolbarButton>
+        </ToolbarGroup>
 
         {hasDraft && (
-          <button
-            type="button"
-            title="Отменить текущее рисование"
-            onClick={onCancelDraft}
-            style={styles.buttonGhost}
-          >
-            <FiX size={16} />
-            <span>Отменить</span>
-          </button>
+          <ToolbarGroup>
+            <ToolbarButton
+              title="Завершить построение"
+              ariaLabel="Завершить построение"
+              disabled={tool !== "polyline"}
+              onClick={onCommitPolyline}
+              success
+            >
+              <FiCheck size={14} />
+            </ToolbarButton>
+
+            <ToolbarButton
+              title="Отменить текущий черновик"
+              ariaLabel="Отменить черновик"
+              danger
+              onClick={onCancelDraft}
+            >
+              <FiX size={14} />
+            </ToolbarButton>
+          </ToolbarGroup>
         )}
-
-        <button
-          type="button"
-          title="Импортировать SVG"
-          onClick={() => svgInputRef.current?.click()}
-          style={styles.buttonGhost}
-        >
-          <FiImage size={16} />
-          <span>SVG</span>
-        </button>
-
-        <input
-          ref={svgInputRef}
-          type="file"
-          accept=".svg,image/svg+xml"
-          style={{ display: "none" }}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) {
-              onImportSvg(file);
-            }
-            event.currentTarget.value = "";
-          }}
-        />
-
-        {canGroupSelected && (
-          <button
-            type="button"
-            title="Сгруппировать выбранные объекты"
-            onClick={onGroupSelected}
-            style={styles.buttonGhost}
-          >
-            <FiLayers size={16} />
-            <span>Группа</span>
-          </button>
-        )}
-
-        {canUngroupSelected && (
-          <button
-            type="button"
-            title="Разгруппировать выбранную группу"
-            onClick={onUngroupSelected}
-            style={styles.buttonGhost}
-          >
-            <FiX size={16} />
-            <span>Разгруппа</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          title="Клонировать выбранные объекты"
-          onClick={onCloneSelected}
-          disabled={!hasSelection}
-          style={{
-            ...styles.buttonGhost,
-            opacity: hasSelection ? 1 : 0.45,
-            cursor: hasSelection ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiCopy size={16} />
-          <span>Клон</span>
-        </button>
-
-        <button
-          type="button"
-          title="Линейный массив выбранных объектов"
-          onClick={onStartLinearArray}
-          disabled={!hasSelection}
-          style={{
-            ...styles.buttonGhost,
-            opacity: hasSelection ? 1 : 0.45,
-            cursor: hasSelection ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiCopy size={16} />
-          <span>Массив X/Y</span>
-        </button>
-
-        <button
-          type="button"
-          title="Круговой массив выбранных объектов"
-          onClick={onStartCircularArray}
-          disabled={!hasSelection}
-          style={{
-            ...styles.buttonGhost,
-            opacity: hasSelection ? 1 : 0.45,
-            cursor: hasSelection ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiRefreshCw size={16} />
-          <span>Массив круг</span>
-        </button>
-
-        <button
-          type="button"
-          title="Отзеркалить по оси X относительно центра выделения"
-          onClick={() => onMirrorSelected("x")}
-          disabled={!hasSelection}
-          style={{
-            ...styles.buttonGhost,
-            opacity: hasSelection ? 1 : 0.45,
-            cursor: hasSelection ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiRefreshCw size={16} />
-          <span>Зеркало X</span>
-        </button>
-
-        <button
-          type="button"
-          title="Отзеркалить по оси Y относительно центра выделения"
-          onClick={() => onMirrorSelected("y")}
-          disabled={!hasSelection}
-          style={{
-            ...styles.buttonGhost,
-            opacity: hasSelection ? 1 : 0.45,
-            cursor: hasSelection ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiRefreshCw size={16} />
-          <span>Зеркало Y</span>
-        </button>
-
-        <button
-          type="button"
-          title="Удалить выбранный объект"
-          onClick={onDeleteSelected}
-          style={styles.buttonDanger}
-        >
-          <FiTrash2 size={16} />
-          <span>Удалить</span>
-        </button>
-
-        <button
-          type="button"
-          title="Сбросить масштаб и позицию холста"
-          onClick={onResetView}
-          style={styles.buttonGhost}
-        >
-          <FiMaximize size={16} />
-          <span>Вид</span>
-        </button>
-
-        <button
-          type="button"
-          title="Отменить последнее действие"
-          onClick={onUndo}
-          disabled={!canUndo}
-          style={{
-            ...styles.buttonGhost,
-            opacity: canUndo ? 1 : 0.45,
-            cursor: canUndo ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiCornerUpLeft size={16} />
-          <span>Назад</span>
-        </button>
-
-        <button
-          type="button"
-          title="Повторить действие"
-          onClick={onRedo}
-          disabled={!canRedo}
-          style={{
-            ...styles.buttonGhost,
-            opacity: canRedo ? 1 : 0.45,
-            cursor: canRedo ? "pointer" : "not-allowed",
-          }}
-        >
-          <FiCornerUpRight size={16} />
-          <span>Вперёд</span>
-        </button>
       </div>
 
       <button
         type="button"
         onClick={onGenerate}
         disabled={isGenerating}
-        title="Сгенерировать G-code из текущего документа"
-        style={{ ...styles.buttonPrimary, flexShrink: 0 }}
+        style={primaryButtonStyle}
+        title={isGenerating ? "Генерация..." : "Сгенерировать"}
+        aria-label={isGenerating ? "Генерация..." : "Сгенерировать"}
       >
-        <FiPlay size={16} />
-        {isGenerating ? "Генерация..." : "Сгенерировать G-code"}
+        <FiPlay size={14} />
       </button>
     </div>
   );
@@ -9031,18 +9059,22 @@ export function EditToolbar({
 
 path: /panels/ObjectListPanel.tsx
 ----------------------------------------
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   FiBox,
   FiChevronDown,
   FiChevronRight,
   FiCircle,
+  FiCopy,
   FiEdit3,
   FiEye,
   FiEyeOff,
+  FiFolder,
   FiImage,
   FiLayers,
   FiMinus,
+  FiMoreHorizontal,
   FiMove,
   FiTrash2,
   FiType,
@@ -9051,7 +9083,11 @@ import { useStyles } from "../../../styles/useStyles";
 import { useTheme } from "../../../contexts/ThemeContext";
 import type { SelectionState } from "../model/selection";
 import { selectOnly } from "../model/selection";
-import type { SketchArrayDefinition, SketchDocument, SketchShape } from "../model/types";
+import type {
+  SketchArrayDefinition,
+  SketchDocument,
+  SketchShape,
+} from "../model/types";
 import { getGroupById } from "../model/grouping";
 
 type ObjectListPanelProps = {
@@ -9070,24 +9106,64 @@ type ListItem =
   | { kind: "group"; groupId: string; shapes: SketchShape[] }
   | { kind: "shape"; shape: SketchShape };
 
+type TreeNode =
+  | {
+      kind: "group";
+      id: string;
+      name: string;
+      depth: number;
+      collapsed: boolean;
+      selected: boolean;
+      visible: boolean;
+      arrayBadge: ReturnType<typeof getArrayBadgeMeta>;
+      shapes: SketchShape[];
+    }
+  | {
+      kind: "shape";
+      id: string;
+      name: string;
+      depth: number;
+      selected: boolean;
+      visible: boolean;
+      shape: SketchShape;
+      parentGroupId: string | null;
+    };
+
+type MenuTarget =
+  | { kind: "group"; groupId: string }
+  | { kind: "shape"; shapeId: string };
+
+type ShapeMenuTarget = Extract<MenuTarget, { kind: "shape" }>;
+type GroupMenuTarget = Extract<MenuTarget, { kind: "group" }>;
+
+type ContextMenuState =
+  | {
+      x: number;
+      y: number;
+      target: MenuTarget;
+    }
+  | null;
+
 const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
 function getShapeIcon(shape: SketchShape) {
   switch (shape.type) {
     case "rectangle":
-      return <FiBox size={14} />;
+      return <FiBox size={13} />;
     case "circle":
-      return <FiCircle size={14} />;
+      return <FiCircle size={13} />;
     case "line":
-      return <FiMinus size={14} />;
+      return <FiMinus size={13} />;
     case "arc":
-      return <FiCircle size={14} />;
+      return <FiCircle size={13} />;
     case "polyline":
-      return <FiMove size={14} />;
+      return <FiMove size={13} />;
     case "text":
-      return <FiType size={14} />;
+      return <FiType size={13} />;
     case "svg":
-      return <FiImage size={14} />;
+      return <FiImage size={13} />;
+    default:
+      return <FiBox size={13} />;
   }
 }
 
@@ -9096,7 +9172,7 @@ function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined) {
 
   if (array.type === "linear") {
     return {
-      label: "Linear array",
+      label: "LIN",
       background: "#ecfeff",
       border: "#a5f3fc",
       color: "#155e75",
@@ -9104,7 +9180,7 @@ function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined) {
   }
 
   return {
-    label: "Circular array",
+    label: "CIR",
     background: "#f5f3ff",
     border: "#c4b5fd",
     color: "#5b21b6",
@@ -9132,7 +9208,25 @@ export function ObjectListPanel({
 }: ObjectListPanelProps) {
   const styles = useStyles();
   const { theme } = useTheme();
+
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [draggedShapeId, setDraggedShapeId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [renaming, setRenaming] = useState<
+    | null
+    | { kind: "group"; id: string; value: string }
+    | { kind: "shape"; id: string; value: string }
+  >(null);
+  const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setPortalHost(window.document.body);
+    }
+  }, []);
 
   const items = useMemo<ListItem[]>(() => {
     const groupMap = new Map<string, SketchShape[]>();
@@ -9164,6 +9258,79 @@ export function ObjectListPanel({
     return result;
   }, [document.groups, document.shapes]);
 
+  const tree = useMemo<TreeNode[]>(() => {
+    const q = filter.trim().toLowerCase();
+    const nodes: TreeNode[] = [];
+
+    for (const item of items) {
+      if (item.kind === "group") {
+        const group = getGroupById(document, item.groupId);
+        const collapsed = group?.collapsed ?? false;
+        const selected =
+          item.shapes.length > 0 &&
+          item.shapes.every((shape) => selection.ids.includes(shape.id));
+        const visible = item.shapes.some((shape) => shape.visible !== false);
+        const arrayBadge = getArrayBadgeMeta(group?.array);
+
+        const groupMatches = !q || (group?.name ?? "").toLowerCase().includes(q);
+        const matchedShapes = q
+          ? item.shapes.filter((shape) => shape.name.toLowerCase().includes(q))
+          : item.shapes;
+
+        if (!groupMatches && matchedShapes.length === 0) {
+          continue;
+        }
+
+        nodes.push({
+          kind: "group",
+          id: item.groupId,
+          name: group?.name ?? `Группа (${item.shapes.length})`,
+          depth: 0,
+          collapsed,
+          selected,
+          visible,
+          arrayBadge,
+          shapes: item.shapes,
+        });
+
+        if (!collapsed || q) {
+          const shapesToShow = groupMatches && !q ? item.shapes : matchedShapes;
+          for (const shape of shapesToShow) {
+            nodes.push({
+              kind: "shape",
+              id: shape.id,
+              name: shape.name,
+              depth: 1,
+              selected: selection.ids.includes(shape.id),
+              visible: shape.visible !== false,
+              shape,
+              parentGroupId: item.groupId,
+            });
+          }
+        }
+
+        continue;
+      }
+
+      if (q && !item.shape.name.toLowerCase().includes(q)) {
+        continue;
+      }
+
+      nodes.push({
+        kind: "shape",
+        id: item.shape.id,
+        name: item.shape.name,
+        depth: 0,
+        selected: selection.ids.includes(item.shape.id),
+        visible: item.shape.visible !== false,
+        shape: item.shape,
+        parentGroupId: null,
+      });
+    }
+
+    return nodes;
+  }, [document, filter, items, selection.ids]);
+
   function moveShapeBefore(targetShapeId: string) {
     if (!draggedShapeId || draggedShapeId === targetShapeId) return;
 
@@ -9178,304 +9345,672 @@ export function ObjectListPanel({
     onReorderShapes(next);
   }
 
-  const iconButtonStyle: React.CSSProperties = {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    border: `1px solid ${theme.border}`,
-    background: theme.panelSolid,
-    color: theme.text,
+  function beginRenameGroup(groupId: string) {
+    const group = getGroupById(document, groupId);
+    setRenaming({
+      kind: "group",
+      id: groupId,
+      value: group?.name ?? "",
+    });
+    setContextMenu(null);
+  }
+
+  function beginRenameShape(shapeId: string) {
+    const shape = document.shapes.find((item) => item.id === shapeId);
+    setRenaming({
+      kind: "shape",
+      id: shapeId,
+      value: shape?.name ?? "",
+    });
+    setContextMenu(null);
+  }
+
+  function commitRename() {
+    if (!renaming) return;
+
+    const value = renaming.value.trim();
+    if (!value) {
+      setRenaming(null);
+      return;
+    }
+
+    if (renaming.kind === "group") {
+      onRenameGroup(renaming.id, value);
+    } else {
+      onRenameShape(renaming.id, value);
+    }
+
+    setRenaming(null);
+  }
+
+  function handleContextMenu(event: React.MouseEvent, target: MenuTarget) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      target,
+    });
+  }
+
+  useEffect(() => {
+    function closeMenu() {
+      setContextMenu(null);
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as Node | null;
+
+      if (target && menuRef.current?.contains(target)) return;
+      if (target && rootRef.current?.contains(target)) return;
+
+      closeMenu();
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMenu();
+        setRenaming(null);
+      }
+
+      if (event.key === "F2" && selection.primaryId) {
+        beginRenameShape(selection.primaryId);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", closeMenu);
+    window.addEventListener("scroll", closeMenu, true);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
+    };
+  }, [selection.primaryId, document.shapes]);
+
+  const compactIconButton: React.CSSProperties = {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    border: "none",
+    background: "transparent",
+    color: theme.textMuted,
     display: "grid",
     placeItems: "center",
     cursor: "pointer",
     padding: 0,
+    flexShrink: 0,
   };
 
-  function ShapeRow({
-    shape,
-    active,
-    onSelect,
-    onRename,
-    onToggleVisibility,
-    onDelete,
-    onDragStart,
-    onDragOver,
-    onDragEnd,
-  }: {
-    shape: SketchShape;
-    active: boolean;
-    onSelect: () => void;
-    onRename: (name: string) => void;
-    onToggleVisibility: () => void;
-    onDelete: () => void;
-    onDragStart: () => void;
-    onDragOver: () => void;
-    onDragEnd: () => void;
-  }) {
-    return (
-      <div
-        draggable
-        onDragStart={onDragStart}
-        onDragOver={(e) => {
-          e.preventDefault();
-          onDragOver();
-        }}
-        onDragEnd={onDragEnd}
-        style={{
-          border: `1px solid ${active ? theme.primary : theme.border}`,
-          borderRadius: 12,
-          background: active ? theme.primarySoft : theme.panelSolid,
-          padding: 10,
-          display: "grid",
-          gap: 8,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+  const menuItemStyle: React.CSSProperties = {
+    height: 30,
+    padding: "0 10px",
+    borderRadius: 8,
+    border: "none",
+    background: "transparent",
+    color: theme.text,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    width: "100%",
+    textAlign: "left",
+  };
+
+  let contextMenuNode: React.ReactNode = null;
+
+  if (contextMenu && portalHost) {
+    const menuShellStyle: React.CSSProperties = {
+      position: "fixed",
+      left: contextMenu.x,
+      top: contextMenu.y,
+      zIndex: 99999,
+      minWidth: 180,
+      padding: 6,
+      borderRadius: 12,
+      background: theme.panel,
+      border: `1px solid ${theme.border}`,
+      boxShadow: theme.shadow,
+      backdropFilter: "blur(16px)",
+    };
+
+    if (contextMenu.target.kind === "shape") {
+      const target: ShapeMenuTarget = contextMenu.target;
+
+      contextMenuNode = createPortal(
+        <div
+          ref={menuRef}
+          style={menuShellStyle}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
           <button
             type="button"
-            onClick={onSelect}
-            style={{
-              border: "none",
-              background: "transparent",
-              padding: 0,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              cursor: "pointer",
-              color: theme.text,
-              fontWeight: 700,
-              minWidth: 0,
+            style={menuItemStyle}
+            onClick={() => {
+              onSelectionChange(selectOnly(target.shapeId));
+              setContextMenu(null);
             }}
           >
-            <span style={{ display: "grid", placeItems: "center", width: 20, height: 20 }}>
-              {getShapeIcon(shape)}
-            </span>
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {shape.name}
-            </span>
+            <FiLayers size={14} />
+            Выбрать
           </button>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <button type="button" onClick={onToggleVisibility} style={iconButtonStyle}>
-              {shape.visible !== false ? <FiEye size={14} /> : <FiEyeOff size={14} />}
-            </button>
-            <button type="button" onClick={onDelete} style={iconButtonStyle}>
-              <FiTrash2 size={14} />
-            </button>
-          </div>
-        </div>
+          <button
+            type="button"
+            style={menuItemStyle}
+            onClick={() => beginRenameShape(target.shapeId)}
+          >
+            <FiEdit3 size={14} />
+            Переименовать
+          </button>
 
-        <input type="text" value={shape.name} onChange={(e) => onRename(e.target.value)} style={styles.input} />
-      </div>
-    );
+          <button
+            type="button"
+            style={menuItemStyle}
+            onClick={() => {
+              onToggleVisibility(target.shapeId);
+              setContextMenu(null);
+            }}
+          >
+            <FiEye size={14} />
+            Скрыть / показать
+          </button>
+
+          <button
+            type="button"
+            style={menuItemStyle}
+            onClick={() => {
+              navigator.clipboard?.writeText(target.shapeId).catch(() => {});
+              setContextMenu(null);
+            }}
+          >
+            <FiCopy size={14} />
+            Копировать ID
+          </button>
+
+          <div
+            style={{
+              height: 1,
+              background: theme.border,
+              margin: "6px 4px",
+            }}
+          />
+
+          <button
+            type="button"
+            style={{ ...menuItemStyle, color: theme.danger }}
+            onClick={() => {
+              onDeleteShape(target.shapeId);
+              setContextMenu(null);
+            }}
+          >
+            <FiTrash2 size={14} />
+            Удалить
+          </button>
+        </div>,
+        portalHost,
+      );
+    } else {
+      const target: GroupMenuTarget = contextMenu.target;
+
+      contextMenuNode = createPortal(
+        <div
+          ref={menuRef}
+          style={menuShellStyle}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            type="button"
+            style={menuItemStyle}
+            onClick={() => beginRenameGroup(target.groupId)}
+          >
+            <FiEdit3 size={14} />
+            Переименовать группу
+          </button>
+
+          <button
+            type="button"
+            style={menuItemStyle}
+            onClick={() => {
+              onToggleGroupCollapsed(target.groupId);
+              setContextMenu(null);
+            }}
+          >
+            <FiChevronRight size={14} />
+            Свернуть / развернуть
+          </button>
+
+          <button
+            type="button"
+            style={menuItemStyle}
+            onClick={() => {
+              openArrayEditor(target.groupId);
+              setContextMenu(null);
+            }}
+          >
+            <FiLayers size={14} />
+            Редактировать массив
+          </button>
+        </div>,
+        portalHost,
+      );
+    }
   }
 
   return (
-    <div
-      style={{
-        ...styles.panel,
-        padding: 12,
-        width: 320,
-        minWidth: 280,
-        maxWidth: 360,
-        height: "100%",
-        minHeight: 0,
-        overflowY: "auto",
-        overflowX: "hidden",
-        borderRadius: 18,
-      }}
-      className="scrollbar-thin"
-    >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={styles.iconBadge}>
-          <FiLayers size={16} />
+    <>
+      <div
+        ref={rootRef}
+        style={{
+          ...styles.panel,
+          padding: 8,
+          width: 320,
+          minWidth: 260,
+          maxWidth: 360,
+          height: "100%",
+          minHeight: 0,
+          overflow: "hidden",
+          borderRadius: 16,
+          display: "flex",
+          flexDirection: "column",
+          position: "relative",
+        }}
+        className="scrollbar-thin"
+        onContextMenu={(e) => {
+          if (e.target === e.currentTarget) {
+            e.preventDefault();
+            setContextMenu(null);
+          }
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "4px 4px 8px",
+            borderBottom: `1px solid ${theme.border}`,
+            marginBottom: 8,
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              display: "grid",
+              placeItems: "center",
+              background: theme.primarySoft,
+              color: theme.primaryText,
+              flexShrink: 0,
+            }}
+          >
+            <FiLayers size={14} />
+          </div>
+
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 800,
+                color: theme.text,
+                lineHeight: 1.1,
+              }}
+            >
+              Проводник проекта
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: theme.textMuted,
+                marginTop: 2,
+                lineHeight: 1.1,
+              }}
+            >
+              {document.shapes.length} объектов
+            </div>
+          </div>
+
+          <button
+            type="button"
+            style={compactIconButton}
+            title="Дополнительно"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+
+              const rect = e.currentTarget.getBoundingClientRect();
+
+              let menuTarget: MenuTarget | null = null;
+
+              if (selection.primaryId) {
+                menuTarget = { kind: "shape", shapeId: selection.primaryId };
+              } else if (document.groups[0]?.id) {
+                menuTarget = { kind: "group", groupId: document.groups[0].id };
+              }
+
+              if (!menuTarget) return;
+
+              setContextMenu({
+                x: rect.right - 8,
+                y: rect.bottom + 4,
+                target: menuTarget,
+              });
+            }}
+          >
+            <FiMoreHorizontal size={14} />
+          </button>
         </div>
-        <div>
-          <div style={{ fontSize: 15, fontWeight: 800, color: theme.text }}>
-            Объекты CAD
-          </div>
-          <div style={{ fontSize: 12, color: theme.textMuted }}>
-            Группы, сортировка, видимость и переименование
-          </div>
+
+        <div style={{ padding: "0 4px 8px", flexShrink: 0 }}>
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Фильтр объектов..."
+            style={{
+              ...styles.input,
+              height: 32,
+              fontSize: 12,
+              borderRadius: 10,
+            }}
+          />
         </div>
-      </div>
 
-      <div style={{ display: "grid", gap: 10 }}>
-        {items.length === 0 && (
-          <div style={{ ...styles.panelInset, padding: 12, color: theme.textMuted, fontSize: 13 }}>
-            Пока нет объектов.
-          </div>
-        )}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: "0 2px 4px",
+          }}
+        >
+          {tree.length === 0 ? (
+            <div
+              style={{
+                ...styles.panelInset,
+                padding: 10,
+                color: theme.textMuted,
+                fontSize: 12,
+                borderRadius: 10,
+              }}
+            >
+              Ничего не найдено.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gap: 1 }}>
+              {tree.map((node) => {
+                const isRenaming =
+                  renaming &&
+                  renaming.kind === node.kind &&
+                  renaming.id === node.id;
 
-        {items.map((item) => {
-          if (item.kind === "group") {
-            const group = getGroupById(document, item.groupId);
-            const collapsed = group?.collapsed ?? false;
-            const allVisible = item.shapes.every((shape) => shape.visible !== false);
-            const selected = item.shapes.every((shape) => selection.ids.includes(shape.id));
-            const arrayBadge = getArrayBadgeMeta(group?.array);
-
-            return (
-              <div
-                key={item.groupId}
-                style={{
-                  border: `1px solid ${selected ? theme.primary : theme.border}`,
-                  borderRadius: 14,
-                  background: selected ? theme.primarySoft : theme.panelSolid,
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
-                    padding: "10px 12px",
-                    background: theme.panelMuted,
-                    borderBottom: collapsed ? "none" : `1px solid ${theme.border}`,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      minWidth: 0,
-                      flex: 1,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => onToggleGroupCollapsed(item.groupId)}
-                      style={{ ...iconButtonStyle, width: 26, height: 26, borderRadius: 8 }}
-                    >
-                      {collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onSelectionChange({
-                          ids: item.shapes.map((shape) => shape.id),
-                          primaryId: item.shapes[0]?.id ?? null,
-                        })
+                if (node.kind === "group") {
+                  return (
+                    <div
+                      key={`group-${node.id}`}
+                      onContextMenu={(e) =>
+                        handleContextMenu(e, { kind: "group", groupId: node.id })
                       }
                       style={{
-                        border: "none",
-                        background: "transparent",
-                        padding: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        cursor: "pointer",
-                        fontWeight: 800,
-                        color: theme.text,
-                        minWidth: 0,
+                        borderRadius: 8,
+                        background: node.selected ? theme.primarySoft : "transparent",
                       }}
                     >
-                      <FiLayers size={14} />
-                      <span>{group?.name ?? `Группа (${item.shapes.length})`}</span>
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => item.shapes.forEach((shape) => onToggleVisibility(shape.id))}
-                    title={allVisible ? "Скрыть группу" : "Показать группу"}
-                    style={iconButtonStyle}
-                  >
-                    {allVisible ? <FiEye size={14} /> : <FiEyeOff size={14} />}
-                  </button>
-                </div>
-
-                <div style={{ padding: 8, display: "grid", gap: 8 }}>
-                  <input
-                    type="text"
-                    value={group?.name ?? ""}
-                    onChange={(e) => onRenameGroup(item.groupId, e.target.value)}
-                    style={styles.input}
-                  />
-
-                  {arrayBadge && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
-                        flexWrap: "wrap",
-                        padding: 10,
-                        borderRadius: 12,
-                        background: theme.panelSolid,
-                        border: `1px solid ${theme.border}`,
-                      }}
-                    >
-                      <span
+                      <div
                         style={{
-                          fontSize: 12,
-                          fontWeight: 800,
-                          color: arrayBadge.color,
-                          background: arrayBadge.background,
-                          border: `1px solid ${arrayBadge.border}`,
-                          borderRadius: 999,
-                          padding: "4px 10px",
+                          height: 28,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 4,
+                          padding: "0 6px",
+                          color: theme.text,
+                          userSelect: "none",
                         }}
                       >
-                        {arrayBadge.label}
-                      </span>
+                        <button
+                          type="button"
+                          onClick={() => onToggleGroupCollapsed(node.id)}
+                          style={{
+                            ...compactIconButton,
+                            width: 18,
+                            height: 18,
+                            color: theme.textMuted,
+                          }}
+                        >
+                          {node.collapsed ? (
+                            <FiChevronRight size={12} />
+                          ) : (
+                            <FiChevronDown size={12} />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onSelectionChange({
+                              ids: node.shapes.map((shape) => shape.id),
+                              primaryId: node.shapes[0]?.id ?? null,
+                            })
+                          }
+                          onDoubleClick={() => beginRenameGroup(node.id)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            padding: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            minWidth: 0,
+                            flex: 1,
+                            cursor: "pointer",
+                            color: theme.text,
+                            textAlign: "left",
+                          }}
+                        >
+                          <FiFolder size={13} />
+                          {isRenaming ? (
+                            <input
+                              autoFocus
+                              value={renaming.value}
+                              onChange={(e) =>
+                                setRenaming((prev) =>
+                                  prev ? { ...prev, value: e.target.value } : prev,
+                                )
+                              }
+                              onBlur={commitRename}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitRename();
+                                if (e.key === "Escape") setRenaming(null);
+                              }}
+                              style={{
+                                ...styles.input,
+                                height: 24,
+                                fontSize: 12,
+                                borderRadius: 6,
+                                padding: "0 8px",
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                minWidth: 0,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                fontSize: 12,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {node.name}
+                            </span>
+                          )}
+                        </button>
+
+                        {node.arrayBadge && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              color: node.arrayBadge.color,
+                              background: node.arrayBadge.background,
+                              border: `1px solid ${node.arrayBadge.border}`,
+                              borderRadius: 999,
+                              padding: "1px 6px",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {node.arrayBadge.label}
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            node.shapes.forEach((shape) => onToggleVisibility(shape.id))
+                          }
+                          style={compactIconButton}
+                          title={node.visible ? "Скрыть группу" : "Показать группу"}
+                        >
+                          {node.visible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={`shape-${node.id}`}
+                    draggable
+                    onDragStart={() => setDraggedShapeId(node.id)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      moveShapeBefore(node.id);
+                    }}
+                    onDragEnd={() => setDraggedShapeId(null)}
+                    onContextMenu={(e) =>
+                      handleContextMenu(e, { kind: "shape", shapeId: node.id })
+                    }
+                    style={{
+                      marginLeft: node.depth * 14,
+                      borderRadius: 8,
+                      background: node.selected ? theme.primarySoft : "transparent",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: 26,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "0 6px",
+                        color: theme.text,
+                        userSelect: "none",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onSelectionChange(selectOnly(node.id))}
+                        onDoubleClick={() => beginRenameShape(node.id)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          padding: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          minWidth: 0,
+                          flex: 1,
+                          cursor: "pointer",
+                          color: theme.text,
+                          textAlign: "left",
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 14,
+                            height: 14,
+                            display: "grid",
+                            placeItems: "center",
+                            color: theme.textMuted,
+                            opacity: node.visible ? 1 : 0.6,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {getShapeIcon(node.shape)}
+                        </span>
+
+                        {isRenaming ? (
+                          <input
+                            autoFocus
+                            value={renaming.value}
+                            onChange={(e) =>
+                              setRenaming((prev) =>
+                                prev ? { ...prev, value: e.target.value } : prev,
+                              )
+                            }
+                            onBlur={commitRename}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitRename();
+                              if (e.key === "Escape") setRenaming(null);
+                            }}
+                            style={{
+                              ...styles.input,
+                              height: 22,
+                              fontSize: 12,
+                              borderRadius: 6,
+                              padding: "0 8px",
+                            }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              minWidth: 0,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              fontSize: 12,
+                              fontWeight: node.selected ? 700 : 500,
+                              opacity: node.visible ? 1 : 0.65,
+                            }}
+                          >
+                            {node.name}
+                          </span>
+                        )}
+                      </button>
 
                       <button
                         type="button"
-                        onClick={() => openArrayEditor(item.groupId)}
-                        style={styles.buttonGhost}
+                        onClick={() => onToggleVisibility(node.id)}
+                        style={compactIconButton}
+                        title={node.visible ? "Скрыть" : "Показать"}
                       >
-                        <FiEdit3 size={14} />
-                        Изменить массив
+                        {node.visible ? <FiEye size={12} /> : <FiEyeOff size={12} />}
                       </button>
                     </div>
-                  )}
-
-                  {!collapsed && item.shapes.map((shape) => {
-                    const active = selection.ids.includes(shape.id);
-                    return (
-                      <ShapeRow
-                        key={shape.id}
-                        shape={shape}
-                        active={active}
-                        onSelect={() => onSelectionChange(selectOnly(shape.id))}
-                        onRename={(name) => onRenameShape(shape.id, name)}
-                        onToggleVisibility={() => onToggleVisibility(shape.id)}
-                        onDelete={() => onDeleteShape(shape.id)}
-                        onDragStart={() => setDraggedShapeId(shape.id)}
-                        onDragOver={() => moveShapeBefore(shape.id)}
-                        onDragEnd={() => setDraggedShapeId(null)}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          }
-
-          const active = selection.ids.includes(item.shape.id);
-          return (
-            <ShapeRow
-              key={item.shape.id}
-              shape={item.shape}
-              active={active}
-              onSelect={() => onSelectionChange(selectOnly(item.shape.id))}
-              onRename={(name) => onRenameShape(item.shape.id, name)}
-              onToggleVisibility={() => onToggleVisibility(item.shape.id)}
-              onDelete={() => onDeleteShape(item.shape.id)}
-              onDragStart={() => setDraggedShapeId(item.shape.id)}
-              onDragOver={() => moveShapeBefore(item.shape.id)}
-              onDragEnd={() => setDraggedShapeId(null)}
-            />
-          );
-        })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {contextMenuNode}
+    </>
   );
 }
 
@@ -10926,9 +11461,403 @@ export function TextToolPanel({ value, fontOptions, onChange }: TextToolPanelPro
 }
 
 
+path: /plugins/builtinShapes.tsx
+----------------------------------------
+import type { CadPlugin } from "./types";
+import { defineShapePlugin } from "./types";
+import type {
+  SketchArc,
+  SketchCircle,
+  SketchLine,
+  SketchPolyline,
+  SketchRectangle,
+  SketchSvg,
+  SketchText,
+} from "../model/types";
+
+import { RectangleShapeView } from "../canvas/RectangleShapeView";
+import { CircleShapeView } from "../canvas/CircleShapeView";
+import { LineShapeView } from "../canvas/LineShapeView";
+import { ArcShapeView } from "../canvas/ArcShapeView";
+import { PolylineShapeView } from "../canvas/PolylineShapeView";
+import { TextShapeView } from "../canvas/TextShapeView";
+import { SvgShapeView } from "../canvas/SvgShapeView";
+import { shapeBounds } from "../model/shapeBounds";
+
+export const builtinShapesPlugin: CadPlugin = {
+  id: "builtin-shapes",
+  shapes: [
+    defineShapePlugin<SketchRectangle>({
+      type: "rectangle",
+      getBounds: shapeBounds,
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+        <RectangleShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+
+    defineShapePlugin<SketchCircle>({
+      type: "circle",
+      getBounds: shapeBounds,
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+        <CircleShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+
+    defineShapePlugin<SketchLine>({
+      type: "line",
+      getBounds: shapeBounds,
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+        <LineShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+
+    defineShapePlugin<SketchArc>({
+      type: "arc",
+      getBounds: shapeBounds,
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+        <ArcShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+
+    defineShapePlugin<SketchPolyline>({
+      type: "polyline",
+      getBounds: shapeBounds,
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+        <PolylineShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+
+    defineShapePlugin<SketchText>({
+      type: "text",
+      getBounds: shapeBounds,
+      render: ({
+        shape,
+        documentHeight,
+        view,
+        isSelected,
+        onPointerDown,
+        textPreviewMap,
+      }) => (
+        <TextShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          polylines={textPreviewMap[shape.id] ?? []}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+
+    defineShapePlugin<SketchSvg>({
+      type: "svg",
+      getBounds: shapeBounds,
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+        <SvgShapeView
+          shape={shape}
+          documentHeight={documentHeight}
+          view={view}
+          isSelected={isSelected}
+          onPointerDown={(event) => onPointerDown(event, shape.id)}
+        />
+      ),
+    }),
+  ],
+};
+
+
+path: /plugins/builtinTools.tsx
+----------------------------------------
+import {
+  FiCircle,
+  FiGitCommit,
+  FiMinus,
+  FiMousePointer,
+  FiPenTool,
+  FiSquare,
+  FiType,
+} from "react-icons/fi";
+import type { CadPlugin } from "./types";
+
+export const builtinToolsPlugin: CadPlugin = {
+  id: "builtin-tools",
+  tools: [
+    {
+      id: "select",
+      label: "Выбор",
+      hint: "Выделение и перемещение",
+      icon: <FiMousePointer size={14} />,
+      order: 0,
+    },
+    {
+      id: "rectangle",
+      label: "Прямоугольник",
+      hint: "Построить прямоугольник",
+      icon: <FiSquare size={14} />,
+      order: 10,
+    },
+    {
+      id: "circle",
+      label: "Окружность",
+      hint: "Построить окружность",
+      icon: <FiCircle size={14} />,
+      order: 20,
+    },
+    {
+      id: "line",
+      label: "Линия",
+      hint: "Построить линию",
+      icon: <FiMinus size={14} />,
+      order: 30,
+    },
+    {
+      id: "arc",
+      label: "Дуга",
+      hint: "Дуга: центр → старт → конец",
+      icon: <FiGitCommit size={14} />,
+      order: 40,
+    },
+    {
+      id: "polyline",
+      label: "Ломаная",
+      hint: "Построить ломаную",
+      icon: <FiPenTool size={14} />,
+      order: 50,
+    },
+    {
+      id: "text",
+      label: "Текст",
+      hint: "Добавить текст",
+      icon: <FiType size={14} />,
+      order: 60,
+    },
+  ],
+};
+
+
+path: /plugins/defaultRegistry.ts
+----------------------------------------
+import type { CadPlugin } from "./types";
+import { createCadPluginRegistry } from "./registry";
+import { builtinShapesPlugin } from "./builtinShapes";
+import { builtinToolsPlugin } from "./builtinTools";
+
+export function createDefaultCadRegistry(extraPlugins: CadPlugin[] = []) {
+  return createCadPluginRegistry([
+    builtinShapesPlugin,
+    builtinToolsPlugin,
+    ...extraPlugins,
+  ]);
+}
+
+
+path: /plugins/registry.tsx
+----------------------------------------
+import { createContext, useContext } from "react";
+import type { PropsWithChildren } from "react";
+import type {
+  AnyShapePlugin,
+  CadPlugin,
+  CommandPlugin,
+  ToolPlugin,
+} from "./types";
+import type { SketchShape, SketchShapeType, SketchTool } from "../model/types";
+
+export type CadPluginRegistry = {
+  plugins: CadPlugin[];
+  shapePlugins: Map<SketchShapeType, AnyShapePlugin>;
+  toolPlugins: Map<SketchTool, ToolPlugin>;
+  commandPlugins: Map<string, CommandPlugin>;
+};
+
+export function createCadPluginRegistry(
+  plugins: CadPlugin[],
+): CadPluginRegistry {
+  const shapePlugins = new Map<SketchShapeType, AnyShapePlugin>();
+  const toolPlugins = new Map<SketchTool, ToolPlugin>();
+  const commandPlugins = new Map<string, CommandPlugin>();
+
+  for (const plugin of plugins) {
+    for (const shape of plugin.shapes ?? []) {
+      shapePlugins.set(shape.type as SketchShapeType, shape);
+    }
+
+    for (const tool of plugin.tools ?? []) {
+      toolPlugins.set(tool.id, tool);
+    }
+
+    for (const command of plugin.commands ?? []) {
+      commandPlugins.set(command.id, command);
+    }
+  }
+
+  return {
+    plugins,
+    shapePlugins,
+    toolPlugins,
+    commandPlugins,
+  };
+}
+
+export function getShapePlugin(
+  registry: CadPluginRegistry,
+  shape: SketchShape,
+): AnyShapePlugin | undefined {
+  return registry.shapePlugins.get(shape.type as SketchShapeType);
+}
+
+export function getToolPlugins(registry: CadPluginRegistry): ToolPlugin[] {
+  return [...registry.toolPlugins.values()].sort(
+    (a, b) => (a.order ?? 0) - (b.order ?? 0),
+  );
+}
+
+const CadRegistryContext = createContext<CadPluginRegistry | null>(null);
+
+export function CadRegistryProvider({
+  registry,
+  children,
+}: PropsWithChildren<{ registry: CadPluginRegistry }>) {
+  return (
+    <CadRegistryContext.Provider value={registry}>
+      {children}
+    </CadRegistryContext.Provider>
+  );
+}
+
+export function useCadRegistry(): CadPluginRegistry {
+  const registry = useContext(CadRegistryContext);
+
+  if (!registry) {
+    throw new Error(
+      "CadRegistryProvider is missing. Wrap CAD UI with <CadRegistryProvider registry={...}>.",
+    );
+  }
+
+  return registry;
+}
+
+export function useShapePlugin(shape: SketchShape): AnyShapePlugin | undefined {
+  const registry = useCadRegistry();
+  return getShapePlugin(registry, shape);
+}
+
+export function useToolPlugins(): ToolPlugin[] {
+  const registry = useCadRegistry();
+  return getToolPlugins(registry);
+}
+
+
+path: /plugins/types.ts
+----------------------------------------
+import type React from "react";
+import type {
+  SketchDocument,
+  SketchShape,
+  SketchTool,
+} from "../model/types";
+import type { ViewTransform } from "../model/view";
+import type { SelectionState } from "../model/selection";
+import type { Bounds2D } from "../model/shapeBounds";
+
+export type ShapeRenderProps<TShape extends SketchShape = SketchShape> = {
+  shape: TShape;
+  documentHeight: number;
+  view: ViewTransform;
+  isSelected: boolean;
+  textPreviewMap: Record<string, { x: number; y: number }[][]>;
+  onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+};
+
+export type ShapePlugin<TShape extends SketchShape = SketchShape> = {
+  type: TShape["type"];
+  render: (props: ShapeRenderProps<TShape>) => React.ReactNode;
+  getBounds: (shape: TShape) => Bounds2D;
+  hitTest?: (
+    point: { x: number; y: number },
+    shape: TShape,
+    tolerance: number,
+  ) => boolean;
+};
+
+/**
+ * "Стертый" тип для хранения в registry.
+ * На границе registry мы теряем конкретный TShape,
+ * а типобезопасность сохраняем через defineShapePlugin().
+ */
+export type AnyShapePlugin = ShapePlugin<any>;
+
+export function defineShapePlugin<TShape extends SketchShape>(
+  plugin: ShapePlugin<TShape>,
+): AnyShapePlugin {
+  return plugin as AnyShapePlugin;
+}
+
+export type ToolRuntime = {
+  document: SketchDocument;
+  selection: SelectionState;
+  view: ViewTransform;
+  setTool: (tool: SketchTool) => void;
+  setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  onSelectionChange: (selection: SelectionState) => void;
+  checkpointHistory: () => void;
+};
+
+export type ToolPlugin = {
+  id: SketchTool;
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+  order?: number;
+};
+
+export type CommandPlugin = {
+  id: string;
+  title: string;
+  run: (runtime: ToolRuntime) => void;
+};
+
+export type CadPlugin = {
+  id: string;
+  shapes?: AnyShapePlugin[];
+  tools?: ToolPlugin[];
+  commands?: CommandPlugin[];
+};
+
+
 === SUMMARY ===
-included: 53
+included: 58
 skipped(binary): 0
 skipped(size): 0
 skipped(ext): 0
-totalBytes(approx): 294190
+totalBytes(approx): 318764
