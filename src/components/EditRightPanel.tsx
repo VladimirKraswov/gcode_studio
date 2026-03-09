@@ -56,6 +56,14 @@ export function EditRightPanel({
 
       <DocumentSettingsPanel document={document} setDocument={setDocument} />
 
+      {selectedShape && (
+        <ShapePropertiesPanel
+          document={document}
+          setDocument={setDocument}
+          selectedShape={selectedShape}
+        />
+      )}
+
       <div style={{ height: 1, background: theme.border, margin: "18px 0" }} />
 
       <div style={{ display: "grid", gap: 10 }}>
@@ -76,14 +84,6 @@ export function EditRightPanel({
           </select>
         </label>
       </div>
-
-      {selectedShape && (
-        <ShapePropertiesPanel
-          document={document}
-          setDocument={setDocument}
-          selectedShape={selectedShape}
-        />
-      )}
     </div>
   );
 }
