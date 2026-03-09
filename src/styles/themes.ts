@@ -1,19 +1,19 @@
 // src/styles/themes.ts
 export const lightTheme = {
-  bg: "#f8fafc",
-  bgSoft: "#f1f5f9",
-  app: "#f1f5f9",
+  bg: "#fcf8f3",       // очень светлый тёплый фон
+  bgSoft: "#f5efe8",   // чуть насыщеннее
+  app: "#f5efe8",
   panel: "rgba(255,255,255,0.92)",
   panelSolid: "#ffffff",
-  panelMuted: "#f8fafc",
-  border: "#e2e8f0",
-  borderStrong: "#cbd5e1",
-  text: "#0f172a",
-  textSoft: "#334155",
-  textMuted: "#64748b",
-  primary: "#3b82f6",
-  primarySoft: "#dbeafe",
-  primaryText: "#2563eb",
+  panelMuted: "#faf1e7", // тёплый молочный
+  border: "#e8dccc",    // тёплый светло-серый
+  borderStrong: "#d6c9b8",
+  text: "#2c2c2c",      // тёплый тёмно-серый
+  textSoft: "#5a4f45",
+  textMuted: "#8b7f72",
+  primary: "#d97706",   // amber-600
+  primarySoft: "#fef3c7", // amber-100
+  primaryText: "#b45309", // amber-700
   success: "#10b981",
   successSoft: "#d1fae5",
   warning: "#f59e0b",
@@ -29,55 +29,55 @@ export const lightTheme = {
   },
 
   cad: {
-    canvasBg: "#f8fafc",
+    canvasBg: "#fcf8f3",
     sheetFill: "rgba(255,255,255,0.86)",
-    sheetStroke: "#cbd5e1",
+    sheetStroke: "#d6c9b8",
 
-    gridMinor: "#e2e8f0",
-    gridMajor: "#cbd5e1",
-    ruler: "#cbd5e1",
-    rulerTickMajor: "#64748b",
-    rulerTickMinor: "#94a3b8",
-    rulerText: "#475569",
+    gridMinor: "#e8dccc",
+    gridMajor: "#d6c9b8",
+    ruler: "#d6c9b8",
+    rulerTickMajor: "#8b7f72",
+    rulerTickMinor: "#b3a693",
+    rulerText: "#5a4f45",
 
-    axisX: "#ef4444",
-    axisY: "#2563eb",
-    axisText: "#0f172a",
-    origin: "#ef4444",
-    originText: "#0f172a",
+    axisX: "#f87171",   // красный (оставим)
+    axisY: "#d97706",   // amber-600
+    axisText: "#2c2c2c",
+    origin: "#f87171",
+    originText: "#2c2c2c",
 
-    shapeStroke: "#475569",
-    selectedStroke: "#1d4ed8",
+    shapeStroke: "#5a4f45",
+    selectedStroke: "#d97706",
 
-    selectionStroke: "#2563eb",
-    selectionFill: "rgba(37, 99, 235, 0.06)",
-    selectionHoverFill: "rgba(37, 99, 235, 0.12)",
+    selectionStroke: "#d97706",
+    selectionFill: "rgba(217, 119, 6, 0.06)",
+    selectionHoverFill: "rgba(217, 119, 6, 0.12)",
     selectionDragStroke: "#d97706",
     selectionDragFill: "rgba(245, 158, 11, 0.12)",
 
-    draftStroke: "#2563eb",
-    draftFill: "rgba(37,99,235,0.12)",
-    draftAccent: "#ef4444",
-    draftGuide: "#93c5fd",
+    draftStroke: "#d97706",
+    draftFill: "rgba(217,119,6,0.12)",
+    draftAccent: "#f87171",
+    draftGuide: "#fdba74", // amber-300
 
-    constraintStroke: "#0f172a",
-    constraintMuted: "#94a3b8",
-    constraintSource: "#1d4ed8",
-    constraintTarget: "#475569",
-    constraintHandleX: "#2563eb",
-    constraintHandleY: "#7c3aed",
+    constraintStroke: "#2c2c2c",
+    constraintMuted: "#b3a693",
+    constraintSource: "#d97706",
+    constraintTarget: "#5a4f45",
+    constraintHandleX: "#d97706",
+    constraintHandleY: "#fbbf24",
     constraintLabelFill: "#ffffff",
-    constraintLabelStroke: "#cbd5e1",
-    constraintLabelText: "#0f172a",
+    constraintLabelStroke: "#d6c9b8",
+    constraintLabelText: "#2c2c2c",
 
     constraintPreviewStroke: "#f59e0b",
     constraintPreviewFill: "#fff7ed",
     constraintPreviewBorder: "#fdba74",
     constraintPreviewText: "#9a3412",
 
-    arrayPreviewStroke: "#22c55e",
-    arrayPreviewFill: "rgba(34,197,94,0.08)",
-    arrayPreviewGuide: "rgba(34,197,94,0.35)",
+    arrayPreviewStroke: "#d97706",
+    arrayPreviewFill: "rgba(217,119,6,0.08)",
+    arrayPreviewGuide: "rgba(217,119,6,0.35)",
   },
 };
 

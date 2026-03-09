@@ -26,6 +26,7 @@ import {
 import { downloadTextFile } from "../utils";
 import { useStyles } from "../styles/useStyles";
 import { useTheme } from "../contexts/ThemeContext";
+import { lightEditorTheme, darkEditorTheme } from "../styles/editorThemes";
 
 type GCodeEditorProps = {
   source: string;
@@ -83,108 +84,6 @@ const oneDarkHighlightStyle = HighlightStyle.define([
   { tag: tags.atom, color: "#e5c07b" },
 ]);
 
-const lightEditorTheme = EditorView.theme(
-  {
-    "&": {
-      height: "100%",
-      width: "100%",
-      fontSize: "13px",
-      color: "#24292e",
-      backgroundColor: "#ffffff",
-    },
-
-    ".cm-editor": {
-      height: "100%",
-      backgroundColor: "#ffffff",
-    },
-
-    ".cm-scroller": {
-      backgroundColor: "#ffffff",
-      color: "#24292e",
-      fontFamily: "monospace",
-    },
-
-    ".cm-content": {
-      caretColor: "#0366d6",
-    },
-
-    ".cm-gutters": {
-      backgroundColor: "#f6f8fa",
-      color: "#6a737d",
-      borderRight: "1px solid #e1e4e8",
-    },
-
-    ".cm-activeLine": {
-      backgroundColor: "#f0f3f5",
-    },
-
-    ".cm-activeLineGutter": {
-      backgroundColor: "#e2e5e9",
-      color: "#24292e",
-    },
-
-    ".cm-cursor": {
-      borderLeftColor: "#0366d6",
-    },
-
-    ".cm-selectionBackground, ::selection": {
-      backgroundColor: "#c8e1ff",
-    },
-  },
-  { dark: false }
-);
-
-const darkEditorTheme = EditorView.theme(
-  {
-    "&": {
-      height: "100%",
-      width: "100%",
-      fontSize: "13px",
-      color: "#abb2bf",
-      backgroundColor: "#282c34",
-    },
-
-    ".cm-editor": {
-      height: "100%",
-      backgroundColor: "#282c34",
-    },
-
-    ".cm-scroller": {
-      backgroundColor: "#282c34",
-      color: "#abb2bf",
-      fontFamily: "monospace",
-    },
-
-    ".cm-content": {
-      caretColor: "#61afef",
-    },
-
-    ".cm-gutters": {
-      backgroundColor: "#21252b",
-      color: "#7f848e",
-      borderRight: "1px solid #3e4451",
-    },
-
-    ".cm-activeLine": {
-      backgroundColor: "rgba(97, 175, 239, 0.10)",
-    },
-
-    ".cm-activeLineGutter": {
-      backgroundColor: "rgba(97, 175, 239, 0.16)",
-      color: "#abb2bf",
-    },
-
-    ".cm-cursor": {
-      borderLeftColor: "#61afef",
-    },
-
-    ".cm-selectionBackground, ::selection": {
-      backgroundColor: "rgba(80, 160, 210, 0.3)",
-    },
-  },
-  { dark: true }
-);
-
 export function GCodeEditor({
   source,
   setSource,
@@ -194,7 +93,7 @@ export function GCodeEditor({
   title = "Редактор G-code",
 }: GCodeEditorProps) {
   const styles = useStyles();
-  const { theme, isDark } = useTheme(); // получаем флаг тёмной темы
+  const { theme, isDark } = useTheme();
   const editorRef = useRef<ReactCodeMirrorRef | null>(null);
   const localValueRef = useRef(source);
 
@@ -222,7 +121,7 @@ export function GCodeEditor({
       EditorView.editable.of(true),
       gcodeLanguage,
       syntaxHighlighting(oneDarkHighlightStyle),
-      isDark ? darkEditorTheme : lightEditorTheme, // выбираем тему в зависимости от isDark
+      isDark ? darkEditorTheme : lightEditorTheme,
       keymap.of([
         {
           key: "Mod-s",
@@ -583,7 +482,7 @@ export function GCodeEditor({
             minHeight: 0,
             borderRadius: 18,
             overflow: "hidden",
-            border: `1px solid ${isDark ? "#1e293b" : "#e2e8f0"}`,
+            border: `1px solid ${isDark ? theme.borderStrong : "#e2e8f0"}`,
             boxShadow: "inset 0 1px 0 rgba(0,0,0,0.04)",
             display: "flex",
           }}
@@ -594,7 +493,6 @@ export function GCodeEditor({
             height="100%"
             width="100%"
             extensions={extensions}
-            // theme={isDark ? "dark" : "light"}
             basicSetup={{
               foldGutter: false,
               dropCursor: false,
