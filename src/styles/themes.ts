@@ -82,28 +82,28 @@ export const lightTheme = {
 };
 
 export const darkTheme = {
-  bg: "#0f172a",
-  bgSoft: "#1e293b",
-  app: "#0b1120",
-  panel: "rgba(30, 41, 59, 0.95)",
-  panelSolid: "#1e293b",
-  panelMuted: "#334155",
-  border: "#334155",
-  borderStrong: "#475569",
-  text: "#f1f5f9",
-  textSoft: "#cbd5e1",
-  textMuted: "#94a3b8",
-  primary: "#3b82f6",
-  primarySoft: "#1e3a8a",
-  primaryText: "#60a5fa",
+  bg: "#1c1917", // warm dark background (stone-900)
+  bgSoft: "#292524", // stone-800
+  app: "#0c0a09", // stone-950
+  panel: "rgba(41, 37, 36, 0.95)", // warm semi-transparent
+  panelSolid: "#292524", // stone-800
+  panelMuted: "#44403c", // stone-700
+  border: "#44403c",
+  borderStrong: "#57534e",
+  text: "#f5f5f4",
+  textSoft: "#d6d3d1",
+  textMuted: "#a8a29e",
+  primary: "#f59e0b", // amber-500
+  primarySoft: "#7b341e", // warm brown
+  primaryText: "#d97706", // amber-600
   success: "#10b981",
   successSoft: "#064e3b",
   warning: "#f59e0b",
   warningSoft: "#78350f",
   danger: "#ef4444",
   dangerSoft: "#7f1d1d",
-  shadow: "0 20px 40px rgba(0, 0, 0, 0.5), 0 8px 18px rgba(0, 0, 0, 0.4)",
-  shadowSoft: "0 8px 24px rgba(0, 0, 0, 0.4)",
+  shadow: "0 20px 40px rgba(0, 0, 0, 0.6), 0 8px 18px rgba(0, 0, 0, 0.5)",
+  shadowSoft: "0 8px 24px rgba(0, 0, 0, 0.5)",
   radius: {
     lg: 16,
     xl: 20,
@@ -111,55 +111,55 @@ export const darkTheme = {
   },
 
   cad: {
-    canvasBg: "#0f172a",
-    sheetFill: "rgba(15,23,42,0.72)",
-    sheetStroke: "#475569",
+    canvasBg: "#1c1917", // stone-900
+    sheetFill: "rgba(28,25,23,0.72)",
+    sheetStroke: "#57534e", // stone-600
 
-    gridMinor: "#334155",
-    gridMajor: "#475569",
-    ruler: "#475569",
-    rulerTickMajor: "#94a3b8",
-    rulerTickMinor: "#64748b",
-    rulerText: "#cbd5e1",
+    gridMinor: "#44403c", // stone-700
+    gridMajor: "#57534e", // stone-600
+    ruler: "#57534e",
+    rulerTickMajor: "#a8a29e", // stone-400
+    rulerTickMinor: "#78716c", // stone-500
+    rulerText: "#d6d3d1", // stone-300
 
-    axisX: "#f87171",
-    axisY: "#60a5fa",
-    axisText: "#e2e8f0",
+    axisX: "#f87171", // red-400
+    axisY: "#fbbf24", // amber-400 (warm yellow)
+    axisText: "#f5f5f4",
     origin: "#f87171",
-    originText: "#e2e8f0",
+    originText: "#f5f5f4",
 
-    shapeStroke: "#cbd5e1",
-    selectedStroke: "#60a5fa",
+    shapeStroke: "#d6d3d1", // stone-300
+    selectedStroke: "#f59e0b", // amber-500
 
-    selectionStroke: "#60a5fa",
-    selectionFill: "rgba(96, 165, 250, 0.10)",
-    selectionHoverFill: "rgba(96, 165, 250, 0.16)",
-    selectionDragStroke: "#f59e0b",
-    selectionDragFill: "rgba(245, 158, 11, 0.16)",
+    selectionStroke: "#f59e0b", // amber-500
+    selectionFill: "rgba(245, 158, 11, 0.10)",
+    selectionHoverFill: "rgba(245, 158, 11, 0.16)",
+    selectionDragStroke: "#d97706", // amber-600
+    selectionDragFill: "rgba(217, 119, 6, 0.16)",
 
-    draftStroke: "#60a5fa",
-    draftFill: "rgba(96,165,250,0.14)",
-    draftAccent: "#f87171",
-    draftGuide: "#93c5fd",
+    draftStroke: "#f59e0b", // amber-500
+    draftFill: "rgba(245,158,11,0.14)",
+    draftAccent: "#f87171", // red-400
+    draftGuide: "#fde68a", // amber-200
 
-    constraintStroke: "#e2e8f0",
-    constraintMuted: "#64748b",
-    constraintSource: "#60a5fa",
-    constraintTarget: "#94a3b8",
-    constraintHandleX: "#60a5fa",
-    constraintHandleY: "#a78bfa",
-    constraintLabelFill: "#1e293b",
-    constraintLabelStroke: "#475569",
-    constraintLabelText: "#f1f5f9",
+    constraintStroke: "#f5f5f4",
+    constraintMuted: "#78716c", // stone-500
+    constraintSource: "#f59e0b", // amber-500
+    constraintTarget: "#a8a29e", // stone-400
+    constraintHandleX: "#f59e0b", // amber-500
+    constraintHandleY: "#fbbf24", // amber-400
+    constraintLabelFill: "#292524", // stone-800
+    constraintLabelStroke: "#57534e",
+    constraintLabelText: "#f5f5f4",
 
-    constraintPreviewStroke: "#f59e0b",
+    constraintPreviewStroke: "#d97706", // amber-600
     constraintPreviewFill: "#3f2a12",
     constraintPreviewBorder: "#b45309",
-    constraintPreviewText: "#fdba74",
+    constraintPreviewText: "#fdba74", // amber-300
 
-    arrayPreviewStroke: "#22c55e",
-    arrayPreviewFill: "rgba(34,197,94,0.12)",
-    arrayPreviewGuide: "rgba(74,222,128,0.35)",
+    arrayPreviewStroke: "#f59e0b", // amber-500
+    arrayPreviewFill: "rgba(245,158,11,0.12)",
+    arrayPreviewGuide: "rgba(245,158,11,0.35)",
   },
 };
 
