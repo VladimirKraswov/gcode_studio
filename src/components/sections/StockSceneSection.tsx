@@ -1,7 +1,5 @@
 // src/components/sections/StockSceneSection.tsx
 import type { PlacementMode, StockDimensions } from "../../types/gcode";
-import { useStyles } from "../../styles/useStyles";
-import { useTheme } from "../../contexts/ThemeContext";
 import { RangeCard } from "./RangeCard";
 
 type StockSceneSectionProps = {
@@ -25,31 +23,14 @@ export function StockSceneSection({
   detailLevel,
   onDetailLevelChange,
 }: StockSceneSectionProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
-  const radioLine: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 13,
-    color: theme.text,
-    marginBottom: 8,
-  };
-
   return (
     <>
-      <div
-        style={{
-          ...styles.panelInset,
-          padding: 12,
-          marginBottom: 12,
-        }}
-      >
-        <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 10 }}>
+      <div className="ui-panel-inset mb-3 p-3">
+        <div className="mb-2.5 text-[13px] font-extrabold text-[var(--color-text)]">
           Позиционирование
         </div>
-        <label style={radioLine}>
+
+        <label className="mb-2 flex items-center gap-2.5 text-[13px] text-[var(--color-text)]">
           <input
             type="radio"
             checked={placementMode === "origin"}
@@ -57,7 +38,8 @@ export function StockSceneSection({
           />
           <span>Левый нижний угол</span>
         </label>
-        <label style={radioLine}>
+
+        <label className="flex items-center gap-2.5 text-[13px] text-[var(--color-text)]">
           <input
             type="radio"
             checked={placementMode === "center"}
@@ -67,15 +49,8 @@ export function StockSceneSection({
         </label>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
-        <label style={styles.inputLabel}>
+      <div className="mb-3 grid grid-cols-3 gap-2">
+        <label className="ui-label">
           Ширина
           <input
             type="number"
@@ -87,10 +62,11 @@ export function StockSceneSection({
                 width: Math.max(1, Number(e.target.value) || 1),
               })
             }
-            style={styles.input}
+            className="ui-input"
           />
         </label>
-        <label style={styles.inputLabel}>
+
+        <label className="ui-label">
           Высота
           <input
             type="number"
@@ -102,10 +78,11 @@ export function StockSceneSection({
                 height: Math.max(1, Number(e.target.value) || 1),
               })
             }
-            style={styles.input}
+            className="ui-input"
           />
         </label>
-        <label style={styles.inputLabel}>
+
+        <label className="ui-label">
           Толщина
           <input
             type="number"
@@ -118,25 +95,12 @@ export function StockSceneSection({
                 thickness: Math.max(0.1, Number(e.target.value) || 0.1),
               })
             }
-            style={styles.input}
+            className="ui-input"
           />
         </label>
       </div>
 
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: 12,
-          borderRadius: 14,
-          background: theme.panelSolid,
-          border: `1px solid ${theme.border}`,
-          fontSize: 13,
-          fontWeight: 700,
-          marginBottom: 12,
-        }}
-      >
+      <label className="ui-check-row mb-3 rounded-[14px]">
         <input
           type="checkbox"
           checked={showMaterialRemoval}

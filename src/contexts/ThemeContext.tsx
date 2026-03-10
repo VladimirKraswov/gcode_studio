@@ -1,6 +1,5 @@
-// src/contexts/ThemeContext.tsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { lightTheme, darkTheme } from '../styles/themes';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { lightTheme, darkTheme } from "../styles/themes";
 
 type Theme = typeof lightTheme;
 
@@ -12,21 +11,22 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'gcode-studio-theme';
+const STORAGE_KEY = "gcode-studio-theme";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved === 'dark';
+    return saved === "dark";
   });
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, isDark ? 'dark' : 'light');
+    localStorage.setItem(STORAGE_KEY, isDark ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
   }, [isDark]);
 
   const theme = isDark ? darkTheme : lightTheme;
 
-  const toggleTheme = () => setIsDark(prev => !prev);
+  const toggleTheme = () => setIsDark((prev) => !prev);
 
   return (
     <ThemeContext.Provider value={{ theme, isDark, toggleTheme }}>
@@ -37,6 +37,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
 export function useTheme() {
   const context = useContext(ThemeContext);
-  if (!context) throw new Error('useTheme must be used within ThemeProvider');
+  if (!context) throw new Error("useTheme must be used within ThemeProvider");
   return context;
 }

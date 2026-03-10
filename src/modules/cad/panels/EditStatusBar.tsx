@@ -1,4 +1,3 @@
-import { useTheme } from "../../../contexts/ThemeContext";
 import type { SketchTool } from "../model/types";
 
 type EditStatusBarProps = {
@@ -18,8 +17,6 @@ export function EditStatusBar({
   isTransforming,
   hasDraft,
 }: EditStatusBarProps) {
-  const { theme } = useTheme();
-
   const interactionLabel = isTransforming
     ? "Трансформация / ограничение"
     : isDragging
@@ -53,18 +50,7 @@ export function EditStatusBar({
           : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
 
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 12,
-        flexWrap: "wrap",
-        marginTop: 12,
-        color: theme.textMuted,
-        fontSize: 12,
-        flexShrink: 0,
-      }}
-    >
+    <div className="mt-3 flex shrink-0 flex-wrap justify-between gap-3 text-xs text-[var(--color-text-muted)]">
       <span>{hint}</span>
       <span>
         {interactionLabel} · Объектов: {objectCount}

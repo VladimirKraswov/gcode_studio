@@ -1,8 +1,6 @@
 import type { ChangeEvent } from "react";
 import { FiFolder, FiPlay, FiSliders } from "react-icons/fi";
 import type { PlacementMode, StockDimensions } from "../types/gcode";
-import { useStyles } from "../styles/useStyles";
-import { useTheme } from "../contexts/ThemeContext";
 import {
   CollapsibleSection,
   FileProjectSection,
@@ -61,20 +59,21 @@ export function LeftPanel({
   detailLevel,
   onDetailLevelChange,
 }: LeftPanelProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   if (mode === "cad") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <section style={{ ...styles.panel, padding: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ ...styles.iconBadge, width: 40, height: 40 }}>
+      <div className="flex flex-col gap-4">
+        <section className="ui-panel p-4">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
               <FiFolder size={18} />
             </div>
-            <span style={{ fontSize: 16, fontWeight: 600, color: theme.text }}>Объекты CAD</span>
+
+            <span className="text-base font-semibold text-[var(--color-text)]">
+              Объекты CAD
+            </span>
           </div>
-          <div style={{ marginTop: 12, color: theme.textMuted, fontSize: 13, lineHeight: 1.5 }}>
+
+          <div className="mt-3 text-[13px] leading-6 text-[var(--color-text-muted)]">
             В режиме CAD в левой колонке отображается список объектов и групп.
           </div>
         </section>
@@ -83,7 +82,7 @@ export function LeftPanel({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div className="flex flex-col gap-4">
       <CollapsibleSection title="Файл проекта" icon={<FiFolder size={18} />}>
         <FileProjectSection
           fileName={fileName}
@@ -107,7 +106,11 @@ export function LeftPanel({
         />
       </CollapsibleSection>
 
-      <CollapsibleSection title="Заготовка и сцена" icon={<FiSliders size={18} />} defaultCollapsed={false}>
+      <CollapsibleSection
+        title="Заготовка и сцена"
+        icon={<FiSliders size={18} />}
+        defaultCollapsed={false}
+      >
         <StockSceneSection
           placementMode={placementMode}
           onPlacementModeChange={onPlacementModeChange}

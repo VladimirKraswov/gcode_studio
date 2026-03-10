@@ -25,7 +25,7 @@ export function DocumentSettingsPanel({
       id: "scene",
       label: "Документ",
       content: (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="grid gap-3">
           <GridSheetSection document={document} setDocument={setDocument} />
         </div>
       ),
@@ -34,7 +34,7 @@ export function DocumentSettingsPanel({
       id: "tool",
       label: "CAM",
       content: (
-        <div style={{ display: "grid", gap: 12 }}>
+        <div className="grid gap-3">
           <ToolSection document={document} setDocument={setDocument} />
           <FeedsSection document={document} setDocument={setDocument} />
           <CamDefaultsSection document={document} setDocument={setDocument} />
@@ -47,7 +47,7 @@ export function DocumentSettingsPanel({
   ];
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div className="grid gap-3">
       <SettingsTabs tabs={tabs} />
     </div>
   );

@@ -1,7 +1,5 @@
 import type { ChangeEvent } from "react";
 import { FiBox, FiCamera, FiFolder, FiSave, FiUpload } from "react-icons/fi";
-import { useStyles } from "../../styles/useStyles";
-import { useTheme } from "../../contexts/ThemeContext";
 
 type FileProjectSectionProps = {
   fileName: string;
@@ -20,100 +18,54 @@ export function FileProjectSection({
   onLoadDemo,
   onResetCamera,
 }: FileProjectSectionProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
     <>
-      <label
-        style={{
-          ...styles.buttonGhost,
-          width: "100%",
-          justifyContent: "center",
-          marginBottom: 12,
-          position: "relative",
-          overflow: "hidden",
-        }}
-      >
+      {/* Кнопка загрузки G‑code */}
+      <label className="ui-btn-ghost w-full justify-center mb-3 relative overflow-hidden">
         <FiUpload size={16} />
         <span>Загрузить G-code</span>
         <input
           type="file"
           accept=".gcode,.nc,.tap,.txt"
           onChange={onFileChange}
-          style={{
-            position: "absolute",
-            inset: 0,
-            opacity: 0,
-            cursor: "pointer",
-          }}
+          className="absolute inset-0 opacity-0 cursor-pointer"
         />
       </label>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
-        <label
-          style={{
-            ...styles.buttonGhost,
-            width: "100%",
-            justifyContent: "center",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
+      {/* Сетка для проектных файлов */}
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <label className="ui-btn-ghost w-full justify-center relative overflow-hidden">
           <FiFolder size={15} />
           <span>Открыть .gs</span>
           <input
             type="file"
             accept=".gs,application/json"
             onChange={onProjectFileChange}
-            style={{
-              position: "absolute",
-              inset: 0,
-              opacity: 0,
-              cursor: "pointer",
-            }}
+            className="absolute inset-0 opacity-0 cursor-pointer"
           />
         </label>
 
-        <button type="button" onClick={onSaveProject} style={styles.buttonGhost}>
+        <button type="button" onClick={onSaveProject} className="ui-btn-ghost w-full justify-center">
           <FiSave size={15} />
           Сохранить .gs
         </button>
       </div>
 
-      <div
-        style={{
-          ...styles.panelInset,
-          padding: 12,
-          marginBottom: 12,
-        }}
-      >
-        <div style={styles.mutedText}>Текущий файл</div>
-        <div
-          style={{
-            marginTop: 6,
-            fontWeight: 800,
-            color: theme.text,
-            wordBreak: "break-word",
-          }}
-        >
+      {/* Информация о текущем файле */}
+      <div className="ui-panel-inset p-3 mb-3">
+        <div className="text-xs text-text-muted">Текущий файл</div>
+        <div className="mt-1.5 font-extrabold text-text break-words">
           {fileName}
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <button type="button" onClick={onLoadDemo} style={styles.buttonGhost}>
+      {/* Кнопки управления */}
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={onLoadDemo} className="ui-btn-ghost w-full justify-center">
           <FiBox size={15} />
           Демо
         </button>
-        <button type="button" onClick={onResetCamera} style={styles.buttonGhost}>
+        <button type="button" onClick={onResetCamera} className="ui-btn-ghost w-full justify-center">
           <FiCamera size={15} />
           Камера
         </button>

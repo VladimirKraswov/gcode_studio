@@ -1,46 +1,24 @@
 // src/modules/cad/panels/settings/GridSheetSection.tsx
-import { useStyles } from "../../../../styles/useStyles";
-import { useTheme } from "../../../../contexts/ThemeContext";
 import type { SketchDocument } from "../../model/types";
 import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
-
-const twoColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
 
 type GridSheetSectionProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
 };
 
-export function GridSheetSection({ document, setDocument }: GridSheetSectionProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
-  const checkboxRow: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 13,
-    fontWeight: 700,
-    color: theme.text,
-    padding: 12,
-    borderRadius: 12,
-    background: theme.panelSolid,
-    border: `1px solid ${theme.border}`,
-  };
-
+export function GridSheetSection({
+  document,
+  setDocument,
+}: GridSheetSectionProps) {
   return (
     <CollapsibleCardBlock title="Сетка и лист">
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={twoColumnGrid}>
-          <label style={styles.inputLabel}>
+      <div className="grid gap-2.5">
+        <div className="grid min-w-0 grid-cols-2 gap-2.5">
+          <label className="ui-label">
             Ширина листа
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               min="1"
               value={document.width}
@@ -53,10 +31,10 @@ export function GridSheetSection({ document, setDocument }: GridSheetSectionProp
             />
           </label>
 
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Высота листа
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               min="1"
               value={document.height}
@@ -70,10 +48,10 @@ export function GridSheetSection({ document, setDocument }: GridSheetSectionProp
           </label>
         </div>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Шаг сетки
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="1"
             value={document.snapStep}
@@ -86,7 +64,7 @@ export function GridSheetSection({ document, setDocument }: GridSheetSectionProp
           />
         </label>
 
-        <label style={checkboxRow}>
+        <label className="ui-check-row">
           <input
             type="checkbox"
             checked={document.snapEnabled}

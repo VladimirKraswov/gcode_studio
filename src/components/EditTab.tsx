@@ -14,8 +14,6 @@ import {
   CadRegistryProvider,
 } from "../modules/cad";
 import type { CadPanButtonMode } from "../utils/settings";
-import { useStyles } from "../styles/useStyles";
-import { useTheme } from "../contexts/ThemeContext";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -37,9 +35,6 @@ type EditTabProps = {
 };
 
 export default function EditTab(props: EditTabProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
 
   const editor = useCadEditor({
@@ -66,19 +61,7 @@ export default function EditTab(props: EditTabProps) {
   return (
     <CadRegistryProvider registry={cadRegistry}>
       <>
-        <div
-          style={{
-            ...styles.panel,
-            padding: 16,
-            height: "100%",
-            minHeight: 0,
-            minWidth: 0,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            width: "100%",
-          }}
-        >
+        <div className="ui-panel flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden p-4">
           <EditToolbar
             tool={editor.tool}
             onToolChange={editor.setTool}
@@ -125,28 +108,9 @@ export default function EditTab(props: EditTabProps) {
             />
           )}
 
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              minWidth: 0,
-              display: "flex",
-              gap: 12,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                ...styles.panelInset,
-                flex: 1,
-                minHeight: 0,
-                minWidth: 0,
-                overflow: "hidden",
-                background: theme.panelMuted,
-                display: "flex",
-              }}
-            >
-              <div style={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
+          <div className="flex flex-1 min-h-0 min-w-0 gap-3 overflow-hidden">
+            <div className="ui-panel-inset flex flex-1 min-h-0 min-w-0 overflow-hidden">
+              <div className="flex-1 min-h-0 min-w-0 overflow-hidden">
                 <CadCanvas
                   svgRef={editor.svgRef}
                   document={props.document}

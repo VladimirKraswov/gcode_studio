@@ -1,7 +1,5 @@
 import { FiCode, FiEdit3, FiEye } from "react-icons/fi";
 import type { MainTab } from "../types/ui";
-import { useStyles } from "../styles/useStyles";
-import { useTheme } from "../contexts/ThemeContext";
 
 type MainTabsProps = {
   activeTab: MainTab;
@@ -15,17 +13,8 @@ const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
 ];
 
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 10,
-        flexWrap: "wrap",
-      }}
-    >
+    <div className="flex flex-wrap gap-2.5">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
 
@@ -34,27 +23,23 @@ export function MainTabs({ activeTab, onChange }: MainTabsProps) {
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
-            style={{
-              height: 42,
-              padding: "0 16px",
-              borderRadius: 999,
-              border: isActive
-                ? `1px solid ${theme.primaryText}`
-                : `1px solid ${theme.border}`,
-              background: isActive
-                ? `linear-gradient(180deg, ${theme.primary} 0%, ${theme.primaryText} 100%)`
-                : theme.panelSolid,
-              color: isActive ? "#fff" : theme.textSoft,
-              fontWeight: 800,
-              fontSize: 13,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              boxShadow: isActive
-                ? `0 10px 20px ${theme.primary}30`
-                : "none",
-            }}
+            className={[
+              "inline-flex h-[42px] items-center gap-2 rounded-full px-4 text-[13px] font-extrabold transition",
+              isActive
+                ? "border text-white shadow-[0_10px_20px_color-mix(in_srgb,var(--color-primary)_30%,transparent)]"
+                : "border bg-[var(--color-panel-solid)] text-[var(--color-text-soft)]",
+            ].join(" ")}
+            style={
+              isActive
+                ? {
+                    borderColor: "var(--color-primary-text)",
+                    background:
+                      "linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-text) 100%)",
+                  }
+                : {
+                    borderColor: "var(--color-border)",
+                  }
+            }
           >
             {tab.icon}
             {tab.label}

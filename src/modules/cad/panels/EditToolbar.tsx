@@ -13,8 +13,6 @@ import {
   FiTrash2,
   FiX,
 } from "react-icons/fi";
-import { useStyles } from "../../../styles/useStyles";
-import { useTheme } from "../../../contexts/ThemeContext";
 import type { MirrorAxis, SketchTool } from "../model/types";
 import { useToolPlugins } from "../plugins/registry";
 
@@ -67,45 +65,13 @@ function ToolbarButton({
   children,
   style,
 }: ToolbarButtonProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
-  const baseStyle: CSSProperties = {
-    ...styles.buttonGhost,
-    width: 30,
-    height: 30,
-    minWidth: 30,
-    padding: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-    fontSize: 12,
-    flexShrink: 0,
-    opacity: disabled ? 0.4 : 1,
-    cursor: disabled ? "not-allowed" : "pointer",
-    border: active
-      ? `1px solid ${theme.primary}`
-      : success
-        ? `1px solid ${theme.success}`
-        : danger
-          ? `1px solid ${theme.danger}`
-          : `1px solid ${theme.border}`,
-    background: active
-      ? theme.primarySoft
-      : success
-        ? theme.successSoft
-        : danger
-          ? "transparent"
-          : theme.panel,
-    color: active
-      ? theme.primaryText
-      : success
-        ? theme.success
-        : danger
-          ? theme.danger
-          : theme.text,
-    boxShadow: "none",
-  };
+  const variantClass = active
+    ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]"
+    : success
+      ? "border-[var(--color-success)] bg-[var(--color-success-soft)] text-[var(--color-success)]"
+      : danger
+        ? "border-[var(--color-danger)] bg-transparent text-[var(--color-danger)]"
+        : "border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text)]";
 
   return (
     <button
@@ -115,52 +81,28 @@ function ToolbarButton({
       aria-pressed={active || undefined}
       disabled={disabled}
       onClick={onClick}
-      style={{ ...baseStyle, ...style }}
+      className={[
+        "inline-flex h-[30px] w-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-lg border p-0 text-xs shadow-none",
+        "disabled:cursor-not-allowed disabled:opacity-40",
+        variantClass,
+      ].join(" ")}
+      style={style}
     >
       {children}
     </button>
   );
 }
 
-type ToolbarGroupProps = {
-  children: ReactNode;
-};
-
-function ToolbarGroup({ children }: ToolbarGroupProps) {
-  const { theme } = useTheme();
-
+function ToolbarGroup({ children }: { children: ReactNode }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 4,
-        padding: 3,
-        borderRadius: 10,
-        border: `1px solid ${theme.border}`,
-        background: theme.panel,
-      }}
-    >
+    <div className="flex items-center gap-1 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-panel)] p-[3px]">
       {children}
     </div>
   );
 }
 
 function ToolbarDivider() {
-  const { theme } = useTheme();
-
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        width: 1,
-        height: 18,
-        background: theme.border,
-        margin: "0 2px",
-        flexShrink: 0,
-      }}
-    />
-  );
+  return <div aria-hidden="true" className="mx-[2px] h-[18px] w-px shrink-0 bg-[var(--color-border)]" />;
 }
 
 export function EditToolbar({
@@ -188,50 +130,12 @@ export function EditToolbar({
   hasSelection,
   hasDraft,
 }: EditToolbarProps) {
-  const styles = useStyles();
   const svgInputRef = useRef<HTMLInputElement>(null);
-
   const tools = useToolPlugins();
 
-  const primaryButtonStyle: CSSProperties = {
-    ...styles.buttonPrimary,
-    height: 32,
-    width: 32,
-    minWidth: 32,
-    padding: 0,
-    borderRadius: 10,
-    display: "grid",
-    placeItems: "center",
-    flexShrink: 0,
-    cursor: isGenerating ? "wait" : "pointer",
-    opacity: isGenerating ? 0.8 : 1,
-  };
-
   return (
-    <div
-      style={{
-        ...styles.panelInset,
-        padding: 6,
-        marginBottom: 12,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 8,
-        flexWrap: "wrap",
-        flexShrink: 0,
-        borderRadius: 14,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          flexWrap: "wrap",
-          minWidth: 0,
-          flex: 1,
-        }}
-      >
+    <div className="ui-panel-inset mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[14px] p-1.5">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         <ToolbarGroup>
           {tools.map((item) => (
             <ToolbarButton
@@ -259,7 +163,7 @@ export function EditToolbar({
             ref={svgInputRef}
             type="file"
             accept=".svg,image/svg+xml"
-            style={{ display: "none" }}
+            className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) onImportSvg(file);
@@ -407,9 +311,9 @@ export function EditToolbar({
         type="button"
         onClick={onGenerate}
         disabled={isGenerating}
-        style={primaryButtonStyle}
         title={isGenerating ? "Генерация..." : "Сгенерировать"}
         aria-label={isGenerating ? "Генерация..." : "Сгенерировать"}
+        className="ui-btn-primary grid h-8 w-8 min-w-8 shrink-0 place-items-center rounded-[10px] p-0 disabled:cursor-wait disabled:opacity-80"
       >
         <FiPlay size={14} />
       </button>

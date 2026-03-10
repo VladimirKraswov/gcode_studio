@@ -6,8 +6,6 @@ import {
   FiUploadCloud,
   FiX,
 } from "react-icons/fi";
-import { useStyles } from "../styles/useStyles";
-import { useTheme } from "../contexts/ThemeContext";
 
 export type SvgImportStage =
   | "reading"
@@ -45,6 +43,15 @@ function clampProgress(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="ui-stat-card">
+      <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">{label}</div>
+      <div className="text-base font-extrabold text-[var(--color-text)]">{value}</div>
+    </div>
+  );
+}
+
 export function SvgImportModal({
   open,
   fileName,
@@ -58,9 +65,6 @@ export function SvgImportModal({
   onChangeDraft,
   onConfirm,
 }: SvgImportModalProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   useEffect(() => {
     if (!open) return;
 
@@ -86,98 +90,38 @@ export function SvgImportModal({
   const canEdit = stage === "ready" && draft;
   const canConfirm = stage === "ready" && Boolean(draft);
 
-  const overlayStyle: React.CSSProperties = {
-    position: "fixed",
-    inset: 0,
-    zIndex: 1000,
-    background: "rgba(15, 23, 42, 0.42)",
-    backdropFilter: "blur(6px)",
-    display: "grid",
-    placeItems: "center",
-    padding: 24,
-  };
-
-  const modalStyle: React.CSSProperties = {
-    width: "min(680px, 100%)",
-    maxHeight: "min(88vh, 920px)",
-    overflowY: "auto",
-    background: theme.panelSolid,
-    borderRadius: 24,
-    border: `1px solid ${theme.border}`,
-    boxShadow: theme.shadow,
-    padding: 18,
-  };
-
-  const headerStyle: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    marginBottom: 16,
-  };
-
-  const footerStyle: React.CSSProperties = {
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 18,
-  };
-
-  const closeButtonStyle: React.CSSProperties = {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    border: `1px solid ${theme.border}`,
-    background: theme.panelSolid,
-    color: theme.text,
-    display: "grid",
-    placeItems: "center",
-    cursor: "pointer",
-  };
-
-  function Stat({ label, value }: { label: string; value: string }) {
-    return (
-      <div style={styles.statCard}>
-        <div style={styles.statLabel}>{label}</div>
-        <div style={{ ...styles.statValue, fontSize: 16 }}>{value}</div>
-      </div>
-    );
-  }
+  const progressBarClass =
+    stage === "error"
+      ? "bg-[var(--color-danger)]"
+      : stage === "aborted"
+        ? "bg-[var(--color-warning)]"
+        : "bg-[linear-gradient(90deg,var(--color-primary)_0%,var(--color-primary-text)_100%)]";
 
   return (
     <div
-      style={overlayStyle}
+      className="fixed inset-0 z-[1000] grid place-items-center bg-[rgba(15,23,42,0.42)] p-6 backdrop-blur-[6px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
         }
       }}
     >
-      <div style={modalStyle}>
-        <div style={headerStyle}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={styles.iconBadge}>
+      <div className="w-full max-w-[680px] max-h-[88vh] overflow-y-auto rounded-[24px] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-[18px] shadow-[var(--shadow)]">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
               {isBusy ? (
-                <FiLoader
-                  size={18}
-                  style={{ animation: "spin 1s linear infinite" }}
-                />
+                <FiLoader size={18} className="animate-spin" />
               ) : (
                 <FiUploadCloud size={18} />
               )}
             </div>
 
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: theme.text }}>
+              <div className="text-lg font-extrabold text-[var(--color-text)]">
                 Импорт SVG
               </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: theme.textMuted,
-                  marginTop: 2,
-                }}
-              >
+              <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
                 {fileName}
               </div>
             </div>
@@ -186,36 +130,25 @@ export function SvgImportModal({
           <button
             type="button"
             onClick={onClose}
-            style={closeButtonStyle}
             title="Закрыть"
+            className="grid h-[38px] w-[38px] place-items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-panel-solid)] text-[var(--color-text)]"
           >
             <FiX size={18} />
           </button>
         </div>
 
         {(isBusy || stage === "error" || stage === "aborted") && (
-          <div style={{ ...styles.panelInset, padding: 16, marginBottom: 14 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                marginBottom: 12,
-              }}
-            >
+          <div className="ui-panel-inset mb-3.5 p-4">
+            <div className="mb-3 flex items-center gap-2.5">
               {stage === "error" ? (
-                <FiAlertCircle size={18} color={theme.danger} />
+                <FiAlertCircle size={18} className="text-[var(--color-danger)]" />
               ) : stage === "aborted" ? (
-                <FiSlash size={18} color={theme.warning} />
+                <FiSlash size={18} className="text-[var(--color-warning)]" />
               ) : (
-                <FiLoader
-                  size={18}
-                  color={theme.primary}
-                  style={{ animation: "spin 1s linear infinite" }}
-                />
+                <FiLoader size={18} className="animate-spin text-[var(--color-primary)]" />
               )}
 
-              <div style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>
+              <div className="text-sm font-bold text-[var(--color-text)]">
                 {stage === "error"
                   ? "Ошибка импорта"
                   : stage === "aborted"
@@ -224,38 +157,20 @@ export function SvgImportModal({
               </div>
             </div>
 
-            <div
-              style={{
-                height: 12,
-                borderRadius: 999,
-                background: theme.border,
-                overflow: "hidden",
-                marginBottom: 10,
-              }}
-            >
+            <div className="mb-2.5 h-3 overflow-hidden rounded-full bg-[var(--color-border)]">
               <div
-                style={{
-                  width: `${clampProgress(progress)}%`,
-                  height: "100%",
-                  borderRadius: 999,
-                  background:
-                    stage === "error"
-                      ? `linear-gradient(90deg, ${theme.danger} 0%, ${theme.danger} 100%)`
-                      : stage === "aborted"
-                        ? `linear-gradient(90deg, ${theme.warning} 0%, ${theme.warning} 100%)`
-                        : `linear-gradient(90deg, ${theme.primary} 0%, ${theme.primaryText} 100%)`,
-                  transition: "width 160ms ease",
-                }}
+                className={`h-full rounded-full transition-[width] duration-150 ease-in-out ${progressBarClass}`}
+                style={{ width: `${clampProgress(progress)}%` }}
               />
             </div>
 
-            <div style={{ fontSize: 13, color: theme.textSoft, lineHeight: 1.5 }}>
+            <div className="text-[13px] leading-6 text-[var(--color-text-soft)]">
               {error ?? message}
             </div>
 
             {isBusy && (
-              <div style={{ marginTop: 14 }}>
-                <button type="button" onClick={onAbort} style={styles.buttonDanger}>
+              <div className="mt-3.5">
+                <button type="button" onClick={onAbort} className="ui-btn-danger">
                   <FiSlash size={16} />
                   Abort
                 </button>
@@ -266,53 +181,33 @@ export function SvgImportModal({
 
         {canEdit && draft && (
           <>
-            <div
-              style={{
-                ...styles.panelInset,
-                padding: 14,
-                marginBottom: 14,
-                display: "grid",
-                gap: 12,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 800, color: theme.text }}>
+            <div className="ui-panel-inset mb-3.5 grid gap-3 p-3.5">
+              <div className="text-[13px] font-extrabold text-[var(--color-text)]">
                 Исходный размер SVG
               </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                }}
-              >
+              <div className="grid grid-cols-2 gap-2.5">
                 <Stat label="Ширина" value={String(draft.sourceWidth)} />
                 <Stat label="Высота" value={String(draft.sourceHeight)} />
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: 12 }}>
-              <label style={styles.inputLabel}>
+            <div className="grid gap-3">
+              <label className="ui-label">
                 Имя объекта
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="text"
                   value={draft.name}
                   onChange={(e) => onChangeDraft({ name: e.target.value })}
                 />
               </label>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                }}
-              >
-                <label style={styles.inputLabel}>
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className="ui-label">
                   Ширина
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -334,10 +229,10 @@ export function SvgImportModal({
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Высота
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -360,20 +255,7 @@ export function SvgImportModal({
                 </label>
               </div>
 
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: 12,
-                  borderRadius: 14,
-                  border: `1px solid ${theme.border}`,
-                  background: theme.panelSolid,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: theme.text,
-                }}
-              >
+              <label className="flex items-center gap-2.5 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3 text-[13px] font-bold text-[var(--color-text)]">
                 <input
                   type="checkbox"
                   checked={draft.keepAspectRatio}
@@ -393,17 +275,11 @@ export function SvgImportModal({
                 Пропорциональное масштабирование
               </label>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 10,
-                }}
-              >
-                <label style={styles.inputLabel}>
+              <div className="grid grid-cols-2 gap-2.5">
+                <label className="ui-label">
                   X
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     step="0.001"
                     value={draft.x}
@@ -413,10 +289,10 @@ export function SvgImportModal({
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Y
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     step="0.001"
                     value={draft.y}
@@ -430,8 +306,8 @@ export function SvgImportModal({
           </>
         )}
 
-        <div style={footerStyle}>
-          <button type="button" onClick={onClose} style={styles.buttonGhost}>
+        <div className="mt-[18px] flex justify-end gap-2.5">
+          <button type="button" onClick={onClose} className="ui-btn-ghost">
             Закрыть
           </button>
 
@@ -439,11 +315,7 @@ export function SvgImportModal({
             type="button"
             onClick={onConfirm}
             disabled={!canConfirm}
-            style={{
-              ...styles.buttonPrimary,
-              opacity: canConfirm ? 1 : 0.55,
-              cursor: canConfirm ? "pointer" : "not-allowed",
-            }}
+            className="ui-btn-primary disabled:cursor-not-allowed disabled:opacity-55"
           >
             Импортировать
           </button>

@@ -1,6 +1,4 @@
 import { FiCopy, FiRefreshCw, FiX } from "react-icons/fi";
-import { useStyles } from "../../../styles/useStyles";
-import { useTheme } from "../../../contexts/ThemeContext";
 import type {
   CircularArrayParams,
   LinearArrayParams,
@@ -27,65 +25,38 @@ export function ArrayToolPanel({
   onApply,
   onClose,
 }: ArrayToolPanelProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
-  const fieldLabel = styles.inputLabel;
-
   return (
-    <div
-      style={{
-        ...styles.panelInset,
-        padding: 12,
-        marginBottom: 12,
-        display: "grid",
-        gap: 12,
-        flexShrink: 0,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          alignItems: "center",
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={styles.iconBadge}>
+    <div className="ui-panel-inset mb-3 grid shrink-0 gap-3 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
             {mode === "linear" ? <FiCopy size={16} /> : <FiRefreshCw size={16} />}
           </div>
+
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: theme.text }}>
+            <div className="text-[15px] font-extrabold text-[var(--color-text)]">
               {mode === "linear" ? "Линейный массив" : "Круговой массив"}
             </div>
-            <div style={{ fontSize: 12, color: theme.textMuted }}>
+            <div className="text-xs text-[var(--color-text-muted)]">
               Оператор применяется к текущему выделению
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={onClose} style={styles.buttonGhost}>
+        <div className="flex gap-2">
+          <button type="button" onClick={onClose} className="ui-btn-ghost">
             <FiX size={15} />
             Закрыть
           </button>
-          <button type="button" onClick={onApply} style={styles.buttonPrimary}>
+          <button type="button" onClick={onApply} className="ui-btn-primary">
             Применить
           </button>
         </div>
       </div>
 
       {mode === "linear" ? (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 10,
-          }}
-        >
-          <label style={fieldLabel}>
+        <div className="grid grid-cols-4 gap-2.5">
+          <label className="ui-label">
             Количество
             <input
               type="number"
@@ -97,11 +68,11 @@ export function ArrayToolPanel({
                   count: Math.max(2, Number(e.target.value) || 2),
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Шаг
             <input
               type="number"
@@ -112,11 +83,11 @@ export function ArrayToolPanel({
                   spacing: Math.abs(Number(e.target.value) || 0),
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Ось
             <select
               value={linear.axis}
@@ -125,14 +96,14 @@ export function ArrayToolPanel({
                   axis: e.target.value as LinearArrayParams["axis"],
                 })
               }
-              style={styles.select}
+              className="ui-input"
             >
               <option value="x">X</option>
               <option value="y">Y</option>
             </select>
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Направление
             <select
               value={linear.direction}
@@ -141,7 +112,7 @@ export function ArrayToolPanel({
                   direction: e.target.value as LinearArrayParams["direction"],
                 })
               }
-              style={styles.select}
+              className="ui-input"
             >
               <option value="positive">Плюс</option>
               <option value="negative">Минус</option>
@@ -149,14 +120,8 @@ export function ArrayToolPanel({
           </label>
         </div>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-            gap: 10,
-          }}
-        >
-          <label style={fieldLabel}>
+        <div className="grid grid-cols-6 gap-2.5">
+          <label className="ui-label">
             Количество
             <input
               type="number"
@@ -168,11 +133,11 @@ export function ArrayToolPanel({
                   count: Math.max(2, Number(e.target.value) || 2),
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Center X
             <input
               type="number"
@@ -183,11 +148,11 @@ export function ArrayToolPanel({
                   centerX: Number(e.target.value) || 0,
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Center Y
             <input
               type="number"
@@ -198,11 +163,11 @@ export function ArrayToolPanel({
                   centerY: Number(e.target.value) || 0,
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Радиус
             <input
               type="number"
@@ -214,11 +179,11 @@ export function ArrayToolPanel({
                   radius: Math.max(0, Number(e.target.value) || 0),
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label style={fieldLabel}>
+          <label className="ui-label">
             Total angle
             <input
               type="number"
@@ -229,21 +194,11 @@ export function ArrayToolPanel({
                   totalAngle: Number(e.target.value) || 0,
                 })
               }
-              style={styles.input}
+              className="ui-input"
             />
           </label>
 
-          <label
-            style={{
-              display: "flex",
-              alignItems: "flex-end",
-              paddingBottom: 8,
-              gap: 8,
-              fontSize: 13,
-              fontWeight: 700,
-              color: theme.text,
-            }}
-          >
+          <label className="flex items-end gap-2 pb-2 text-[13px] font-bold text-[var(--color-text)]">
             <input
               type="checkbox"
               checked={circular.rotateItems}

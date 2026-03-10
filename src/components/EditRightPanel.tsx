@@ -4,8 +4,6 @@ import { ShapePropertiesPanel } from "../modules/cad/panels/ShapePropertiesPanel
 import type { SketchDocument } from "../modules/cad/model/types";
 import type { SelectionState } from "../modules/cad/model/selection";
 import type { CadPanButtonMode } from "../utils/settings";
-import { useStyles } from "../styles/useStyles";
-import { useTheme } from "../contexts/ThemeContext";
 
 type EditRightPanelProps = {
   document: SketchDocument;
@@ -22,33 +20,23 @@ export function EditRightPanel({
   panButtonMode,
   onPanButtonModeChange,
 }: EditRightPanelProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   const selectedShape =
     document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
   return (
     <div
-      style={{
-        ...styles.panel,
-        padding: 16,
-        height: "100%",
-        minHeight: 0,
-        overflowY: "auto",
-        overflowX: "hidden",
-      }}
-      className="scrollbar-thin"
+      className="ui-panel scrollbar-thin h-full min-h-0 overflow-y-auto overflow-x-hidden p-4"
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-        <div style={styles.iconBadge}>
+      <div className="mb-3.5 flex items-center gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
           <FiSliders size={18} />
         </div>
+
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+          <div className="text-base font-extrabold text-[var(--color-text)]">
             Параметры документа
           </div>
-          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+          <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
             Размер листа, подачи и режим резки
           </div>
         </div>
@@ -64,19 +52,19 @@ export function EditRightPanel({
         />
       )}
 
-      <div style={{ height: 1, background: theme.border, margin: "18px 0" }} />
+      <div className="my-[18px] h-px bg-[var(--color-border)]" />
 
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+      <div className="grid gap-2.5">
+        <div className="text-base font-extrabold text-[var(--color-text)]">
           Управление
         </div>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Кнопка панорамы
           <select
             value={panButtonMode}
             onChange={(e) => onPanButtonModeChange(e.target.value as CadPanButtonMode)}
-            style={styles.select}
+            className="ui-input"
           >
             <option value="right">Правая кнопка</option>
             <option value="middle">Средняя кнопка</option>

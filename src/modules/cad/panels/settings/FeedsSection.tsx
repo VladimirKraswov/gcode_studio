@@ -1,14 +1,6 @@
 // src/modules/cad/panels/settings/FeedsSection.tsx
-import { useStyles } from "../../../../styles/useStyles";
 import type { SketchDocument } from "../../model/types";
 import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
-
-const threeColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
 
 type FeedsSectionProps = {
   document: SketchDocument;
@@ -16,15 +8,13 @@ type FeedsSectionProps = {
 };
 
 export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
-  const styles = useStyles();
-
   return (
     <CollapsibleCardBlock title="Подачи">
-      <div style={threeColumnGrid}>
-        <label style={styles.inputLabel}>
+      <div className="grid min-w-0 grid-cols-3 gap-2.5">
+        <label className="ui-label">
           Feed cut
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="1"
             value={document.feedCut}
@@ -37,10 +27,10 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Feed plunge
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="1"
             value={document.feedPlunge}
@@ -53,10 +43,10 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Feed rapid
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="1"
             value={document.feedRapid}

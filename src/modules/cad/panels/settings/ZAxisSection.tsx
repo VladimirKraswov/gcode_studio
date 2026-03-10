@@ -1,14 +1,6 @@
 // src/modules/cad/panels/settings/ZAxisSection.tsx
-import { useStyles } from "../../../../styles/useStyles";
 import type { SketchDocument } from "../../model/types";
 import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
-
-const twoColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
 
 type ZAxisSectionProps = {
   document: SketchDocument;
@@ -16,15 +8,13 @@ type ZAxisSectionProps = {
 };
 
 export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
-  const styles = useStyles();
-
   return (
     <CollapsibleCardBlock title="Оси Z и проходы">
-      <div style={twoColumnGrid}>
-        <label style={styles.inputLabel}>
+      <div className="grid min-w-0 grid-cols-2 gap-2.5">
+        <label className="ui-label">
           Start Z
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             value={document.startZ}
             onChange={(e) =>
@@ -36,10 +26,10 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Safe Z
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             value={document.safeZ}
             onChange={(e) =>
@@ -51,10 +41,10 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Cut Z по умолчанию
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             value={document.cutZ}
             onChange={(e) =>
@@ -66,10 +56,10 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Pass depth
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="0.001"
             step="0.001"

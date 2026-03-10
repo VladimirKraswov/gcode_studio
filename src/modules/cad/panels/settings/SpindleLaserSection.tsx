@@ -1,45 +1,23 @@
 // src/modules/cad/panels/settings/SpindleLaserSection.tsx
-import { useStyles } from "../../../../styles/useStyles";
-import { useTheme } from "../../../../contexts/ThemeContext";
 import type { SketchDocument } from "../../model/types";
 import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
-
-const twoColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
 
 type SpindleLaserSectionProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
 };
 
-export function SpindleLaserSection({ document, setDocument }: SpindleLaserSectionProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
-  const checkboxRow: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 13,
-    fontWeight: 700,
-    color: theme.text,
-    padding: 12,
-    borderRadius: 12,
-    background: theme.panelSolid,
-    border: `1px solid ${theme.border}`,
-  };
-
+export function SpindleLaserSection({
+  document,
+  setDocument,
+}: SpindleLaserSectionProps) {
   return (
     <CollapsibleCardBlock title="Шпиндель / лазер / охлаждение">
-      <div style={twoColumnGrid}>
-        <label style={styles.inputLabel}>
+      <div className="grid min-w-0 grid-cols-2 gap-2.5">
+        <label className="ui-label">
           Spindle speed (S)
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="0"
             value={document.spindleSpeed}
@@ -52,7 +30,7 @@ export function SpindleLaserSection({ document, setDocument }: SpindleLaserSecti
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Направление
           <select
             value={document.spindleDirection}
@@ -62,17 +40,17 @@ export function SpindleLaserSection({ document, setDocument }: SpindleLaserSecti
                 spindleDirection: e.target.value as SketchDocument["spindleDirection"],
               }))
             }
-            style={styles.select}
+            className="ui-input"
           >
             <option value="cw">CW (M3)</option>
             <option value="ccw">CCW (M4)</option>
           </select>
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           S power
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="0"
             value={document.laserPower}
@@ -85,10 +63,10 @@ export function SpindleLaserSection({ document, setDocument }: SpindleLaserSecti
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Dwell, мс
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="0"
             value={document.dwellMs}
@@ -102,8 +80,8 @@ export function SpindleLaserSection({ document, setDocument }: SpindleLaserSecti
         </label>
       </div>
 
-      <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
-        <label style={checkboxRow}>
+      <div className="mt-2.5 grid gap-2.5">
+        <label className="ui-check-row">
           <input
             type="checkbox"
             checked={document.spindleOn}
@@ -117,7 +95,7 @@ export function SpindleLaserSection({ document, setDocument }: SpindleLaserSecti
           <span>Включать M3/M4/M5</span>
         </label>
 
-        <label style={checkboxRow}>
+        <label className="ui-check-row">
           <input
             type="checkbox"
             checked={document.coolant}
@@ -131,7 +109,7 @@ export function SpindleLaserSection({ document, setDocument }: SpindleLaserSecti
           <span>Охлаждение M8/M9</span>
         </label>
 
-        <label style={checkboxRow}>
+        <label className="ui-check-row">
           <input
             type="checkbox"
             checked={document.returnHome}

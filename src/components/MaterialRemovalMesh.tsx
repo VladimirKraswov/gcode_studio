@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { useTheme } from "../contexts/ThemeContext";
 import type { ParsedGCode, PlacementMode, StockDimensions } from "../types/gcode";
 import { clamp, getStockPlacement, toSceneCoords } from "../utils";
 
@@ -15,6 +14,17 @@ type MaterialRemovalMeshProps = {
   mirrorX?: boolean;
 };
 
+function readCssVar(name: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+function isDarkTheme() {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.getAttribute("data-theme") === "dark";
+}
+
 export function MaterialRemovalMesh({
   parsed,
   stock,
@@ -25,7 +35,6 @@ export function MaterialRemovalMesh({
   toolDiameter = 1,
   mirrorX = true,
 }: MaterialRemovalMeshProps) {
-  const { theme, isDark } = useTheme();
   const { bounds, segments } = parsed;
   const { width, height: depth, thickness } = stock;
 
@@ -75,14 +84,23 @@ export function MaterialRemovalMesh({
     return () => material.dispose();
   }, [material]);
 
-  const baseWoodColor = useMemo(
-    () => new THREE.Color(isDark ? theme.panelMuted : "#d8b17b"),
-    [isDark, theme.panelMuted],
-  );
-  const cutWoodColor = useMemo(
-    () => new THREE.Color(isDark ? theme.borderStrong : "#5a3e2a"),
-    [isDark, theme.borderStrong],
-  );
+  const baseWoodColor = useMemo(() => {
+    const dark = isDarkTheme();
+    return new THREE.Color(
+      dark
+        ? readCssVar("--color-panel-muted", "#44403c")
+        : "#d8b17b",
+    );
+  }, []);
+
+  const cutWoodColor = useMemo(() => {
+    const dark = isDarkTheme();
+    return new THREE.Color(
+      dark
+        ? readCssVar("--color-border-strong", "#57534e")
+        : "#5a3e2a",
+    );
+  }, []);
 
   useEffect(() => {
     const targetLength = (progress / 100) * totalLength;

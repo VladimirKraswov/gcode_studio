@@ -2,8 +2,6 @@
 import { MainTabs } from "./MainTabs";
 import { ThemeToggle } from "./ThemeToggle";
 import type { MainTab } from "../types/ui";
-import { useStyles } from "../styles/useStyles";
-import { useTheme } from "../contexts/ThemeContext";
 
 type AppHeaderProps = {
   fileName: string;
@@ -18,54 +16,23 @@ export function AppHeader({
   onTabChange,
   tabMeta,
 }: AppHeaderProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
-    <div
-      style={{
-        ...styles.panel,
-        padding: "8px 12px",
-        background: theme.panelSolid,
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 12,
-      }}
-    >
-      {/* Левая часть – иконка вкладки, название, имя файла */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div
-          style={{
-            ...styles.iconBadge,
-            width: 32,
-            height: 32,
-            borderRadius: 10,
-          }}
-        >
+    <div className="ui-panel flex shrink-0 items-center justify-between gap-3 bg-[var(--color-panel-solid)] px-3 py-2">
+      <div className="flex items-center gap-2">
+        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
           {tabMeta.icon}
         </div>
-        <span style={{ fontSize: 14, fontWeight: 600, color: theme.text }}>
+
+        <span className="text-sm font-semibold text-[var(--color-text)]">
           {tabMeta.title}
         </span>
-        <span
-          style={{
-            fontSize: 12,
-            color: theme.textMuted,
-            marginLeft: 4,
-            maxWidth: 160,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
+
+        <span className="ml-1 max-w-40 truncate whitespace-nowrap text-xs text-[var(--color-text-muted)]">
           {fileName}
         </span>
       </div>
 
-      {/* Правая часть – переключатель темы и вкладки */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="flex items-center gap-2">
         <ThemeToggle />
         <MainTabs activeTab={activeTab} onChange={onTabChange} />
       </div>

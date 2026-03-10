@@ -24,7 +24,6 @@ import {
   FiX,
 } from "react-icons/fi";
 import { downloadTextFile } from "../utils";
-import { useStyles } from "../styles/useStyles";
 import { useTheme } from "../contexts/ThemeContext";
 import { lightEditorTheme, darkEditorTheme } from "../styles/editorThemes";
 
@@ -58,7 +57,6 @@ const COMMON_COMMANDS = [
   "F300",
 ];
 
-// --- Язык G‑code ---
 const gcodeLanguage = StreamLanguage.define({
   token: (stream: StringStream) => {
     if (stream.eatSpace()) return null;
@@ -74,8 +72,6 @@ const gcodeLanguage = StreamLanguage.define({
   },
 });
 
-// --- Стили для тегов (One Dark) — можно оставить одинаковыми для обеих тем,
-//     но можно сделать и отдельные светлые стили. Пока оставим так.
 const oneDarkHighlightStyle = HighlightStyle.define([
   { tag: tags.comment, color: "#7f8c8d", fontStyle: "italic" },
   { tag: tags.keyword, color: "#c678dd" },
@@ -92,8 +88,7 @@ export function GCodeEditor({
   onClose,
   title = "Редактор G-code",
 }: GCodeEditorProps) {
-  const styles = useStyles();
-  const { theme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const editorRef = useRef<ReactCodeMirrorRef | null>(null);
   const localValueRef = useRef(source);
 
@@ -216,74 +211,40 @@ export function GCodeEditor({
 
   return (
     <div
+      className="flex h-full min-h-0 flex-col overflow-hidden border shadow-[var(--shadow)]"
       style={{
-        height: "100%",
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
         borderRadius: isTab ? 20 : 24,
-        overflow: "hidden",
-        background: theme.panelMuted,
-        border: `1px solid ${theme.border}`,
-        boxShadow: theme.shadow,
+        background: "var(--color-panel-muted)",
+        borderColor: "var(--color-border)",
       }}
     >
-      {/* Шапка и панель команд */}
       <div
+        className="flex flex-col gap-3 border-b px-4 pt-4 pb-3.5"
         style={{
-          padding: "16px 16px 14px",
-          borderBottom: `1px solid ${theme.border}`,
-          background: theme.panel,
+          borderColor: "var(--color-border)",
+          background: "var(--color-panel)",
           backdropFilter: "blur(10px)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={styles.iconBadge}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
               <FiFileText size={18} />
             </div>
 
             <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: 17,
-                    fontWeight: 700,
-                    color: theme.text,
-                  }}
-                >
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="m-0 text-[17px] font-bold text-[var(--color-text)]">
                   {title}
                 </h3>
 
                 {isDirty && (
                   <span
+                    className="rounded-full border px-2 py-[2px] text-[11px] font-bold"
                     style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: theme.warning,
-                      background: theme.warning + "20",
-                      border: `1px solid ${theme.warning}`,
-                      padding: "2px 8px",
-                      borderRadius: 999,
+                      color: "var(--color-warning)",
+                      background: "color-mix(in srgb, var(--color-warning) 12%, transparent)",
+                      borderColor: "var(--color-warning)",
                     }}
                   >
                     Есть изменения
@@ -291,24 +252,18 @@ export function GCodeEditor({
                 )}
               </div>
 
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 12,
-                  color: theme.textMuted,
-                }}
-              >
+              <div className="mt-1 text-xs text-[var(--color-text-muted)]">
                 {fileName} · {stats.lines} строк · {stats.chars} символов
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div className="flex flex-wrap gap-2">
             {onClose && (
               <button
                 type="button"
                 onClick={onClose}
-                style={styles.buttonGhost}
+                className="ui-btn-ghost"
                 title="Закрыть редактор"
               >
                 <FiX size={15} />
@@ -319,7 +274,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleApply}
-              style={styles.buttonPrimary}
+              className="ui-btn-primary"
               title="Применить изменения"
             >
               <FiCheck size={16} />
@@ -329,7 +284,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleSave}
-              style={styles.buttonGhost}
+              className="ui-btn-ghost"
               title="Сохранить как файл"
             >
               <FiDownload size={16} />
@@ -339,7 +294,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleReset}
-              style={styles.buttonGhost}
+              className="ui-btn-ghost"
               title="Вернуть исходный текст"
             >
               <FiRefreshCw size={16} />
@@ -349,7 +304,7 @@ export function GCodeEditor({
             <button
               type="button"
               onClick={handleClear}
-              style={styles.buttonDanger}
+              className="ui-btn-danger"
               title="Очистить редактор"
             >
               <FiTrash2 size={16} />
@@ -359,71 +314,38 @@ export function GCodeEditor({
         </div>
 
         <div
+          className="sticky top-0 flex flex-col gap-2 rounded-2xl border p-3"
           style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            padding: 12,
-            borderRadius: 16,
-            background: theme.panelSolid,
-            border: `1px solid ${theme.border}`,
-            position: "sticky",
-            top: 0,
+            background: "var(--color-panel-solid)",
+            borderColor: "var(--color-border)",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 14,
-              fontWeight: 600,
-              color: theme.text,
-            }}
-          >
+          <div className="flex items-center gap-2 text-sm font-semibold text-[var(--color-text)]">
             <FiCommand size={16} />
             <span>Быстрые команды</span>
           </div>
 
-          <div style={{ position: "relative", maxWidth: 280 }}>
+          <div className="relative max-w-[280px]">
             <FiSearch
               size={15}
-              style={{
-                position: "absolute",
-                left: 10,
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: theme.textMuted,
-              }}
+              className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[var(--color-text-muted)]"
             />
             <input
               type="text"
               value={commandSearch}
               onChange={(e) => setCommandSearch(e.target.value)}
               placeholder="Найти команду..."
-              style={{
-                ...styles.input,
-                paddingLeft: 32,
-              }}
+              className="ui-input pl-8"
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8,
-              maxHeight: 96,
-              overflowY: "auto",
-              paddingRight: 4,
-            }}
-          >
+          <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto pr-1">
             {filteredCommands.map((cmd) => (
               <button
                 key={cmd}
                 type="button"
                 onClick={() => handleAddCommand(cmd)}
-                style={styles.buttonGhost}
+                className="ui-btn-ghost"
                 title={`Вставить ${cmd}`}
               >
                 <FiEdit3 size={14} />
@@ -432,7 +354,7 @@ export function GCodeEditor({
             ))}
 
             {filteredCommands.length === 0 && (
-              <div style={{ fontSize: 13, color: theme.textMuted }}>
+              <div className="text-[13px] text-[var(--color-text-muted)]">
                 Команды не найдены
               </div>
             )}
@@ -440,51 +362,38 @@ export function GCodeEditor({
         </div>
       </div>
 
-      {/* Основная область с редактором */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
+      <div className="flex flex-1 min-h-0 flex-col gap-3 p-4">
         <div
+          className="flex flex-wrap justify-between gap-2.5 rounded-xl border px-3 py-2 text-xs"
           style={{
-            padding: "8px 12px",
-            borderRadius: 12,
-            background: theme.panelSolid,
-            border: `1px solid ${theme.border}`,
-            fontSize: 12,
-            color: theme.textMuted,
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 10,
-            flexWrap: "wrap",
+            background: "var(--color-panel-solid)",
+            borderColor: "var(--color-border)",
+            color: "var(--color-text-muted)",
           }}
         >
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          <div className="flex flex-wrap gap-3.5">
             <span>⌘/Ctrl + S — сохранить</span>
             <span>Кнопки команд вставляют текст в курсор</span>
           </div>
 
-          <div style={{ fontWeight: 600, color: isDirty ? theme.warning : theme.success }}>
+          <div
+            className="font-semibold"
+            style={{
+              color: isDirty ? "var(--color-warning)" : "var(--color-success)",
+            }}
+          >
             {isDirty ? "Не сохранено" : "Синхронизировано"}
           </div>
         </div>
 
-        {/* Контейнер CodeMirror */}
         <div
+          className="flex flex-1 min-h-0 overflow-hidden"
           style={{
-            flex: 1,
-            minHeight: 0,
             borderRadius: 18,
-            overflow: "hidden",
-            border: `1px solid ${isDark ? theme.borderStrong : "#e2e8f0"}`,
+            border: `1px solid ${
+              isDark ? "var(--color-border-strong)" : "#e2e8f0"
+            }`,
             boxShadow: "inset 0 1px 0 rgba(0,0,0,0.04)",
-            display: "flex",
           }}
         >
           <CodeMirror

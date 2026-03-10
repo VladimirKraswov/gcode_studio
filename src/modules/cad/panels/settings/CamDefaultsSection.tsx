@@ -1,46 +1,17 @@
 // src/modules/cad/panels/settings/CamDefaultsSection.tsx
-import { useStyles } from "../../../../styles/useStyles";
-import { useTheme } from "../../../../contexts/ThemeContext";
 import type { SketchCamSettings, SketchDocument } from "../../model/types";
 import { createDefaultCamSettings } from "../../model/document";
 import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
-
-const twoColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
-
-const threeColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
 
 type CamDefaultsSectionProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
 };
 
-export function CamDefaultsSection({ document, setDocument }: CamDefaultsSectionProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
-  const checkboxRow: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 13,
-    fontWeight: 700,
-    color: theme.text,
-    padding: 12,
-    borderRadius: 12,
-    background: theme.panelSolid,
-    border: `1px solid ${theme.border}`,
-  };
-
+export function CamDefaultsSection({
+  document,
+  setDocument,
+}: CamDefaultsSectionProps) {
   const defaultCamSettings = (() => {
     const defaults = createDefaultCamSettings();
     const value = document.defaultCamSettings ?? defaults;
@@ -84,9 +55,9 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
 
   return (
     <CollapsibleCardBlock title="CAM defaults">
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={twoColumnGrid}>
-          <label style={styles.inputLabel}>
+      <div className="grid gap-2.5">
+        <div className="grid min-w-0 grid-cols-2 gap-2.5">
+          <label className="ui-label">
             Операция по умолчанию
             <select
               value={defaultCamSettings.operation}
@@ -95,7 +66,7 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
                   operation: e.target.value as SketchCamSettings["operation"],
                 })
               }
-              style={styles.select}
+              className="ui-input"
             >
               <option value="follow-path">Follow path</option>
               <option value="profile-inside">Profile inside</option>
@@ -104,7 +75,7 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
             </select>
           </label>
 
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Направление
             <select
               value={defaultCamSettings.direction}
@@ -113,33 +84,36 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
                   direction: e.target.value as SketchCamSettings["direction"],
                 })
               }
-              style={styles.select}
+              className="ui-input"
             >
               <option value="climb">Climb</option>
               <option value="conventional">Conventional</option>
             </select>
           </label>
 
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Stepdown override
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               step="0.001"
               value={defaultCamSettings.stepdown ?? ""}
               onChange={(e) =>
                 updateDefaultCam({
-                  stepdown: e.target.value === "" ? null : Math.max(0.001, Number(e.target.value) || 0.001),
+                  stepdown:
+                    e.target.value === ""
+                      ? null
+                      : Math.max(0.001, Number(e.target.value) || 0.001),
                 })
               }
               placeholder="inherit passDepth"
             />
           </label>
 
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Stepover override
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               min="0.05"
               max="1"
@@ -147,7 +121,10 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
               value={defaultCamSettings.stepover ?? ""}
               onChange={(e) =>
                 updateDefaultCam({
-                  stepover: e.target.value === "" ? null : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
+                  stepover:
+                    e.target.value === ""
+                      ? null
+                      : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
                 })
               }
               placeholder="inherit document stepover"
@@ -155,7 +132,7 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
           </label>
         </div>
 
-        <label style={checkboxRow}>
+        <label className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3 text-[13px] font-bold text-[var(--color-text)]">
           <input
             type="checkbox"
             checked={defaultCamSettings.ramping.enabled}
@@ -172,10 +149,10 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
           <span>Ramping по умолчанию</span>
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Количество витков ramping
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="1"
             step="1"
@@ -192,7 +169,7 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
           />
         </label>
 
-        <label style={checkboxRow}>
+        <label className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3 text-[13px] font-bold text-[var(--color-text)]">
           <input
             type="checkbox"
             checked={defaultCamSettings.tabs.enabled}
@@ -209,11 +186,11 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
           <span>Tabs / bridges по умолчанию</span>
         </label>
 
-        <div style={threeColumnGrid}>
-          <label style={styles.inputLabel}>
+        <div className="grid min-w-0 grid-cols-3 gap-2.5">
+          <label className="ui-label">
             Count
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               min="0"
               step="1"
@@ -230,10 +207,10 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
             />
           </label>
 
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Width
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               min="0.1"
               step="0.1"
@@ -250,10 +227,10 @@ export function CamDefaultsSection({ document, setDocument }: CamDefaultsSection
             />
           </label>
 
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Height
             <input
-              style={styles.input}
+              className="ui-input"
               type="number"
               min="0.1"
               step="0.1"

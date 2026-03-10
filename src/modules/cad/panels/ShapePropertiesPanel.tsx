@@ -11,8 +11,6 @@ import {
 } from "react-icons/fi";
 import { createDefaultCamSettings } from "../model/document";
 import { clamp } from "../../../utils";
-import { useStyles } from "../../../styles/useStyles";
-import { useTheme } from "../../../contexts/ThemeContext";
 import type {
   ConstraintEdge,
   SketchCamSettings,
@@ -44,26 +42,10 @@ function CardBlock({
   children: React.ReactNode;
   title?: string;
 }) {
-  const { theme } = useTheme();
   return (
-    <div
-      style={{
-        background: theme.panelSolid,
-        border: `1px solid ${theme.border}`,
-        borderRadius: 14,
-        padding: 12,
-        minWidth: 0,
-      }}
-    >
+    <div className="min-w-0 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3">
       {title && (
-        <div
-          style={{
-            fontSize: 13,
-            fontWeight: 800,
-            color: theme.text,
-            marginBottom: 10,
-          }}
-        >
+        <div className="mb-2.5 text-[13px] font-extrabold text-[var(--color-text)]">
           {title}
         </div>
       )}
@@ -144,9 +126,6 @@ export function ShapePropertiesPanel({
   setDocument,
   selectedShape,
 }: ShapePropertiesPanelProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   const otherShapes = useMemo(
     () => document.shapes.filter((shape) => shape.id !== selectedShape.id),
     [document.shapes, selectedShape.id],
@@ -242,62 +221,29 @@ export function ShapePropertiesPanel({
     );
   }
 
-  const twoColumnGrid: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-    minWidth: 0,
-  };
-
-  const threeColumnGrid: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
-    minWidth: 0,
-  };
-
-  const checkboxRow: React.CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 13,
-    fontWeight: 700,
-    color: theme.text,
-    padding: 12,
-    borderRadius: 12,
-    background: theme.panelSolid,
-    border: `1px solid ${theme.border}`,
-  };
-
   return (
     <>
-      <div style={{ height: 1, background: theme.border, margin: "18px 0" }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-        <div style={styles.iconBadge}>{getShapeIcon(selectedShape.type)}</div>
+      <div className="my-[18px] h-px bg-[var(--color-border)]" />
+
+      <div className="mb-3.5 flex items-center gap-3">
+        <div className="ui-icon-badge">{getShapeIcon(selectedShape.type)}</div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: theme.text }}>
+          <div className="text-base font-extrabold text-[var(--color-text)]">
             Выбранный объект
           </div>
-          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+          <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
             Тип: {selectedShape.type}
           </div>
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: 12 }}>
+      <div className="grid gap-3">
         {selectedGroup?.array && (
           <CardBlock title="Параметры массива">
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="grid gap-2.5">
               <div
+                className="inline-flex w-fit items-center gap-2 rounded-full px-2.5 py-1.5 text-xs font-extrabold"
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 8,
-                  width: "fit-content",
-                  padding: "6px 10px",
-                  borderRadius: 999,
-                  fontSize: 12,
-                  fontWeight: 800,
                   border:
                     selectedGroup.array.type === "linear"
                       ? "1px solid #a5f3fc"
@@ -315,61 +261,61 @@ export function ShapePropertiesPanel({
               </div>
 
               {selectedGroup.array.type === "linear" ? (
-                <div style={twoColumnGrid}>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Count</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Count</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.count}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Spacing</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Spacing</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.spacing}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Axis</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Axis</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.axis.toUpperCase()}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Direction</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Direction</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.direction === "positive" ? "+" : "-"}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div style={twoColumnGrid}>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Count</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Count</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.count}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Total angle</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Total angle</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.totalAngle}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Center X</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Center X</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.centerX}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Center Y</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Center Y</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.centerY}
                     </div>
                   </div>
-                  <div style={styles.statCard}>
-                    <div style={styles.statLabel}>Radius</div>
-                    <div style={{ ...styles.statValue, fontSize: 15 }}>
+                  <div className="ui-stat-card">
+                    <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">Radius</div>
+                    <div className="text-[15px] font-extrabold text-[var(--color-text)]">
                       {selectedGroup.array.params.radius}
                     </div>
                   </div>
@@ -379,7 +325,7 @@ export function ShapePropertiesPanel({
               <button
                 type="button"
                 onClick={() => openArrayEditor(selectedGroup.id)}
-                style={styles.buttonPrimary}
+                className="ui-btn-primary"
               >
                 <FiEdit3 size={15} />
                 Редактировать
@@ -389,10 +335,10 @@ export function ShapePropertiesPanel({
         )}
 
         <CardBlock>
-          <label style={styles.inputLabel}>
+          <label className="ui-label">
             Имя
             <input
-              style={styles.input}
+              className="ui-input"
               type="text"
               value={selectedShape.name}
               onChange={(e) => updateSelected({ name: e.target.value })}
@@ -401,21 +347,21 @@ export function ShapePropertiesPanel({
         </CardBlock>
 
         <CardBlock>
-          <div style={twoColumnGrid}>
-            <label style={styles.inputLabel}>
+          <div className="grid min-w-0 grid-cols-2 gap-2.5">
+            <label className="ui-label">
               Индивидуальная глубина Z
               <input
-                style={styles.input}
+                className="ui-input"
                 type="number"
                 value={selectedShape.cutZ ?? document.cutZ}
                 onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
               />
             </label>
 
-            <label style={styles.inputLabel}>
+            <label className="ui-label">
               Толщина линии
               <input
-                style={styles.input}
+                className="ui-input"
                 type="number"
                 min="0.1"
                 step="0.1"
@@ -432,31 +378,31 @@ export function ShapePropertiesPanel({
 
         {selectedShape.type === "rectangle" && (
           <CardBlock>
-            <div style={twoColumnGrid}>
-              <label style={styles.inputLabel}>
+            <div className="grid min-w-0 grid-cols-2 gap-2.5">
+              <label className="ui-label">
                 X
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.x}
                   onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Y
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.y}
                   onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Width
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.width}
                   onChange={(e) =>
@@ -467,10 +413,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Height
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.height}
                   onChange={(e) =>
@@ -481,10 +427,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={{ ...styles.inputLabel, gridColumn: "1 / -1" }}>
+              <label className="ui-label col-span-full">
                 Угол поворота
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   step="0.1"
                   value={selectedShape.rotation ?? 0}
@@ -501,31 +447,31 @@ export function ShapePropertiesPanel({
 
         {selectedShape.type === "circle" && (
           <CardBlock>
-            <div style={twoColumnGrid}>
-              <label style={styles.inputLabel}>
+            <div className="grid min-w-0 grid-cols-2 gap-2.5">
+              <label className="ui-label">
                 CX
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.cx}
                   onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 CY
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.cy}
                   onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Radius
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.radius}
                   onChange={(e) =>
@@ -541,41 +487,41 @@ export function ShapePropertiesPanel({
 
         {selectedShape.type === "line" && (
           <CardBlock>
-            <div style={twoColumnGrid}>
-              <label style={styles.inputLabel}>
+            <div className="grid min-w-0 grid-cols-2 gap-2.5">
+              <label className="ui-label">
                 X1
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.x1}
                   onChange={(e) => updateSelected({ x1: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Y1
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.y1}
                   onChange={(e) => updateSelected({ y1: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 X2
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.x2}
                   onChange={(e) => updateSelected({ x2: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Y2
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.y2}
                   onChange={(e) => updateSelected({ y2: Number(e.target.value) || 0 })}
@@ -587,31 +533,31 @@ export function ShapePropertiesPanel({
 
         {selectedShape.type === "arc" && (
           <CardBlock>
-            <div style={twoColumnGrid}>
-              <label style={styles.inputLabel}>
+            <div className="grid min-w-0 grid-cols-2 gap-2.5">
+              <label className="ui-label">
                 CX
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.cx}
                   onChange={(e) => updateSelected({ cx: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 CY
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   value={selectedShape.cy}
                   onChange={(e) => updateSelected({ cy: Number(e.target.value) || 0 })}
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Radius
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   min="0.001"
                   step="0.001"
@@ -624,10 +570,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Start angle
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   step="0.1"
                   value={selectedShape.startAngle}
@@ -637,10 +583,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 End angle
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   step="0.1"
                   value={selectedShape.endAngle}
@@ -651,7 +597,7 @@ export function ShapePropertiesPanel({
               </label>
             </div>
 
-            <label style={{ ...checkboxRow, marginTop: 10 }}>
+            <label className="ui-check-row mt-2.5">
               <input
                 type="checkbox"
                 checked={selectedShape.clockwise}
@@ -663,7 +609,7 @@ export function ShapePropertiesPanel({
         )}
 
         {selectedShape.type === "polyline" && (
-          <label style={checkboxRow}>
+          <label className="ui-check-row">
             <input
               type="checkbox"
               checked={selectedShape.closed}
@@ -676,31 +622,31 @@ export function ShapePropertiesPanel({
         {selectedShape.type === "svg" && (
           <>
             <CardBlock>
-              <div style={twoColumnGrid}>
-                <label style={styles.inputLabel}>
+              <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                <label className="ui-label">
                   X
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     value={selectedShape.x}
                     onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Y
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     value={selectedShape.y}
                     onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Width
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -713,10 +659,10 @@ export function ShapePropertiesPanel({
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Height
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     min="0.001"
                     step="0.001"
@@ -729,10 +675,10 @@ export function ShapePropertiesPanel({
                   />
                 </label>
 
-                <label style={{ ...styles.inputLabel, gridColumn: "1 / -1" }}>
+                <label className="ui-label col-span-full">
                   Угол поворота
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     step="0.1"
                     value={selectedShape.rotation ?? 0}
@@ -746,7 +692,7 @@ export function ShapePropertiesPanel({
               </div>
             </CardBlock>
 
-            <label style={checkboxRow}>
+            <label className="ui-check-row">
               <input
                 type="checkbox"
                 checked={selectedShape.preserveAspectRatio}
@@ -760,10 +706,10 @@ export function ShapePropertiesPanel({
         {selectedShape.type === "text" && (
           <>
             <CardBlock>
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Текст
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="text"
                   value={selectedShape.text}
                   onChange={(e) => updateSelected({ text: e.target.value })}
@@ -772,31 +718,31 @@ export function ShapePropertiesPanel({
             </CardBlock>
 
             <CardBlock>
-              <div style={twoColumnGrid}>
-                <label style={styles.inputLabel}>
+              <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                <label className="ui-label">
                   X
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     value={selectedShape.x}
                     onChange={(e) => updateSelected({ x: Number(e.target.value) || 0 })}
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Y
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     value={selectedShape.y}
                     onChange={(e) => updateSelected({ y: Number(e.target.value) || 0 })}
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Height
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     value={selectedShape.height}
                     onChange={(e) =>
@@ -807,10 +753,10 @@ export function ShapePropertiesPanel({
                   />
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Letter spacing
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     step="0.5"
                     value={selectedShape.letterSpacing}
@@ -825,13 +771,13 @@ export function ShapePropertiesPanel({
             </CardBlock>
 
             <CardBlock>
-              <div style={twoColumnGrid}>
-                <label style={styles.inputLabel}>
+              <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                <label className="ui-label">
                   Font
                   <select
                     value={selectedShape.fontFile}
                     onChange={(e) => updateSelected({ fontFile: e.target.value })}
-                    style={styles.select}
+                    className="ui-input"
                   >
                     {DEFAULT_FONT_OPTIONS.map((font) => (
                       <option key={font} value={font}>
@@ -841,22 +787,22 @@ export function ShapePropertiesPanel({
                   </select>
                 </label>
 
-                <label style={styles.inputLabel}>
+                <label className="ui-label">
                   Rotation
                   <input
-                    style={styles.input}
+                    className="ui-input"
                     type="number"
                     value={selectedShape.rotation ?? 0}
                     onChange={(e) => updateSelected({ rotation: Number(e.target.value) || 0 })}
                   />
                 </label>
 
-                <label style={{ ...styles.inputLabel, gridColumn: "1 / -1" }}>
+                <label className="ui-label col-span-full">
                   Align
                   <select
                     value={selectedShape.align ?? "left"}
                     onChange={(e) => updateSelected({ align: e.target.value })}
-                    style={styles.select}
+                    className="ui-input"
                   >
                     <option value="left">left</option>
                     <option value="center">center</option>
@@ -869,9 +815,9 @@ export function ShapePropertiesPanel({
         )}
 
         <CardBlock title="CAM операция">
-          <div style={{ display: "grid", gap: 10 }}>
-            <div style={twoColumnGrid}>
-              <label style={styles.inputLabel}>
+          <div className="grid gap-2.5">
+            <div className="grid min-w-0 grid-cols-2 gap-2.5">
+              <label className="ui-label">
                 Operation
                 <select
                   value={shapeCamSettings.operation}
@@ -880,7 +826,7 @@ export function ShapePropertiesPanel({
                       operation: e.target.value as SketchCamSettings["operation"],
                     })
                   }
-                  style={styles.select}
+                  className="ui-input"
                 >
                   <option value="follow-path">Follow path</option>
                   <option value="profile-inside">Profile inside</option>
@@ -889,7 +835,7 @@ export function ShapePropertiesPanel({
                 </select>
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Direction
                 <select
                   value={shapeCamSettings.direction}
@@ -898,17 +844,17 @@ export function ShapePropertiesPanel({
                       direction: e.target.value as SketchCamSettings["direction"],
                     })
                   }
-                  style={styles.select}
+                  className="ui-input"
                 >
                   <option value="climb">Climb</option>
                   <option value="conventional">Conventional</option>
                 </select>
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Stepdown override
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   step="0.001"
                   value={shapeCamSettings.stepdown ?? ""}
@@ -924,10 +870,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Stepover override
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   min="0.05"
                   max="1"
@@ -946,7 +892,7 @@ export function ShapePropertiesPanel({
               </label>
             </div>
 
-            <label style={checkboxRow}>
+            <label className="ui-check-row">
               <input
                 type="checkbox"
                 checked={shapeCamSettings.ramping.enabled}
@@ -963,10 +909,10 @@ export function ShapePropertiesPanel({
               <span>Enable ramping</span>
             </label>
 
-            <label style={styles.inputLabel}>
+            <label className="ui-label">
               Ramping turns
               <input
-                style={styles.input}
+                className="ui-input"
                 type="number"
                 min="1"
                 step="1"
@@ -983,7 +929,7 @@ export function ShapePropertiesPanel({
               />
             </label>
 
-            <label style={checkboxRow}>
+            <label className="ui-check-row">
               <input
                 type="checkbox"
                 checked={shapeCamSettings.tabs.enabled}
@@ -1000,11 +946,11 @@ export function ShapePropertiesPanel({
               <span>Enable tabs / bridges</span>
             </label>
 
-            <div style={threeColumnGrid}>
-              <label style={styles.inputLabel}>
+            <div className="grid min-w-0 grid-cols-3 gap-2.5">
+              <label className="ui-label">
                 Tabs count
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   min="0"
                   step="1"
@@ -1021,10 +967,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Tabs width
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   min="0.1"
                   step="0.1"
@@ -1041,10 +987,10 @@ export function ShapePropertiesPanel({
                 />
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Tabs height
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   min="0.1"
                   step="0.1"
@@ -1065,33 +1011,23 @@ export function ShapePropertiesPanel({
         </CardBlock>
 
         <CardBlock title="Расстояния / ограничения">
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="grid gap-2.5">
             {selectedConstraints.length === 0 ? (
-              <div
-                style={{
-                  ...styles.panelInset,
-                  padding: 12,
-                  fontSize: 13,
-                  color: theme.textMuted,
-                }}
-              >
+              <div className="ui-panel-inset p-3 text-[13px] text-[var(--color-text-muted)]">
                 Для этого объекта ограничения ещё не заданы.
               </div>
             ) : (
               selectedConstraints.map((constraint) => (
                 <div
                   key={constraint.id}
+                  className="grid gap-2 rounded-xl border p-2.5"
                   style={{
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 12,
-                    padding: 10,
-                    display: "grid",
-                    gap: 8,
-                    background: theme.panelSolid,
+                    borderColor: "var(--color-border)",
+                    background: "var(--color-panel-solid)",
                   }}
                 >
-                  <div style={twoColumnGrid}>
-                    <label style={styles.inputLabel}>
+                  <div className="grid min-w-0 grid-cols-2 gap-2.5">
+                    <label className="ui-label">
                       Ребро объекта
                       <select
                         value={constraint.edge}
@@ -1102,7 +1038,7 @@ export function ShapePropertiesPanel({
                             }),
                           )
                         }
-                        style={styles.select}
+                        className="ui-input"
                       >
                         <option value="left">Левый</option>
                         <option value="right">Правый</option>
@@ -1111,7 +1047,7 @@ export function ShapePropertiesPanel({
                       </select>
                     </label>
 
-                    <label style={styles.inputLabel}>
+                    <label className="ui-label">
                       До ребра
                       <select
                         value={constraint.targetEdge}
@@ -1122,7 +1058,7 @@ export function ShapePropertiesPanel({
                             }),
                           )
                         }
-                        style={styles.select}
+                        className="ui-input"
                       >
                         <option value="left">Левый</option>
                         <option value="right">Правый</option>
@@ -1131,7 +1067,7 @@ export function ShapePropertiesPanel({
                       </select>
                     </label>
 
-                    <label style={styles.inputLabel}>
+                    <label className="ui-label">
                       Цель
                       <select
                         value={constraint.target.kind}
@@ -1152,17 +1088,17 @@ export function ShapePropertiesPanel({
                             }),
                           )
                         }
-                        style={styles.select}
+                        className="ui-input"
                       >
                         <option value="sheet">Лист</option>
                         <option value="shape">Объект</option>
                       </select>
                     </label>
 
-                    <label style={styles.inputLabel}>
+                    <label className="ui-label">
                       Расстояние
                       <input
-                        style={styles.input}
+                        className="ui-input"
                         type="number"
                         step="0.001"
                         value={constraint.distance}
@@ -1178,7 +1114,7 @@ export function ShapePropertiesPanel({
                   </div>
 
                   {constraint.target.kind === "shape" && (
-                    <label style={styles.inputLabel}>
+                    <label className="ui-label">
                       Целевой объект
                       <select
                         value={constraint.target.shapeId}
@@ -1192,7 +1128,7 @@ export function ShapePropertiesPanel({
                             }),
                           )
                         }
-                        style={styles.select}
+                        className="ui-input"
                       >
                         {otherShapes.map((shape) => (
                           <option key={shape.id} value={shape.id}>
@@ -1203,8 +1139,8 @@ export function ShapePropertiesPanel({
                     </label>
                   )}
 
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <label style={checkboxRow}>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="ui-check-row">
                       <input
                         type="checkbox"
                         checked={constraint.enabled}
@@ -1224,18 +1160,13 @@ export function ShapePropertiesPanel({
                       onClick={() =>
                         setDocument((prev) => removeConstraint(prev, constraint.id))
                       }
-                      style={styles.buttonDanger}
+                      className="ui-btn-danger"
                     >
                       Удалить
                     </button>
                   </div>
 
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: theme.textMuted,
-                    }}
-                  >
+                  <div className="text-xs text-[var(--color-text-muted)]">
                     {edgeTitle(constraint.edge)} край объекта →{" "}
                     {constraint.target.kind === "sheet"
                       ? "граница листа"
@@ -1247,25 +1178,19 @@ export function ShapePropertiesPanel({
               ))
             )}
 
-            <div
-              style={{
-                height: 1,
-                background: theme.border,
-                margin: "2px 0",
-              }}
-            />
+            <div className="my-[2px] h-px bg-[var(--color-border)]" />
 
-            <div style={{ fontSize: 13, fontWeight: 800, color: theme.text }}>
+            <div className="text-[13px] font-extrabold text-[var(--color-text)]">
               Добавить ограничение
             </div>
 
-            <div style={twoColumnGrid}>
-              <label style={styles.inputLabel}>
+            <div className="grid min-w-0 grid-cols-2 gap-2.5">
+              <label className="ui-label">
                 Ребро объекта
                 <select
                   value={newConstraintEdge}
                   onChange={(e) => setNewConstraintEdge(e.target.value as ConstraintEdge)}
-                  style={styles.select}
+                  className="ui-input"
                 >
                   <option value="left">Левый</option>
                   <option value="right">Правый</option>
@@ -1274,12 +1199,12 @@ export function ShapePropertiesPanel({
                 </select>
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 До ребра
                 <select
                   value={newTargetEdge}
                   onChange={(e) => setNewTargetEdge(e.target.value as ConstraintEdge)}
-                  style={styles.select}
+                  className="ui-input"
                 >
                   <option value="left">Левый</option>
                   <option value="right">Правый</option>
@@ -1288,7 +1213,7 @@ export function ShapePropertiesPanel({
                 </select>
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Цель
                 <select
                   value={newTargetKind}
@@ -1297,17 +1222,17 @@ export function ShapePropertiesPanel({
                       e.target.value as SketchDistanceConstraintTarget["kind"],
                     )
                   }
-                  style={styles.select}
+                  className="ui-input"
                 >
                   <option value="sheet">Лист</option>
                   <option value="shape">Объект</option>
                 </select>
               </label>
 
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Расстояние
                 <input
-                  style={styles.input}
+                  className="ui-input"
                   type="number"
                   step="0.001"
                   value={newDistance}
@@ -1317,12 +1242,12 @@ export function ShapePropertiesPanel({
             </div>
 
             {newTargetKind === "shape" && (
-              <label style={styles.inputLabel}>
+              <label className="ui-label">
                 Целевой объект
                 <select
                   value={newTargetShapeId}
                   onChange={(e) => setNewTargetShapeId(e.target.value)}
-                  style={styles.select}
+                  className="ui-input"
                 >
                   {otherShapes.map((shape) => (
                     <option key={shape.id} value={shape.id}>
@@ -1333,31 +1258,23 @@ export function ShapePropertiesPanel({
               </label>
             )}
 
-            <button type="button" onClick={handleAddConstraint} style={styles.buttonPrimary}>
+            <button type="button" onClick={handleAddConstraint} className="ui-btn-primary">
               Добавить расстояние
             </button>
 
             {constraintIssues.length > 0 && (
               <div
+                className="grid gap-2 rounded-xl border p-3 text-[13px]"
                 style={{
-                  borderRadius: 12,
-                  border: `1px solid ${theme.danger}`,
-                  background: theme.dangerSoft,
-                  color: theme.danger,
-                  padding: 12,
-                  display: "grid",
-                  gap: 8,
-                  fontSize: 13,
+                  borderColor: "var(--color-danger)",
+                  background: "var(--color-danger-soft)",
+                  color: "var(--color-danger)",
                 }}
               >
-                <div style={{ fontWeight: 800 }}>
-                  Предупреждения по ограничениям
-                </div>
+                <div className="font-extrabold">Предупреждения по ограничениям</div>
 
                 {constraintIssues.map((issue, index) => (
-                  <div key={`${issue.constraintId}-${index}`}>
-                    • {issue.message}
-                  </div>
+                  <div key={`${issue.constraintId}-${index}`}>• {issue.message}</div>
                 ))}
               </div>
             )}

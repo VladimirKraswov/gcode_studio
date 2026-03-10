@@ -8,8 +8,6 @@ import { CenterPanelContainer } from "./containers/CenterPanelContainer";
 import { RightPanelContainer } from "./containers/RightPanelContainer";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { NotificationToast } from "./components/NotificationToast";
-import { useStyles } from "./styles/useStyles";
-import { useTheme } from "./contexts/ThemeContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
 const TAB_META = {
@@ -32,56 +30,31 @@ const TAB_META = {
 
 function AppContent() {
   const { parsed, isParsing, fileName, activeTab, setActiveTab, handleFileChange } = useApp();
-  const styles = useStyles();
-  const { theme } = useTheme();
   const tabMeta = TAB_META[activeTab];
 
   if (!parsed || isParsing) {
     return (
-      <div style={styles.appShell}>
-        <div
-          style={{
-            height: "100vh",
-            display: "grid",
-            placeItems: "center",
-            padding: 24,
-          }}
-        >
-          <div
-            style={{
-              ...styles.panel,
-              width: "min(520px, 100%)",
-              padding: 28,
-              textAlign: "center",
-              background: theme.panelSolid,
-            }}
-          >
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                margin: "0 auto 18px",
-                borderRadius: 24,
-                display: "grid",
-                placeItems: "center",
-                background: theme.primarySoft,
-                color: theme.primary,
-              }}
-            >
-              <FiLoader size={34} style={{ animation: "spin 1s linear infinite" }} />
+      <div className="ui-app-shell">
+        <div className="grid h-screen place-items-center p-6">
+          <div className="ui-panel w-full max-w-[520px] bg-[var(--color-panel-solid)] p-7 text-center">
+            <div className="mx-auto mb-[18px] grid h-[72px] w-[72px] place-items-center rounded-[24px] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
+              <FiLoader size={34} className="animate-spin" />
             </div>
-            <h1 style={{ margin: 0, fontSize: 28 }}>GCode Studio</h1>
-            <p style={{ color: theme.textMuted, margin: "10px 0 18px" }}>
+
+            <h1 className="m-0 text-[28px]">GCode Studio</h1>
+
+            <p className="my-[10px] mb-[18px] text-[var(--color-text-muted)]">
               {isParsing
                 ? "Парсинг G-code... Это может занять несколько секунд."
                 : "Загрузите файл, чтобы начать работу."}
             </p>
+
             {!isParsing && (
               <input
                 type="file"
                 accept=".gcode,.nc,.tap,.txt"
                 onChange={handleFileChange}
-                style={styles.input}
+                className="ui-input"
               />
             )}
           </div>
@@ -92,7 +65,14 @@ function AppContent() {
 
   return (
     <MainLayout
-      header={<AppHeader fileName={fileName} activeTab={activeTab} onTabChange={setActiveTab} tabMeta={tabMeta} />}
+      header={
+        <AppHeader
+          fileName={fileName}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          tabMeta={tabMeta}
+        />
+      }
       leftPanel={<LeftPanelContainer />}
       centerPanel={<CenterPanelContainer />}
       rightPanel={<RightPanelContainer />}

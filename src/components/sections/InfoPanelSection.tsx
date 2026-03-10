@@ -5,10 +5,14 @@ import {
   FiMaximize2,
   FiMove,
 } from "react-icons/fi";
-import type { CameraInfo, CurrentState, ParsedStats, Bounds, StockDimensions } from "../../types/gcode";
+import type {
+  CameraInfo,
+  CurrentState,
+  ParsedStats,
+  Bounds,
+  StockDimensions,
+} from "../../types/gcode";
 import { fmt } from "../../utils";
-import { useStyles } from "../../styles/useStyles";
-import { useTheme } from "../../contexts/ThemeContext";
 
 type InfoPanelSectionProps = {
   bounds: Bounds;
@@ -19,22 +23,19 @@ type InfoPanelSectionProps = {
   totalLength: number;
 };
 
-function PanelGroup({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
-  const { theme } = useTheme();
+function PanelGroup({
+  title,
+  icon,
+  children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section style={{ marginBottom: 18 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 10,
-          fontSize: 13,
-          fontWeight: 800,
-          color: theme.text,
-        }}
-      >
-        <FiCrosshair size={14} style={{ opacity: 0, width: 0 }} />
+    <section className="mb-[18px]">
+      <div className="mb-2.5 flex items-center gap-2 text-[13px] font-extrabold text-[var(--color-text)]">
+        <FiCrosshair size={14} className="w-0 opacity-0" />
         {icon}
         <span>{title}</span>
       </div>
@@ -44,31 +45,14 @@ function PanelGroup({ title, icon, children }: { title: string; icon: React.Reac
 }
 
 function StatGrid({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: 10,
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className="grid grid-cols-2 gap-2.5">{children}</div>;
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
-  const styles = useStyles();
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
-      <div
-        style={{
-          ...styles.statValue,
-          fontSize: 15,
-          wordBreak: "break-word",
-        }}
-      >
+    <div className="ui-stat-card">
+      <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">{label}</div>
+      <div className="break-words text-[15px] font-extrabold text-[var(--color-text)]">
         {value}
       </div>
     </div>
@@ -83,14 +67,11 @@ export function InfoPanelSection({
   cameraInfo,
   totalLength,
 }: InfoPanelSectionProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
-    <div style={{ ...styles.panel, padding: 16 }}>
-      <div style={styles.panelHeader}>
-        <h3 style={styles.sectionTitle}>
-          <div style={styles.iconBadge}>
+    <div className="ui-panel p-4">
+      <div className="mb-[14px] flex items-center justify-between gap-3">
+        <h3 className="m-0 flex items-center gap-2.5 text-base font-bold text-[var(--color-text)]">
+          <div className="ui-icon-badge">
             <FiActivity size={18} />
           </div>
           <span>Информация</span>
@@ -124,16 +105,11 @@ export function InfoPanelSection({
           <MiniStat label="Строка" value={String(currentState.lineNumber)} />
         </StatGrid>
 
-        <div style={{ marginTop: 10, ...styles.statCard }}>
-          <div style={styles.statLabel}>Текущая строка G‑code</div>
-          <div
-            style={{
-              ...styles.statValue,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-              fontSize: 14,
-              wordBreak: "break-word",
-            }}
-          >
+        <div className="ui-stat-card mt-2.5">
+          <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">
+            Текущая строка G-code
+          </div>
+          <div className="break-words font-mono text-sm font-extrabold text-[var(--color-text)]">
             {currentState.segment ? currentState.segment.raw : "-"}
           </div>
         </div>
@@ -141,7 +117,7 @@ export function InfoPanelSection({
 
       <PanelGroup title="Камера" icon={<FiCamera size={16} />}>
         {cameraInfo ? (
-          <div style={{ display: "grid", gap: 10 }}>
+          <div className="grid gap-2.5">
             <MiniStat
               label="Позиция"
               value={`${cameraInfo.position.x.toFixed(1)}, ${cameraInfo.position.y.toFixed(
@@ -156,7 +132,7 @@ export function InfoPanelSection({
             />
           </div>
         ) : (
-          <div style={{ ...styles.panelInset, padding: 12, color: theme.textMuted }}>
+          <div className="ui-panel-inset p-3 text-[var(--color-text-muted)]">
             Нет данных камеры
           </div>
         )}

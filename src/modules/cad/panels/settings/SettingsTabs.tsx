@@ -1,6 +1,5 @@
 // src/modules/cad/panels/settings/SettingsTabs.tsx
 import { useState } from "react";
-import { useTheme } from "../../../../contexts/ThemeContext";
 
 type Tab = {
   id: string;
@@ -14,38 +13,30 @@ type SettingsTabsProps = {
 
 export function SettingsTabs({ tabs }: SettingsTabsProps) {
   const [activeTab, setActiveTab] = useState(tabs[0]?.id);
-  const { theme } = useTheme();
 
   return (
     <div>
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          marginBottom: 16,
-          borderBottom: `1px solid ${theme.border}`,
-          paddingBottom: 8,
-        }}
-      >
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: "none",
-              background: activeTab === tab.id ? theme.primarySoft : "transparent",
-              color: activeTab === tab.id ? theme.primaryText : theme.textSoft,
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              cursor: "pointer",
-              fontSize: 13,
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="mb-4 flex gap-2 border-b border-[var(--color-border)] pb-2">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={[
+                "cursor-pointer rounded-lg px-3 py-1.5 text-[13px]",
+                isActive
+                  ? "bg-[var(--color-primary-soft)] font-bold text-[var(--color-primary-text)]"
+                  : "bg-transparent font-medium text-[var(--color-text-soft)]",
+              ].join(" ")}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
+
       <div>{tabs.find((t) => t.id === activeTab)?.content}</div>
     </div>
   );

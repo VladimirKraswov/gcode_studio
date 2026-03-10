@@ -1,7 +1,6 @@
 // src/modules/cad/panels/settings/CollapsibleCardBlock.tsx
 import { useState } from "react";
 import { FiChevronDown, FiChevronUp } from "react-icons/fi";
-import { useTheme } from "../../../../contexts/ThemeContext";
 
 type CollapsibleCardBlockProps = {
   title: string;
@@ -9,35 +8,30 @@ type CollapsibleCardBlockProps = {
   defaultCollapsed?: boolean;
 };
 
-export function CollapsibleCardBlock({ title, children, defaultCollapsed = false }: CollapsibleCardBlockProps) {
+export function CollapsibleCardBlock({
+  title,
+  children,
+  defaultCollapsed = false,
+}: CollapsibleCardBlockProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
-  const { theme } = useTheme();
 
   return (
-    <div
-      style={{
-        background: theme.panelSolid,
-        border: `1px solid ${theme.border}`,
-        borderRadius: 14,
-        padding: 12,
-        minWidth: 0,
-      }}
-    >
+    <div className="min-w-0 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3">
       <div
         onClick={() => setCollapsed(!collapsed)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          cursor: "pointer",
-          marginBottom: collapsed ? 0 : 10,
-        }}
+        className={`flex cursor-pointer items-center justify-between ${
+          collapsed ? "mb-0" : "mb-2.5"
+        }`}
       >
-        <div style={{ fontSize: 13, fontWeight: 800, color: theme.text }}>{title}</div>
-        <div style={{ color: theme.textSoft }}>
+        <div className="text-[13px] font-extrabold text-[var(--color-text)]">
+          {title}
+        </div>
+
+        <div className="text-[var(--color-text-soft)]">
           {collapsed ? <FiChevronDown size={18} /> : <FiChevronUp size={18} />}
         </div>
       </div>
+
       {!collapsed && children}
     </div>
   );

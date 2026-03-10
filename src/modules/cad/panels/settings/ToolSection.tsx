@@ -1,14 +1,6 @@
 // src/modules/cad/panels/settings/ToolSection.tsx
-import { useStyles } from "../../../../styles/useStyles";
 import type { SketchDocument } from "../../model/types";
 import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
-
-const threeColumnGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: 10,
-  minWidth: 0,
-};
 
 type ToolSectionProps = {
   document: SketchDocument;
@@ -16,12 +8,10 @@ type ToolSectionProps = {
 };
 
 export function ToolSection({ document, setDocument }: ToolSectionProps) {
-  const styles = useStyles();
-
   return (
     <CollapsibleCardBlock title="Инструмент">
-      <div style={threeColumnGrid}>
-        <label style={styles.inputLabel}>
+      <div className="grid min-w-0 grid-cols-3 gap-2.5">
+        <label className="ui-label">
           Тип инструмента
           <select
             value={document.toolType}
@@ -32,7 +22,7 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
                 spindleOn: e.target.value === "laser" ? true : prev.spindleOn,
               }))
             }
-            style={styles.select}
+            className="ui-input"
           >
             <option value="router">Router</option>
             <option value="spindle">Spindle</option>
@@ -41,10 +31,10 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
           </select>
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Tool number
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="1"
             value={document.toolNumber}
@@ -57,10 +47,10 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
           />
         </label>
 
-        <label style={styles.inputLabel}>
+        <label className="ui-label">
           Диаметр инструмента
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="0"
             step="0.001"
@@ -75,11 +65,11 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
         </label>
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        <label style={styles.inputLabel}>
+      <div className="mt-2.5">
+        <label className="ui-label">
           Stepover (0..1)
           <input
-            style={styles.input}
+            className="ui-input"
             type="number"
             min="0.05"
             max="1"

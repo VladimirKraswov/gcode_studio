@@ -1,5 +1,4 @@
 import { FiPause, FiPlay, FiSkipBack } from "react-icons/fi";
-import { useStyles } from "../../styles/useStyles";
 import { RangeCard } from "./RangeCard";
 
 type PlaybackSectionProps = {
@@ -21,27 +20,20 @@ export function PlaybackSection({
   speed,
   onSpeedChange,
 }: PlaybackSectionProps) {
-  const styles = useStyles();
-
   return (
     <>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 8,
-          marginBottom: 14,
-        }}
-      >
-        <button type="button" onClick={onPlayPause} style={styles.buttonPrimary}>
+      <div className="mb-3.5 grid grid-cols-2 gap-2">
+        <button type="button" onClick={onPlayPause} className="ui-btn-primary">
           {playing ? <FiPause size={15} /> : <FiPlay size={15} />}
           {playing ? "Пауза" : "Старт"}
         </button>
-        <button type="button" onClick={onResetPlayback} style={styles.buttonGhost}>
+
+        <button type="button" onClick={onResetPlayback} className="ui-btn-ghost">
           <FiSkipBack size={15} />
           С начала
         </button>
       </div>
+
       <RangeCard
         label="Прогресс"
         value={`${progress.toFixed(1)}%`}
@@ -51,6 +43,7 @@ export function PlaybackSection({
         current={progress}
         onChange={onProgressChange}
       />
+
       <RangeCard
         label="Скорость"
         value={`${speed.toFixed(1)}x`}

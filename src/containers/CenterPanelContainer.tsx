@@ -1,28 +1,15 @@
 // src/containers/CenterPanelContainer.tsx
-import React, { Suspense } from 'react';
-import { useApp } from '../contexts/AppContext';
-import { PathScene } from '../components/PathScene';
-import { useStyles } from '../styles/useStyles';
-import { useTheme } from '../contexts/ThemeContext';
+import React, { Suspense } from "react";
+import { useApp } from "../contexts/AppContext";
+import { PathScene } from "../components/PathScene";
 
-const GCodeEditorPanel = React.lazy(() => import('../components/GCodeEditorPanel'));
-const EditTab = React.lazy(() => import('../components/EditTab'));
+const GCodeEditorPanel = React.lazy(() => import("../components/GCodeEditorPanel"));
+const EditTab = React.lazy(() => import("../components/EditTab"));
 
-// Компонент-заглушка для загрузки
 function Loader() {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
-    <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
-      <div style={{ 
-        width: 40, 
-        height: 40, 
-        borderRadius: '50%', 
-        border: `3px solid ${theme.border}`, 
-        borderTopColor: theme.primary, 
-        animation: 'spin 1s linear infinite' 
-      }} />
+    <div className="grid h-full place-items-center">
+      <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--color-border)] border-t-[var(--color-primary)]" />
     </div>
   );
 }
@@ -60,47 +47,16 @@ export function CenterPanelContainer() {
     applyGeneratedGCode,
   } = useApp();
 
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
-    <div style={{ 
-      ...styles.panel, 
-      flex: 1, 
-      minHeight: 0, 
-      padding: 16, 
-      background: theme.panelSolid, 
-      display: "flex", 
-      flexDirection: "column", 
-      overflow: "hidden" 
-    }}>
+    <div className="ui-panel flex flex-1 min-h-0 flex-col overflow-hidden bg-[var(--color-panel-solid)] p-4">
       {activeTab === "view" && (
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-          <div style={{ 
-            marginBottom: 12, 
-            padding: "10px 12px", 
-            borderRadius: 14, 
-            background: theme.panelMuted, 
-            border: `1px solid ${theme.border}`, 
-            display: "flex", 
-            justifyContent: "space-between", 
-            gap: 12, 
-            flexWrap: "wrap", 
-            fontSize: 12, 
-            color: theme.textMuted, 
-            flexShrink: 0 
-          }}>
+        <div className="flex flex-1 min-h-0 flex-col">
+          <div className="mb-3 flex shrink-0 flex-wrap justify-between gap-3 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-panel-muted)] px-3 py-2.5 text-xs text-[var(--color-text-muted)]">
             <span>ЛКМ/ПКМ — панорама, колесо — масштаб</span>
             <span>Machine zero: X0 Y0 Z0</span>
           </div>
-          <div style={{ 
-            flex: 1, 
-            minHeight: 0, 
-            overflow: "hidden", 
-            borderRadius: 18, 
-            border: `1px solid ${theme.border}`, 
-            background: theme.panelMuted 
-          }}>
+
+          <div className="flex-1 min-h-0 overflow-hidden rounded-[18px] border border-[var(--color-border)] bg-[var(--color-panel-muted)]">
             <PathScene
               parsed={parsed!}
               currentState={currentState}
@@ -117,16 +73,18 @@ export function CenterPanelContainer() {
           </div>
         </div>
       )}
+
       {activeTab === "gcode" && (
         <Suspense fallback={<Loader />}>
-          <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", overflow: "hidden" }}>
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
             <GCodeEditorPanel source={source} setSource={setSource} fileName={fileName} />
           </div>
         </Suspense>
       )}
+
       {activeTab === "edit" && (
         <Suspense fallback={<Loader />}>
-          <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: "flex", overflow: "hidden" }}>
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
             <EditTab
               document={editDocument}
               setDocument={setEditDocument}

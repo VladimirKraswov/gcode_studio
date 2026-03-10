@@ -1,5 +1,4 @@
-import { useStyles } from "../../styles/useStyles";
-import { useTheme } from "../../contexts/ThemeContext";
+import type { ChangeEvent } from "react";
 
 type RangeCardProps = {
   label: string;
@@ -20,38 +19,27 @@ export function RangeCard({
   current,
   onChange,
 }: RangeCardProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   return (
-    <div
-      style={{
-        ...styles.panelInset,
-        padding: 12,
-        marginBottom: 10,
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: 8,
-        }}
-      >
-        <span style={{ fontSize: 13, fontWeight: 700 }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 800, color: theme.primaryText }}>
+    <div className="ui-panel-inset mb-2.5 p-3">
+      <div className="mb-2 flex justify-between gap-3">
+        <span className="text-[13px] font-bold text-[var(--color-text)]">
+          {label}
+        </span>
+        <span className="text-[13px] font-extrabold text-[var(--color-primary-text)]">
           {value}
         </span>
       </div>
+
       <input
         type="range"
         min={min}
         max={max}
         step={step}
         value={current}
-        onChange={(e) => onChange(Number(e.target.value))}
-        style={{ width: "100%" }}
+        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+          onChange(Number(e.target.value))
+        }
+        className="w-full"
       />
     </div>
   );

@@ -1,5 +1,3 @@
-import { useStyles } from "../styles/useStyles";
-
 type StatCardProps = {
   label: string;
   value: string;
@@ -7,19 +5,14 @@ type StatCardProps = {
 };
 
 export function StatCard({ label, value, mono = false }: StatCardProps) {
-  const styles = useStyles();
-
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
+    <div className="ui-stat-card">
+      <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">{label}</div>
       <div
-        style={{
-          ...styles.statValue,
-          fontFamily: mono
-            ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
-            : "inherit",
-          wordBreak: "break-word",
-        }}
+        className={[
+          "break-words text-[17px] leading-[1.25] font-extrabold text-[var(--color-text)]",
+          mono ? "font-mono" : "",
+        ].join(" ")}
       >
         {value}
       </div>

@@ -18,7 +18,6 @@ import { ProgressBillboard } from "./ProgressBillboard";
 import { SimpleLine } from "./SimpleLine";
 import ToolHead from "./ToolHead";
 import { WorkArea } from "./WorkArea";
-import { useTheme } from "../contexts/ThemeContext";
 
 type PathSceneProps = {
   parsed: ParsedGCode;
@@ -33,6 +32,12 @@ type PathSceneProps = {
   toolDiameter?: number;
   onCameraUpdate: (camera: CameraInfo) => void;
 };
+
+function readCssVar(name: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
 
 function buildAxisLine(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
   return [from.clone(), to.clone()];
@@ -86,7 +91,21 @@ export function PathScene({
   onCameraUpdate,
 }: PathSceneProps) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
-  const { theme } = useTheme();
+
+  const theme = useMemo(
+    () => ({
+      bgSoft: readCssVar("--color-bg-soft", "#f5efe8"),
+      border: readCssVar("--color-border", "#e8dccc"),
+      primary: readCssVar("--color-primary", "#d97706"),
+      primarySoft: readCssVar("--color-primary-soft", "#fef3c7"),
+      primaryText: readCssVar("--color-primary-text", "#b45309"),
+      success: readCssVar("--color-success", "#10b981"),
+      danger: readCssVar("--color-danger", "#ef4444"),
+      text: readCssVar("--color-text", "#2c2c2c"),
+      textSoft: readCssVar("--color-text-soft", "#5a4f45"),
+    }),
+    [],
+  );
 
   const placement = useMemo(
     () => getStockPlacement(parsed.bounds, stock, placementMode),
@@ -94,7 +113,6 @@ export function PathScene({
   );
 
   const stockCenter = useMemo(() => toSceneCoords(placement.centerGcode), [placement]);
-
   const orbitTarget = useMemo(() => toScenePoint(placement.centerGcode), [placement]);
 
   const axesHelper = useMemo(() => {

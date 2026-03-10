@@ -18,8 +18,6 @@ import {
   FiTrash2,
   FiType,
 } from "react-icons/fi";
-import { useStyles } from "../../../styles/useStyles";
-import { useTheme } from "../../../contexts/ThemeContext";
 import type { SelectionState } from "../model/selection";
 import { selectOnly } from "../model/selection";
 import type {
@@ -145,9 +143,6 @@ export function ObjectListPanel({
   onDeleteShape,
   onReorderShapes,
 }: ObjectListPanelProps) {
-  const styles = useStyles();
-  const { theme } = useTheme();
-
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -371,53 +366,12 @@ export function ObjectListPanel({
     };
   }, [selection.primaryId, document.shapes]);
 
-  const compactIconButton: React.CSSProperties = {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    border: "none",
-    background: "transparent",
-    color: theme.textMuted,
-    display: "grid",
-    placeItems: "center",
-    cursor: "pointer",
-    padding: 0,
-    flexShrink: 0,
-  };
-
-  const menuItemStyle: React.CSSProperties = {
-    height: 30,
-    padding: "0 10px",
-    borderRadius: 8,
-    border: "none",
-    background: "transparent",
-    color: theme.text,
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: 12,
-    fontWeight: 600,
-    cursor: "pointer",
-    width: "100%",
-    textAlign: "left",
-  };
-
   let contextMenuNode: React.ReactNode = null;
 
   if (contextMenu && portalHost) {
-    const menuShellStyle: React.CSSProperties = {
-      position: "fixed",
-      left: contextMenu.x,
-      top: contextMenu.y,
-      zIndex: 99999,
-      minWidth: 180,
-      padding: 6,
-      borderRadius: 12,
-      background: theme.panel,
-      border: `1px solid ${theme.border}`,
-      boxShadow: theme.shadow,
-      backdropFilter: "blur(16px)",
-    };
+    const menuShell = "fixed z-[99999] min-w-[180px] rounded-xl border bg-[var(--color-panel)] p-1.5 shadow-[var(--shadow)] backdrop-blur-[16px]";
+    const menuItem = "flex h-[30px] w-full items-center gap-2 rounded-lg bg-transparent px-2.5 text-left text-xs font-semibold text-[var(--color-text)]";
+    const menuDanger = "text-[var(--color-danger)]";
 
     if (contextMenu.target.kind === "shape") {
       const target: ShapeMenuTarget = contextMenu.target;
@@ -425,14 +379,19 @@ export function ObjectListPanel({
       contextMenuNode = createPortal(
         <div
           ref={menuRef}
-          style={menuShellStyle}
+          className={menuShell}
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+            borderColor: "var(--color-border)",
+          }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => {
               onSelectionChange(selectOnly(target.shapeId));
               setContextMenu(null);
@@ -444,7 +403,7 @@ export function ObjectListPanel({
 
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => beginRenameShape(target.shapeId)}
           >
             <FiEdit3 size={14} />
@@ -453,7 +412,7 @@ export function ObjectListPanel({
 
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => {
               onToggleVisibility(target.shapeId);
               setContextMenu(null);
@@ -465,7 +424,7 @@ export function ObjectListPanel({
 
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => {
               navigator.clipboard?.writeText(target.shapeId).catch(() => {});
               setContextMenu(null);
@@ -475,17 +434,11 @@ export function ObjectListPanel({
             Копировать ID
           </button>
 
-          <div
-            style={{
-              height: 1,
-              background: theme.border,
-              margin: "6px 4px",
-            }}
-          />
+          <div className="mx-1 my-1.5 h-px bg-[var(--color-border)]" />
 
           <button
             type="button"
-            style={{ ...menuItemStyle, color: theme.danger }}
+            className={`${menuItem} ${menuDanger}`}
             onClick={() => {
               onDeleteShape(target.shapeId);
               setContextMenu(null);
@@ -503,14 +456,19 @@ export function ObjectListPanel({
       contextMenuNode = createPortal(
         <div
           ref={menuRef}
-          style={menuShellStyle}
+          className={menuShell}
+          style={{
+            left: contextMenu.x,
+            top: contextMenu.y,
+            borderColor: "var(--color-border)",
+          }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => beginRenameGroup(target.groupId)}
           >
             <FiEdit3 size={14} />
@@ -519,7 +477,7 @@ export function ObjectListPanel({
 
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => {
               onToggleGroupCollapsed(target.groupId);
               setContextMenu(null);
@@ -531,7 +489,7 @@ export function ObjectListPanel({
 
           <button
             type="button"
-            style={menuItemStyle}
+            className={menuItem}
             onClick={() => {
               openArrayEditor(target.groupId);
               setContextMenu(null);
@@ -550,21 +508,7 @@ export function ObjectListPanel({
     <>
       <div
         ref={rootRef}
-        style={{
-          ...styles.panel,
-          padding: 8,
-          width: 320,
-          minWidth: 260,
-          maxWidth: 360,
-          height: "100%",
-          minHeight: 0,
-          overflow: "hidden",
-          borderRadius: 16,
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-        }}
-        className="scrollbar-thin"
+        className="ui-panel scrollbar-thin relative flex h-full min-h-0 w-[320px] min-w-[260px] max-w-[360px] flex-col overflow-hidden rounded-2xl p-2"
         onContextMenu={(e) => {
           if (e.target === e.currentTarget) {
             e.preventDefault();
@@ -572,58 +516,23 @@ export function ObjectListPanel({
           }
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "4px 4px 8px",
-            borderBottom: `1px solid ${theme.border}`,
-            marginBottom: 8,
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              display: "grid",
-              placeItems: "center",
-              background: theme.primarySoft,
-              color: theme.primaryText,
-              flexShrink: 0,
-            }}
-          >
+        <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-1 py-1 pb-2">
+          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
             <FiLayers size={14} />
           </div>
 
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 800,
-                color: theme.text,
-                lineHeight: 1.1,
-              }}
-            >
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] leading-none font-extrabold text-[var(--color-text)]">
               Проводник проекта
             </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: theme.textMuted,
-                marginTop: 2,
-                lineHeight: 1.1,
-              }}
-            >
+            <div className="mt-0.5 text-[11px] leading-none text-[var(--color-text-muted)]">
               {document.shapes.length} объектов
             </div>
           </div>
 
           <button
             type="button"
-            style={compactIconButton}
+            className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md bg-transparent p-0 text-[var(--color-text-muted)]"
             title="Дополнительно"
             onClick={(e) => {
               e.preventDefault();
@@ -652,44 +561,23 @@ export function ObjectListPanel({
           </button>
         </div>
 
-        <div style={{ padding: "0 4px 8px", flexShrink: 0 }}>
+        <div className="shrink-0 px-1 pb-2">
           <input
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Фильтр объектов..."
-            style={{
-              ...styles.input,
-              height: 32,
-              fontSize: 12,
-              borderRadius: 10,
-            }}
+            className="ui-input h-8 rounded-[10px] text-xs"
           />
         </div>
 
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            overflowX: "hidden",
-            padding: "0 2px 4px",
-          }}
-        >
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-0.5 pb-1">
           {tree.length === 0 ? (
-            <div
-              style={{
-                ...styles.panelInset,
-                padding: 10,
-                color: theme.textMuted,
-                fontSize: 12,
-                borderRadius: 10,
-              }}
-            >
+            <div className="ui-panel-inset rounded-[10px] p-2.5 text-xs text-[var(--color-text-muted)]">
               Ничего не найдено.
             </div>
           ) : (
-            <div style={{ display: "grid", gap: 1 }}>
+            <div className="grid gap-px">
               {tree.map((node) => {
                 const isRenaming =
                   renaming &&
@@ -703,31 +591,13 @@ export function ObjectListPanel({
                       onContextMenu={(e) =>
                         handleContextMenu(e, { kind: "group", groupId: node.id })
                       }
-                      style={{
-                        borderRadius: 8,
-                        background: node.selected ? theme.primarySoft : "transparent",
-                      }}
+                      className={node.selected ? "rounded-lg bg-[var(--color-primary-soft)]" : "rounded-lg bg-transparent"}
                     >
-                      <div
-                        style={{
-                          height: 28,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 4,
-                          padding: "0 6px",
-                          color: theme.text,
-                          userSelect: "none",
-                        }}
-                      >
+                      <div className="flex h-7 items-center gap-1 px-1.5 text-[var(--color-text)] select-none">
                         <button
                           type="button"
                           onClick={() => onToggleGroupCollapsed(node.id)}
-                          style={{
-                            ...compactIconButton,
-                            width: 18,
-                            height: 18,
-                            color: theme.textMuted,
-                          }}
+                          className="grid h-[18px] w-[18px] place-items-center rounded-md p-0 text-[var(--color-text-muted)]"
                         >
                           {node.collapsed ? (
                             <FiChevronRight size={12} />
@@ -745,19 +615,7 @@ export function ObjectListPanel({
                             })
                           }
                           onDoubleClick={() => beginRenameGroup(node.id)}
-                          style={{
-                            border: "none",
-                            background: "transparent",
-                            padding: 0,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            minWidth: 0,
-                            flex: 1,
-                            cursor: "pointer",
-                            color: theme.text,
-                            textAlign: "left",
-                          }}
+                          className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent p-0 text-left text-[var(--color-text)]"
                         >
                           <FiFolder size={13} />
                           {isRenaming ? (
@@ -774,25 +632,10 @@ export function ObjectListPanel({
                                 if (e.key === "Enter") commitRename();
                                 if (e.key === "Escape") setRenaming(null);
                               }}
-                              style={{
-                                ...styles.input,
-                                height: 24,
-                                fontSize: 12,
-                                borderRadius: 6,
-                                padding: "0 8px",
-                              }}
+                              className="ui-input h-6 rounded-md px-2 text-xs"
                             />
                           ) : (
-                            <span
-                              style={{
-                                minWidth: 0,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                                fontSize: 12,
-                                fontWeight: 700,
-                              }}
-                            >
+                            <span className="min-w-0 truncate whitespace-nowrap text-xs font-bold">
                               {node.name}
                             </span>
                           )}
@@ -800,15 +643,11 @@ export function ObjectListPanel({
 
                         {node.arrayBadge && (
                           <span
+                            className="shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-extrabold"
                             style={{
-                              fontSize: 10,
-                              fontWeight: 800,
                               color: node.arrayBadge.color,
                               background: node.arrayBadge.background,
                               border: `1px solid ${node.arrayBadge.border}`,
-                              borderRadius: 999,
-                              padding: "1px 6px",
-                              flexShrink: 0,
                             }}
                           >
                             {node.arrayBadge.label}
@@ -820,7 +659,7 @@ export function ObjectListPanel({
                           onClick={() =>
                             node.shapes.forEach((shape) => onToggleVisibility(shape.id))
                           }
-                          style={compactIconButton}
+                          className="grid h-[22px] w-[22px] place-items-center rounded-md bg-transparent p-0 text-[var(--color-text-muted)]"
                           title={node.visible ? "Скрыть группу" : "Показать группу"}
                         >
                           {node.visible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
@@ -843,51 +682,19 @@ export function ObjectListPanel({
                     onContextMenu={(e) =>
                       handleContextMenu(e, { kind: "shape", shapeId: node.id })
                     }
-                    style={{
-                      marginLeft: node.depth * 14,
-                      borderRadius: 8,
-                      background: node.selected ? theme.primarySoft : "transparent",
-                    }}
+                    className={node.selected ? "rounded-lg bg-[var(--color-primary-soft)]" : "rounded-lg bg-transparent"}
+                    style={{ marginLeft: node.depth * 14 }}
                   >
-                    <div
-                      style={{
-                        height: 26,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "0 6px",
-                        color: theme.text,
-                        userSelect: "none",
-                      }}
-                    >
+                    <div className="flex h-[26px] items-center gap-1.5 px-1.5 text-[var(--color-text)] select-none">
                       <button
                         type="button"
                         onClick={() => onSelectionChange(selectOnly(node.id))}
                         onDoubleClick={() => beginRenameShape(node.id)}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          padding: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          minWidth: 0,
-                          flex: 1,
-                          cursor: "pointer",
-                          color: theme.text,
-                          textAlign: "left",
-                        }}
+                        className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent p-0 text-left text-[var(--color-text)]"
                       >
                         <span
-                          style={{
-                            width: 14,
-                            height: 14,
-                            display: "grid",
-                            placeItems: "center",
-                            color: theme.textMuted,
-                            opacity: node.visible ? 1 : 0.6,
-                            flexShrink: 0,
-                          }}
+                          className="grid h-[14px] w-[14px] shrink-0 place-items-center text-[var(--color-text-muted)]"
+                          style={{ opacity: node.visible ? 1 : 0.6 }}
                         >
                           {getShapeIcon(node.shape)}
                         </span>
@@ -906,25 +713,14 @@ export function ObjectListPanel({
                               if (e.key === "Enter") commitRename();
                               if (e.key === "Escape") setRenaming(null);
                             }}
-                            style={{
-                              ...styles.input,
-                              height: 22,
-                              fontSize: 12,
-                              borderRadius: 6,
-                              padding: "0 8px",
-                            }}
+                            className="ui-input h-[22px] rounded-md px-2 text-xs"
                           />
                         ) : (
                           <span
-                            style={{
-                              minWidth: 0,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              fontSize: 12,
-                              fontWeight: node.selected ? 700 : 500,
-                              opacity: node.visible ? 1 : 0.65,
-                            }}
+                            className={`min-w-0 truncate whitespace-nowrap text-xs ${
+                              node.selected ? "font-bold" : "font-medium"
+                            }`}
+                            style={{ opacity: node.visible ? 1 : 0.65 }}
                           >
                             {node.name}
                           </span>
@@ -934,7 +730,7 @@ export function ObjectListPanel({
                       <button
                         type="button"
                         onClick={() => onToggleVisibility(node.id)}
-                        style={compactIconButton}
+                        className="grid h-[22px] w-[22px] place-items-center rounded-md bg-transparent p-0 text-[var(--color-text-muted)]"
                         title={node.visible ? "Скрыть" : "Показать"}
                       >
                         {node.visible ? <FiEye size={12} /> : <FiEyeOff size={12} />}
