@@ -16,7 +16,6 @@ import { CameraDebug } from "./CameraDebug";
 import { MaterialRemovalMesh } from "./MaterialRemovalMesh";
 import { ProgressBillboard } from "./ProgressBillboard";
 import { SimpleLine } from "./SimpleLine";
-import { StockWireframe } from "./StockWireframe";
 import ToolHead from "./ToolHead";
 import { WorkArea } from "./WorkArea";
 import { useTheme } from "../contexts/ThemeContext";
@@ -370,7 +369,7 @@ export function PathScene({
           <meshStandardMaterial
             color="#c89d67"
             transparent
-            opacity={0.25}
+            opacity={0.7}
             roughness={0.6}
             depthWrite={false}
             polygonOffset
@@ -379,8 +378,6 @@ export function PathScene({
           />
         </mesh>
       )}
-
-      <StockWireframe bounds={parsed.bounds} stock={stock} placementMode={placementMode} />
 
       {showMaterialRemoval ? (
         <MaterialRemovalMesh
