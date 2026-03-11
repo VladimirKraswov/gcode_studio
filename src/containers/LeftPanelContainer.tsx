@@ -5,6 +5,7 @@ import { FileProjectSection } from "@/features/preview/components/panels/FilePro
 import { PlaybackSection } from "@/features/preview/components/panels/PlaybackSection";
 import { StockSceneSection } from "@/features/preview/components/panels/StockSceneSection";
 import { FiFolder, FiPlay, FiSliders } from "react-icons/fi";
+import { ObjectListPanel } from "@/features/cad-editor";
 
 export function LeftPanelContainer() {
   const {
@@ -27,16 +28,58 @@ export function LeftPanelContainer() {
     setShowMaterialRemoval,
     detailLevel,
     setDetailLevel,
+    editDocument,
+    setEditDocument,
+    selection,
+    setSelection,
   } = useApp();
 
   if (activeTab === "edit") {
     return (
       <LeftPanel>
-        <CollapsibleSection title="Объекты CAD" icon={<FiFolder size={18} />}>
-          <div className="mt-3 text-[13px] leading-6 text-text-muted">
-            В режиме CAD в левой колонке отображается список объектов и групп.
-          </div>
-        </CollapsibleSection>
+        <div className="h-full flex flex-col min-h-0">
+          <ObjectListPanel
+            document={editDocument}
+            selection={selection}
+            onSelectionChange={setSelection}
+            onRenameShape={(id, name) => {
+              setEditDocument(prev => ({
+                ...prev,
+                shapes: prev.shapes.map(s => s.id === id ? { ...s, name } : s)
+              }));
+            }}
+            onRenameGroup={(id, name) => {
+              setEditDocument(prev => ({
+                ...prev,
+                groups: prev.groups.map(g => g.id === id ? { ...g, name } : g)
+              }));
+            }}
+            onToggleGroupCollapsed={(id) => {
+              setEditDocument(prev => ({
+                ...prev,
+                groups: prev.groups.map(g => g.id === id ? { ...g, collapsed: !g.collapsed } : g)
+              }));
+            }}
+            onToggleVisibility={(id) => {
+              setEditDocument(prev => ({
+                ...prev,
+                shapes: prev.shapes.map(s => s.id === id ? { ...s, visible: !(s.visible !== false) } : s)
+              }));
+            }}
+            onDeleteShape={(id) => {
+              setEditDocument(prev => ({
+                ...prev,
+                shapes: prev.shapes.filter(s => s.id !== id)
+              }));
+            }}
+            onReorderShapes={(orderedIds) => {
+              setEditDocument(prev => ({
+                ...prev,
+                shapes: [...prev.shapes].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id))
+              }));
+            }}
+          />
+        </div>
       </LeftPanel>
     );
   }
