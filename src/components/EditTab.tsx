@@ -61,7 +61,7 @@ export default function EditTab(props: EditTabProps) {
 
   return (
     <CadRegistryProvider registry={cadRegistry}>
-      <div className="flex flex-1 flex-col overflow-hidden bg-bg rounded-2xl border border-border">
+      <div className="flex flex-1 flex-col overflow-hidden bg-bg relative">
         {/* Workspace Area */}
         <div className="flex-1 relative flex overflow-hidden">
 
@@ -164,14 +164,16 @@ export default function EditTab(props: EditTabProps) {
         </div>
 
         {/* CAD Footer */}
-        <EditStatusBar
-          objectCount={props.document.shapes.length}
-          tool={editor.tool}
-          isDragging={editor.isDragging}
-          isPanning={editor.isPanning}
-          isTransforming={editor.isTransforming}
-          hasDraft={hasDraft}
-        />
+        <div className="h-8 shrink-0 border-t border-border bg-panel-solid">
+          <EditStatusBar
+            objectCount={props.document.shapes.length}
+            tool={editor.tool}
+            isDragging={editor.isDragging}
+            isPanning={editor.isPanning}
+            isTransforming={editor.isTransforming}
+            hasDraft={hasDraft}
+          />
+        </div>
 
         <SvgImportModal
           open={editor.svgImport.open}

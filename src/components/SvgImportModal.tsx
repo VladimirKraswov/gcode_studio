@@ -46,8 +46,8 @@ function clampProgress(value: number) {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="ui-stat-card">
-      <div className="mb-1.5 text-xs text-[var(--color-text-muted)]">{label}</div>
-      <div className="text-base font-extrabold text-[var(--color-text)]">{value}</div>
+      <div className="mb-1.5 text-xs text-text-muted">{label}</div>
+      <div className="text-base font-extrabold text-text">{value}</div>
     </div>
   );
 }
@@ -92,9 +92,9 @@ export function SvgImportModal({
 
   const progressBarClass =
     stage === "error"
-      ? "bg-[var(--color-danger)]"
+      ? "bg-danger"
       : stage === "aborted"
-        ? "bg-[var(--color-warning)]"
+        ? "bg-warning"
         : "bg-[linear-gradient(90deg,var(--color-primary)_0%,var(--color-primary-text)_100%)]";
 
   return (
@@ -106,10 +106,10 @@ export function SvgImportModal({
         }
       }}
     >
-      <div className="w-full max-w-[680px] max-h-[88vh] overflow-y-auto rounded-[24px] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-[18px] shadow-[var(--shadow)]">
+      <div className="w-full max-w-[680px] max-h-[88vh] overflow-y-auto rounded-3xl border border-border bg-panel-solid p-[18px] shadow-standard">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
+            <div className="grid h-10 w-10 place-items-center rounded-[14px] bg-primary-soft text-primary-text">
               {isBusy ? (
                 <FiLoader size={18} className="animate-spin" />
               ) : (
@@ -118,10 +118,10 @@ export function SvgImportModal({
             </div>
 
             <div>
-              <div className="text-lg font-extrabold text-[var(--color-text)]">
+              <div className="text-lg font-extrabold text-text">
                 Импорт SVG
               </div>
-              <div className="mt-0.5 text-xs text-[var(--color-text-muted)]">
+              <div className="mt-0.5 text-xs text-text-muted">
                 {fileName}
               </div>
             </div>
@@ -131,7 +131,7 @@ export function SvgImportModal({
             type="button"
             onClick={onClose}
             title="Закрыть"
-            className="grid h-[38px] w-[38px] place-items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-panel-solid)] text-[var(--color-text)]"
+            className="grid h-[38px] w-[38px] place-items-center rounded-xl border border-border bg-panel-solid text-text"
           >
             <FiX size={18} />
           </button>
@@ -141,14 +141,14 @@ export function SvgImportModal({
           <div className="ui-panel-inset mb-3.5 p-4">
             <div className="mb-3 flex items-center gap-2.5">
               {stage === "error" ? (
-                <FiAlertCircle size={18} className="text-[var(--color-danger)]" />
+                <FiAlertCircle size={18} className="text-danger" />
               ) : stage === "aborted" ? (
-                <FiSlash size={18} className="text-[var(--color-warning)]" />
+                <FiSlash size={18} className="text-warning" />
               ) : (
-                <FiLoader size={18} className="animate-spin text-[var(--color-primary)]" />
+                <FiLoader size={18} className="animate-spin text-primary" />
               )}
 
-              <div className="text-sm font-bold text-[var(--color-text)]">
+              <div className="text-sm font-bold text-text">
                 {stage === "error"
                   ? "Ошибка импорта"
                   : stage === "aborted"
@@ -157,14 +157,14 @@ export function SvgImportModal({
               </div>
             </div>
 
-            <div className="mb-2.5 h-3 overflow-hidden rounded-full bg-[var(--color-border)]">
+            <div className="mb-2.5 h-3 overflow-hidden rounded-full bg-border">
               <div
                 className={`h-full rounded-full transition-[width] duration-150 ease-in-out ${progressBarClass}`}
                 style={{ width: `${clampProgress(progress)}%` }}
               />
             </div>
 
-            <div className="text-[13px] leading-6 text-[var(--color-text-soft)]">
+            <div className="text-[13px] leading-6 text-text-soft">
               {error ?? message}
             </div>
 
@@ -182,7 +182,7 @@ export function SvgImportModal({
         {canEdit && draft && (
           <>
             <div className="ui-panel-inset mb-3.5 grid gap-3 p-3.5">
-              <div className="text-[13px] font-extrabold text-[var(--color-text)]">
+              <div className="text-[13px] font-extrabold text-text">
                 Исходный размер SVG
               </div>
 
@@ -255,7 +255,7 @@ export function SvgImportModal({
                 </label>
               </div>
 
-              <label className="flex items-center gap-2.5 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3 text-[13px] font-bold text-[var(--color-text)]">
+              <label className="flex items-center gap-2.5 rounded-[14px] border border-border bg-panel-solid p-3 text-[13px] font-bold text-text">
                 <input
                   type="checkbox"
                   checked={draft.keepAspectRatio}

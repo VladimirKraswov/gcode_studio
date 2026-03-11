@@ -15,8 +15,6 @@ import { tags } from "@lezer/highlight";
 import {
   FiCheck,
   FiCommand,
-  FiDownload,
-  FiEdit3,
   FiFileText,
   FiRefreshCw,
   FiSearch,
@@ -70,9 +68,7 @@ export function GCodeEditor({
   source,
   setSource,
   fileName,
-  variant = "panel",
   onClose,
-  title = "Редактор G-code",
 }: GCodeEditorProps) {
   const { isDark } = useTheme();
   const editorRef = useRef<ReactCodeMirrorRef | null>(null);

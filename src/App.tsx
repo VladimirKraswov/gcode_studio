@@ -51,14 +51,14 @@ function AppContent() {
     return (
       <div className="ui-app-shell">
         <div className="grid h-screen place-items-center p-6">
-          <div className="ui-panel w-full max-w-[520px] bg-[var(--color-panel-solid)] p-7 text-center">
-            <div className="mx-auto mb-[18px] grid h-[72px] w-[72px] place-items-center rounded-[24px] bg-[var(--color-primary-soft)] text-[var(--color-primary)]">
+        <div className="ui-panel w-full max-w-[520px] bg-panel-solid p-7 text-center shadow-standard">
+          <div className="mx-auto mb-[18px] grid h-[72px] w-[72px] place-items-center rounded-xl bg-primary-soft text-primary">
               <FiLoader size={34} className="animate-spin" />
             </div>
 
-            <h1 className="m-0 text-[28px]">GCode Studio</h1>
+          <h1 className="m-0 text-[28px] font-extrabold text-text">GCode Studio</h1>
 
-            <p className="my-[10px] mb-[18px] text-[var(--color-text-muted)]">
+          <p className="my-[10px] mb-[18px] text-text-muted">
               {isParsing
                 ? "Парсинг G-code... Это может занять несколько секунд."
                 : "Загрузите файл, чтобы начать работу."}

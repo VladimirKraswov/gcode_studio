@@ -9,7 +9,6 @@ import {
   FiRefreshCw,
   FiType,
   FiInfo,
-  FiCrosshair,
 } from "react-icons/fi";
 import { createDefaultCamSettings } from "../model/document";
 import type {

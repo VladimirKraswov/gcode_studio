@@ -46,20 +46,16 @@ export function CenterPanelContainer() {
     applyGeneratedGCode,
   } = useApp();
 
-  // "edit" tab is edge-to-edge for a professional CAD feel.
-  // Other tabs keep the standard panel look with padding.
-  const isEdit = activeTab === "edit";
-
   return (
-    <div className={`${isEdit ? "flex flex-1 min-h-0 min-w-0" : "ui-panel flex flex-1 min-h-0 flex-col overflow-hidden bg-panel-solid p-4"}`}>
+    <div className="flex flex-1 min-h-0 min-w-0 bg-panel-solid">
       {activeTab === "view" && (
-        <div className="flex flex-1 min-h-0 flex-col">
-          <div className="mb-3 flex shrink-0 flex-wrap justify-between gap-3 rounded-[14px] border border-border bg-panel-muted px-3 py-2.5 text-xs text-text-muted">
+        <div className="flex flex-1 min-h-0 flex-col p-2">
+          <div className="mb-2 flex shrink-0 flex-wrap justify-between gap-3 rounded-lg border border-border bg-panel-muted px-3 py-1.5 text-[11px] text-text-muted">
             <span>ЛКМ/ПКМ — панорама, колесо — масштаб</span>
             <span>Machine zero: X0 Y0 Z0</span>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-hidden rounded-[18px] border border-border bg-panel-muted">
+          <div className="flex-1 min-h-0 overflow-hidden rounded-xl border border-border bg-panel-muted">
             <PathScene
               parsed={parsed!}
               currentState={currentState}

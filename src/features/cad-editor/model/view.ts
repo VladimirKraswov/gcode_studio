@@ -6,8 +6,8 @@ export type ViewTransform = {
 
 export const DEFAULT_VIEW: ViewTransform = {
   scale: 2.5,
-  offsetX: 40,
-  offsetY: 40,
+  offsetX: 100,
+  offsetY: 100,
 };
 
 export function createDefaultView(): ViewTransform {

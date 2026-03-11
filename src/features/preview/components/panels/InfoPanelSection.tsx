@@ -1,5 +1,4 @@
 import {
-  FiActivity,
   FiCamera,
   FiMaximize2,
   FiMove,
@@ -12,7 +11,6 @@ import type {
   StockDimensions,
 } from "@/types/gcode";
 import { fmt } from "@/shared/utils/common";
-import { Card } from "@/shared/components/ui/Card";
 
 type InfoPanelSectionProps = {
   bounds: Bounds;
