@@ -272,6 +272,32 @@ export function useCadEditor({
     setIsSelectionHover(false);
   }
 
+  function commitPolyline() {
+    if (polylineDraft.length < 2) {
+      setPolylineDraft([]);
+      setPolylineHoverPoint(null);
+      return;
+    }
+
+    checkpointHistory();
+
+    let nextDoc = { ...document };
+    const pids = polylineDraft.map((p) => {
+      const pt = createPoint(p.x, p.y);
+      nextDoc = addPoint(nextDoc, pt);
+      return pt.id;
+    });
+
+    const shape = createPolylineShape(
+      `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
+      pids,
+      false,
+    );
+
+    setDocument(addShape(nextDoc, shape));
+    focusCreatedShape(shape.id);
+  }
+
   function closeArrayTool() {
     setArrayToolMode(null);
     setEditingArrayGroupId(null);
@@ -456,23 +482,7 @@ export function useCadEditor({
       if (event.key === "Enter") {
         if (polylineDraft.length >= 2) {
           event.preventDefault();
-          checkpointHistory();
-
-          let nextDoc = { ...document };
-          const pids = polylineDraft.map(p => {
-            const pt = createPoint(p.x, p.y);
-            nextDoc = addPoint(nextDoc, pt);
-            return pt.id;
-          });
-
-          const shape = createPolylineShape(
-            `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
-            pids,
-            false,
-          );
-
-          setDocument(addShape(nextDoc, shape));
-          focusCreatedShape(shape.id);
+          commitPolyline();
         }
         return;
       }
