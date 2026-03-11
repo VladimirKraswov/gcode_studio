@@ -28,16 +28,24 @@ export function SelectionOverlay({
   selection,
   documentHeight,
   view,
-  onPointerDown,
   onScaleHandlePointerDown,
   onRotateHandlePointerDown,
   isDragging = false,
   isHover = false,
-  onHoverChange,
 }: SelectionOverlayProps) {
   const { theme } = useTheme();
 
   if (selection.ids.length === 0) return null;
+
+  const isParametricOnly = selection.ids.every(id => {
+    if (id.startsWith("pt-")) return true;
+    const s = document.shapes.find(shape => shape.id === id);
+    return s && s.type !== "text" && s.type !== "svg";
+  });
+
+  // If only parametric shapes are selected, we hide the bounding box
+  // to avoid cluttering and allow direct interaction with vertices/edges
+  if (isParametricOnly) return null;
 
   const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
 
@@ -59,11 +67,6 @@ export function SelectionOverlay({
   const cx = x + width / 2;
   const rotateLineTop = y - 24;
   const rotateHandleY = y - 34;
-
-  const isParametricOnly = selection.ids.every(id => {
-    const s = document.shapes.find(shape => shape.id === id);
-    return s && s.type !== "text" && s.type !== "svg";
-  });
 
   const palette = isDragging
     ? {
@@ -102,24 +105,7 @@ export function SelectionOverlay({
   ];
 
   return (
-    <g>
-      {onPointerDown && (
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill="transparent"
-          stroke="transparent"
-          strokeWidth={18}
-          rx={10}
-          style={{ cursor: palette.handleCursor }}
-          onPointerDown={onPointerDown}
-          onPointerEnter={() => onHoverChange?.(true)}
-          onPointerLeave={() => onHoverChange?.(false)}
-        />
-      )}
-
+    <g pointerEvents="none">
       <rect
         x={x}
         y={y}
@@ -130,7 +116,6 @@ export function SelectionOverlay({
         strokeWidth={palette.width}
         strokeDasharray={palette.dash}
         rx={10}
-        pointerEvents="none"
       />
 
       {!isParametricOnly && (
@@ -152,7 +137,7 @@ export function SelectionOverlay({
             fill="transparent"
             stroke="transparent"
             onPointerDown={onRotateHandlePointerDown}
-            style={{ cursor: "alias" }}
+            style={{ cursor: "alias", pointerEvents: "all" }}
           />
 
           <circle
@@ -162,8 +147,7 @@ export function SelectionOverlay({
             fill={theme.cad.constraintLabelFill}
             stroke={palette.stroke}
             strokeWidth={1.5}
-            onPointerDown={onRotateHandlePointerDown}
-            style={{ cursor: "alias" }}
+            pointerEvents="none"
           />
         </>
       )}
@@ -178,7 +162,7 @@ export function SelectionOverlay({
               fill="transparent"
               stroke="transparent"
               onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
-              style={{ cursor: corner.cursor }}
+              style={{ cursor: corner.cursor, pointerEvents: "all" }}
             />
             <circle
               cx={corner.cx}
@@ -187,8 +171,7 @@ export function SelectionOverlay({
               fill={theme.cad.constraintLabelFill}
               stroke={palette.stroke}
               strokeWidth={1.5}
-              onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
-              style={{ cursor: corner.cursor }}
+              pointerEvents="none"
             />
           </g>
         ))}
