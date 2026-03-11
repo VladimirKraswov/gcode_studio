@@ -4,12 +4,12 @@ import type {
   SketchPolyline,
   SketchRectangle,
   SketchShape,
-} from "../modules/cad/model/types";
+} from "@/features/cad-editor/model/types";
 
-export { createId } from "../modules/cad/model/ids";
-export { createEmptySketchDocument } from "../modules/cad/model/document";
-export { shapeBounds } from "../modules/cad/model/shapeBounds";
-export { moveShape } from "../modules/cad/model/shapeTransforms";
+export { createId } from "@/features/cad-editor/model/ids";
+export { createEmptySketchDocument } from "@/features/cad-editor/model/document";
+export { shapeBounds } from "@/features/cad-editor/model/shapeBounds";
+export { moveShape } from "@/features/cad-editor/model/shapeTransforms";
 export { generateSketchGCode } from "../modules/cam/gcode/generator";
 
 export function updateRectangle(

@@ -1,14 +1,14 @@
 // src/App.tsx
 import { FiCode, FiEye, FiLoader, FiTool } from "react-icons/fi";
-import { AppProvider, useApp } from "./contexts/AppContext";
-import { MainLayout } from "./layouts/MainLayout";
-import { AppHeader } from "./components/AppHeader";
-import { LeftPanelContainer } from "./containers/LeftPanelContainer";
-import { CenterPanelContainer } from "./containers/CenterPanelContainer";
-import { RightPanelContainer } from "./containers/RightPanelContainer";
-import { NotificationProvider } from "./contexts/NotificationContext";
-import { NotificationToast } from "./components/NotificationToast";
-import { ThemeProvider } from "./contexts/ThemeContext";
+import { AppProvider, useApp } from "@/contexts/AppContext";
+import { MainLayout } from "@/layouts/MainLayout";
+import { AppHeader } from "@/components/AppHeader";
+import { LeftPanelContainer } from "@/containers/LeftPanelContainer";
+import { CenterPanelContainer } from "@/containers/CenterPanelContainer";
+import { RightPanelContainer } from "@/containers/RightPanelContainer";
+import { NotificationProvider } from "@/contexts/NotificationContext";
+import { NotificationToast } from "@/components/NotificationToast";
+import { ThemeProvider } from "@/shared/hooks/useTheme";
 
 const TAB_META = {
   view: {
@@ -30,7 +30,7 @@ const TAB_META = {
 
 function AppContent() {
   const { parsed, isParsing, fileName, activeTab, setActiveTab, handleFileChange } = useApp();
-  const tabMeta = TAB_META[activeTab];
+  const tabMeta = TAB_META[activeTab as keyof typeof TAB_META];
 
   if (!parsed || isParsing) {
     return (

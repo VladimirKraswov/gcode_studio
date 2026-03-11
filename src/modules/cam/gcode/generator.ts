@@ -1,4 +1,4 @@
-import type { SketchDocument } from "../../cad/model/types";
+import type { SketchDocument } from "@/features/cad-editor/model/types";
 import {
   emitCutEnd,
   emitCutStart,
@@ -17,7 +17,7 @@ import {
   isInsideAnyBridge,
   pointAtLength,
 } from "../algorithms/bridges";
-import type { Toolpath, ToolpathPoint } from "../types";
+import type { Toolpath, ToolpathPoint } from "@/types";
 
 const EPS = 1e-6;
 

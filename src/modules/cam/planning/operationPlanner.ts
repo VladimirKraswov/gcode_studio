@@ -2,10 +2,10 @@ import type {
   CamOperationType,
   SketchDocument,
   SketchShape,
-} from "../../cad/model/types";
+} from "@/features/cad-editor/model/types";
 import { buildOffset } from "../algorithms/offsetBuilder";
 import { generateBestPocket } from "../algorithms/pocketing";
-import type { Toolpath } from "../types";
+import type { Toolpath } from "@/types";
 import type { GeometryContour } from "./shapeGeometry";
 
 type ResolvedCamSettings = {

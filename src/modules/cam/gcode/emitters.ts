@@ -1,4 +1,4 @@
-import type { SketchDocument } from "../../cad/model/types";
+import type { SketchDocument } from "@/features/cad-editor/model/types";
 import { fmt } from "./format";
 
 function isLaserMode(doc: SketchDocument): boolean {

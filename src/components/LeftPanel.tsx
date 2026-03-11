@@ -1,12 +1,12 @@
 import type { ChangeEvent } from "react";
 import { FiFolder, FiPlay, FiSliders } from "react-icons/fi";
-import type { PlacementMode, StockDimensions } from "../types/gcode";
+import type { PlacementMode, StockDimensions } from "@/types/gcode";
 import {
   CollapsibleSection,
   FileProjectSection,
   PlaybackSection,
   StockSceneSection,
-} from "./sections";
+} from "@/features/preview/components/panels";
 
 type LeftPanelMode = "default" | "cad";
 

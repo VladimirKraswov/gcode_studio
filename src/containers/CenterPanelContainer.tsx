@@ -1,15 +1,14 @@
-// src/containers/CenterPanelContainer.tsx
 import React, { Suspense } from "react";
-import { useApp } from "../contexts/AppContext";
-import { PathScene } from "../components/PathScene";
+import { useApp } from "@/contexts/AppContext";
+import { PathScene } from "@/features/preview/components/PathScene";
 
-const GCodeEditorPanel = React.lazy(() => import("../components/GCodeEditorPanel"));
-const EditTab = React.lazy(() => import("../components/EditTab"));
+const GCodeEditorPanel = React.lazy(() => import("@/features/gcode-editor/components/GCodeEditorPanel"));
+const EditTab = React.lazy(() => import("@/components/EditTab"));
 
 function Loader() {
   return (
     <div className="grid h-full place-items-center">
-      <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[var(--color-border)] border-t-[var(--color-primary)]" />
+      <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-border border-t-primary" />
     </div>
   );
 }
@@ -48,15 +47,15 @@ export function CenterPanelContainer() {
   } = useApp();
 
   return (
-    <div className="ui-panel flex flex-1 min-h-0 flex-col overflow-hidden bg-[var(--color-panel-solid)] p-4">
+    <div className="ui-panel flex flex-1 min-h-0 flex-col overflow-hidden bg-panel-solid p-4">
       {activeTab === "view" && (
         <div className="flex flex-1 min-h-0 flex-col">
-          <div className="mb-3 flex shrink-0 flex-wrap justify-between gap-3 rounded-[14px] border border-[var(--color-border)] bg-[var(--color-panel-muted)] px-3 py-2.5 text-xs text-[var(--color-text-muted)]">
+          <div className="mb-3 flex shrink-0 flex-wrap justify-between gap-3 rounded-[14px] border border-border bg-panel-muted px-3 py-2.5 text-xs text-text-muted">
             <span>ЛКМ/ПКМ — панорама, колесо — масштаб</span>
             <span>Machine zero: X0 Y0 Z0</span>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-hidden rounded-[18px] border border-[var(--color-border)] bg-[var(--color-panel-muted)]">
+          <div className="flex-1 min-h-0 overflow-hidden rounded-[18px] border border-border bg-panel-muted">
             <PathScene
               parsed={parsed!}
               currentState={currentState}

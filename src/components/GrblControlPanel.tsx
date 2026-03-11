@@ -1,4 +1,4 @@
-import { useGrblSender } from "../hooks/useGrblSender";
+import { useGrblSender } from "@/hooks/useGrblSender";
 import {
   FiHome,
   FiArrowUp,

@@ -7,9 +7,9 @@ import type {
   SketchShape,
   SketchSvg,
   SketchText,
-} from "../../cad/model/types";
-import { getTextPolylines } from "../../cad/geometry/textGeometry";
-import { rotateCadPoint, sampleArcPoints } from "../../geometry/geometryEngine";
+} from "@/features/cad-editor/model/types";
+import { getTextPolylines } from "@/features/cad-editor/geometry/textGeometry";
+import { rotateCadPoint, sampleArcPoints } from "@/features/cad-editor/geometry/geometryEngine";
 
 export type GeometryContour = {
   points: { x: number; y: number }[];

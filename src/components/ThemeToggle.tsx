@@ -1,5 +1,5 @@
 import { FiMoon, FiSun } from "react-icons/fi";
-import { useTheme } from "../contexts/ThemeContext";
+import { useTheme } from "@/shared/hooks/useTheme";
 
 export function ThemeToggle() {
   const { isDark, toggleTheme } = useTheme();

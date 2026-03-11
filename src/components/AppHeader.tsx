@@ -1,7 +1,7 @@
 // src/components/AppHeader.tsx
 import { MainTabs } from "./MainTabs";
 import { ThemeToggle } from "./ThemeToggle";
-import type { MainTab } from "../types/ui";
+import type { MainTab } from "@/types/ui";
 
 type AppHeaderProps = {
   fileName: string;

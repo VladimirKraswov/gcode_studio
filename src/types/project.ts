@@ -5,9 +5,9 @@
 
 import type { PlacementMode, StockDimensions } from "./gcode";
 import type { MainTab } from "./ui";
-import type { SketchDocument } from "../modules/cad/model/types";
-import type { SelectionState } from "../modules/cad/model/selection";
-import type { ViewTransform } from "../modules/cad/model/view";
+import type { SketchDocument } from "@/features/cad-editor/model/types";
+import type { SelectionState } from "@/features/cad-editor/model/selection";
+import type { ViewTransform } from "@/features/cad-editor/model/view";
 
 export type GCodeStudioProject = {
   version: 3;

@@ -1,5 +1,5 @@
 import { FiCode, FiEdit3, FiEye } from "react-icons/fi";
-import type { MainTab } from "../types/ui";
+import type { MainTab } from "@/types/ui";
 
 type MainTabsProps = {
   activeTab: MainTab;

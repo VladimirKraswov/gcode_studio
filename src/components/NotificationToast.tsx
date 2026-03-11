@@ -1,4 +1,4 @@
-import { useNotifications } from "../contexts/NotificationContext";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 export function NotificationToast() {
   const { notifications, removeNotification } = useNotifications();

@@ -1,18 +1,20 @@
 // src/hooks/useAppState.ts
-import { useState, useMemo, useCallback } from "react";
-import { DEMO_GCODE } from "../constants/demo";
-import { useGCodeWorker } from "./useGCodeWorker";
-import { usePlayback } from "./usePlayback";
-import { useCurrentState } from "./useCurrentState";
-import { useUndoRedo } from "./useUndoRedo";
-import { loadSettings, saveSettings } from "../utils/settings";
-import type { CameraInfo, PlacementMode, StockDimensions } from "../types/gcode";
-import type { MainTab } from "../types/ui";
-import type { GCodeStudioProject } from "../types/project";
-import { createEmptySketchDocument } from "../modules/cad/model/document";
-import { createSelection } from "../modules/cad/model/selection";
-import { createDefaultView } from "../modules/cad/model/view";
-import { applyDistanceConstraints } from "../modules/cad/model/constraints";
+import { useState, useMemo } from "react";
+import { DEMO_GCODE } from "@/constants/demo";
+import { useGCodeWorker } from "@/features/gcode-editor/hooks/useGCodeWorker";
+import { usePlayback } from "@/features/preview/hooks/usePlayback";
+import { useCurrentState } from "@/features/preview/hooks/useCurrentState";
+import { useUndoRedo } from "@/shared/hooks/useUndoRedo";
+import { loadSettings, saveSettings } from "@/shared/utils/settings";
+import type { PlacementMode, StockDimensions } from "@/types/gcode";
+import type { MainTab } from "@/types/ui";
+import type { GCodeStudioProject } from "@/types/project";
+import { createEmptySketchDocument } from "@/features/cad-editor/model/document";
+import { createSelection } from "@/features/cad-editor/model/selection";
+import { createDefaultView } from "@/features/cad-editor/model/view";
+import { applyDistanceConstraints } from "@/features/cad-editor/model/constraints";
+import { useGCodeFile } from "@/features/gcode-editor/hooks/useGCodeFile";
+import { useSceneState } from "@/features/preview/hooks/useSceneState";
 
 const UNDO_HISTORY_LIMIT = 10;
 const DEFAULT_STOCK: StockDimensions = { width: 300, height: 180, thickness: 3 };
@@ -28,17 +30,30 @@ export function useAppState() {
   const [placementMode, setPlacementMode] = useState<PlacementMode>("origin");
   const [detailLevel, setDetailLevel] = useState(5);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
-  const [cameraResetKey, setCameraResetKey] = useState(0);
-  const [cameraInfo, setCameraInfo] = useState<CameraInfo | null>(null);
   const [settings, setSettings] = useState(() => loadSettings());
 
   const updateSettings = (update: typeof settings | ((prev: typeof settings) => typeof settings)) => {
     setSettings(prev => {
-      const next = typeof update === "function" ? update(prev) : update;
+      const next = typeof update === "function" ? (update as any)(prev) : update;
       saveSettings(next);
       return next;
     });
   };
+
+  const {
+    cameraResetKey,
+    setCameraResetKey,
+    cameraInfo,
+    setCameraInfo,
+    resetCamera
+  } = useSceneState();
+
+  const { applyGeneratedGCode, handleFileChange } = useGCodeFile(
+    setSource,
+    setFileName,
+    setActiveTab,
+    setCameraResetKey
+  );
 
   // CAD состояние с undo/redo
   const initialCadState = useMemo<HistoryCadState>(() => ({
@@ -79,24 +94,6 @@ export function useAppState() {
   const { progress, setProgress, playing, setPlaying, speed, setSpeed, resetPlayback } = usePlayback();
   const currentState = useCurrentState(parsed, progress);
 
-  const applyGeneratedGCode = useCallback((gcode: string) => {
-    setSource(gcode);
-    setFileName("edit-generated.gcode");
-    setActiveTab("gcode");
-    resetPlayback();
-    setCameraResetKey((value) => value + 1);
-  }, [setSource, setFileName, setActiveTab, resetPlayback, setCameraResetKey]);
-
-  const handleFileChange = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    setSource(text || "");
-    setFileName(file.name || "loaded.gcode");
-    resetPlayback();
-    setCameraResetKey((v) => v + 1);
-  }, [setSource, setFileName, resetPlayback, setCameraResetKey]);
-
   return {
     // G-code данные
     source, setSource,
@@ -122,6 +119,7 @@ export function useAppState() {
     detailLevel, setDetailLevel,
     cameraResetKey, setCameraResetKey,
     cameraInfo, setCameraInfo,
+    resetCamera,
 
     // Настройки пользователя
     settings, updateSettings,

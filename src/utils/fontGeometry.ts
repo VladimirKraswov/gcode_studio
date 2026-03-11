@@ -1,5 +1,5 @@
 import opentype from "opentype.js";
-import type { SketchText } from "../modules/cad/model/types";
+import type { SketchText } from "@/features/cad-editor/model/types";
 import { rotateCadPoint } from "../modules/geometry/geometryEngine";
 
 export type CadPoint = {

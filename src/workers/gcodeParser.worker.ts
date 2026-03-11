@@ -4,7 +4,7 @@ import type {
   Point3,
   Segment,
   ToolPoint,
-} from "../types/gcode";
+} from "@/types/gcode";
 
 const MAX_RENDER_SEGMENTS = 25_000;
 

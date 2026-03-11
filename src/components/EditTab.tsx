@@ -13,7 +13,7 @@ import {
   createDefaultCadRegistry,
   CadRegistryProvider,
 } from "../modules/cad";
-import type { CadPanButtonMode } from "../utils/settings";
+import type { CadPanButtonMode } from "@/shared/utils/settings";
 
 type EditTabProps = {
   document: SketchDocument;

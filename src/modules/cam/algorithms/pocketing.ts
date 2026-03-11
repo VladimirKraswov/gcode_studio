@@ -1,4 +1,4 @@
-import type { CadPoint } from "../../cad/geometry/textGeometry";
+import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
 import { buildPocketOffsets } from "./offsetBuilder";
 import { classifyContours, pointInPolygon } from "./contourClassifier";
 
