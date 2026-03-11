@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
-type LeftPanelProps = {
+type RightPanelProps = {
   children: ReactNode;
 };
 
-export function LeftPanel({ children }: LeftPanelProps) {
+export function RightPanel({ children }: RightPanelProps) {
   return (
     <div className="flex flex-col gap-4">
       {children}
