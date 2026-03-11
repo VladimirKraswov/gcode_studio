@@ -60,6 +60,11 @@ export function SelectionOverlay({
   const rotateLineTop = y - 24;
   const rotateHandleY = y - 34;
 
+  const isParametricOnly = selection.ids.every(id => {
+    const s = document.shapes.find(shape => shape.id === id);
+    return s && s.type !== "text" && s.type !== "svg";
+  });
+
   const palette = isDragging
     ? {
         stroke: theme.cad.selectionDragStroke,
@@ -128,38 +133,42 @@ export function SelectionOverlay({
         pointerEvents="none"
       />
 
-      <line
-        x1={cx}
-        y1={y}
-        x2={cx}
-        y2={rotateLineTop}
-        stroke={palette.stroke}
-        strokeWidth={1.5}
-        pointerEvents="none"
-      />
+      {!isParametricOnly && (
+        <>
+          <line
+            x1={cx}
+            y1={y}
+            x2={cx}
+            y2={rotateLineTop}
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
 
-      <circle
-        cx={cx}
-        cy={rotateHandleY}
-        r={11}
-        fill="transparent"
-        stroke="transparent"
-        onPointerDown={onRotateHandlePointerDown}
-        style={{ cursor: "alias" }}
-      />
+          <circle
+            cx={cx}
+            cy={rotateHandleY}
+            r={11}
+            fill="transparent"
+            stroke="transparent"
+            onPointerDown={onRotateHandlePointerDown}
+            style={{ cursor: "alias" }}
+          />
 
-      <circle
-        cx={cx}
-        cy={rotateHandleY}
-        r={5.5}
-        fill={theme.cad.constraintLabelFill}
-        stroke={palette.stroke}
-        strokeWidth={1.5}
-        onPointerDown={onRotateHandlePointerDown}
-        style={{ cursor: "alias" }}
-      />
+          <circle
+            cx={cx}
+            cy={rotateHandleY}
+            r={5.5}
+            fill={theme.cad.constraintLabelFill}
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            onPointerDown={onRotateHandlePointerDown}
+            style={{ cursor: "alias" }}
+          />
+        </>
+      )}
 
-      {!isDragging &&
+      {!isDragging && (!isParametricOnly) &&
         corners.map((corner) => (
           <g key={corner.key}>
             <circle

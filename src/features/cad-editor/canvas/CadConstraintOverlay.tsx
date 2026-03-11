@@ -96,10 +96,12 @@ export function CadConstraintOverlay({
             key={p.id}
             cx={screen.x}
             cy={screen.y}
-            r={3.5}
+            r={5}
             fill={isFixed ? "#ef4444" : isConstrained ? "#22c55e" : "#3b82f6"}
             stroke="#ffffff"
             strokeWidth="1.5"
+            onPointerDown={(e) => onPointerDown?.(e, "point:" + p.id)}
+            style={{ cursor: 'move', pointerEvents: 'all' }}
           />
         );
       })}

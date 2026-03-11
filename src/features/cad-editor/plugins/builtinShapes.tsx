@@ -159,10 +159,9 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchSvg>({
       type: "svg",
       getBounds: (shape: SketchSvg, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
         <SvgShapeView
           shape={shape}
-          points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}

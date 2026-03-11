@@ -1,17 +1,13 @@
-import { FiCopy, FiRefreshCw } from "react-icons/fi";
+import { FiCopy, FiRefreshCw, FiX } from "react-icons/fi";
 import type {
   CircularArrayParams,
   LinearArrayParams,
 } from "../model/array";
-import type { SketchDocument } from "../model/types";
-import type { SelectionState } from "../model/selection";
+import { Button } from "@/shared/components/ui/Button";
+import { IconButton } from "@/shared/components/ui/IconButton";
+import { Input } from "@/shared/components/ui/Input";
 
 export type ArrayToolPanelProps = {
-  document?: SketchDocument;
-  selection?: SelectionState;
-  onSelectionChange?: (next: SelectionState) => void;
-  setDocument?: React.Dispatch<React.SetStateAction<SketchDocument>>;
-
   mode?: "linear" | "circular";
   linear?: LinearArrayParams;
   circular?: CircularArrayParams;
@@ -38,74 +34,69 @@ export function ArrayToolPanel({
   onLinearChange = () => {},
   onCircularChange = () => {},
   onApply = () => {},
+  onClose = () => {},
 }: ArrayToolPanelProps) {
   return (
-    <div className="ui-panel-inset mb-3 grid shrink-0 gap-3 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[14px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
+    <div className="bg-panel border border-border rounded-xl shadow-lg p-3 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
             {mode === "linear" ? <FiCopy size={16} /> : <FiRefreshCw size={16} />}
           </div>
-
-          <div>
-            <div className="text-[15px] font-extrabold text-text">
-              {mode === "linear" ? "Линейный массив" : "Круговой массив"}
-            </div>
-          </div>
+          <span className="font-bold text-sm">
+            {mode === "linear" ? "Linear Array" : "Circular Array"}
+          </span>
         </div>
-
-        <div className="flex gap-2">
-          <button type="button" onClick={onApply} className="ui-btn-primary">
-            Применить
-          </button>
-        </div>
+        <IconButton icon={<FiX size={14} />} onClick={onClose} size="xs" />
       </div>
 
-      {mode === "linear" ? (
-        <div className="grid grid-cols-2 gap-2.5">
-          <label className="ui-label">
-            Количество
-            <input
-              type="number"
-              min="2"
-              value={linear.count}
-              onChange={(e) => onLinearChange({ count: Math.max(2, Number(e.target.value)) })}
-              className="ui-input"
-            />
-          </label>
-          <label className="ui-label">
-            Шаг
-            <input
-              type="number"
-              value={linear.spacing}
-              onChange={(e) => onLinearChange({ spacing: Number(e.target.value) })}
-              className="ui-input"
-            />
-          </label>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2.5">
-          <label className="ui-label">
-            Количество
-            <input
-              type="number"
-              min="2"
-              value={circular.count}
-              onChange={(e) => onCircularChange({ count: Math.max(2, Number(e.target.value)) })}
-              className="ui-input"
-            />
-          </label>
-          <label className="ui-label">
-            Радиус
-            <input
-              type="number"
-              value={circular.radius}
-              onChange={(e) => onCircularChange({ radius: Number(e.target.value) })}
-              className="ui-input"
-            />
-          </label>
-        </div>
-      )}
+      <div className="grid grid-cols-2 gap-2">
+        {mode === "linear" ? (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase font-bold text-text-muted">Count</label>
+              <Input
+                type="number"
+                min="2"
+                value={linear.count}
+                onChange={(e) => onLinearChange({ count: Math.max(2, Number(e.target.value)) })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase font-bold text-text-muted">Spacing</label>
+              <Input
+                type="number"
+                value={linear.spacing}
+                onChange={(e) => onLinearChange({ spacing: Number(e.target.value) })}
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase font-bold text-text-muted">Count</label>
+              <Input
+                type="number"
+                min="2"
+                value={circular.count}
+                onChange={(e) => onCircularChange({ count: Math.max(2, Number(e.target.value)) })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase font-bold text-text-muted">Radius</label>
+              <Input
+                type="number"
+                value={circular.radius}
+                onChange={(e) => onCircularChange({ radius: Number(e.target.value) })}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
+      <Button size="sm" onClick={onApply} className="w-full">
+        Apply Array
+      </Button>
     </div>
   );
 }

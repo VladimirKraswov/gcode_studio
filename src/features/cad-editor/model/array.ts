@@ -215,13 +215,13 @@ function duplicateShapesWithRotation(
 
 function getShapePointIds(s: SketchShape): string[] {
   const ids: string[] = [];
-  if ("p1" in s) ids.push(s.p1);
-  if ("p2" in s) ids.push(s.p2);
-  if ("center" in s) ids.push(s.center);
-  if ("anchorPoint" in s) ids.push(s.anchorPoint);
-  if ("pointIds" in s) ids.push(...s.pointIds);
-  if ("controlPointIds" in s) ids.push(...s.controlPointIds);
-  if ("majorAxisPoint" in s) ids.push(s.majorAxisPoint);
+  const shape = s as any;
+  if ("p1" in shape) ids.push(shape.p1);
+  if ("p2" in shape) ids.push(shape.p2);
+  if ("center" in shape) ids.push(shape.center);
+  if ("pointIds" in shape) ids.push(...shape.pointIds);
+  if ("controlPointIds" in shape) ids.push(...shape.controlPointIds);
+  if ("majorAxisPoint" in shape) ids.push(shape.majorAxisPoint);
   return ids;
 }
 
@@ -229,7 +229,6 @@ function updateShapePointIds(s: any, map: Map<string, string>) {
   if ("p1" in s) s.p1 = map.get(s.p1);
   if ("p2" in s) s.p2 = map.get(s.p2);
   if ("center" in s) s.center = map.get(s.center);
-  if ("anchorPoint" in s) s.anchorPoint = map.get(s.anchorPoint);
   if ("pointIds" in s) s.pointIds = s.pointIds.map((id: string) => map.get(id));
   if ("controlPointIds" in s) s.controlPointIds = s.controlPointIds.map((id: string) => map.get(id));
   if ("majorAxisPoint" in s) s.majorAxisPoint = map.get(s.majorAxisPoint);

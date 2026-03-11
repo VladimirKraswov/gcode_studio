@@ -12,6 +12,7 @@ import {
   type ViewTransform,
   createDefaultCadRegistry,
   CadRegistryProvider,
+  QuickConstraintBar,
 } from "@/features/cad-editor";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 import { FiPlay } from "react-icons/fi";
@@ -65,8 +66,8 @@ export default function EditTab(props: EditTabProps) {
         {/* Workspace Area */}
         <div className="flex-1 relative flex overflow-hidden">
 
-          {/* Vertical Tools */}
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+          {/* Left Vertical Tools */}
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-30">
             <EditToolbar
               tool={editor.tool}
               onToolChange={editor.setTool}
@@ -92,8 +93,8 @@ export default function EditTab(props: EditTabProps) {
             />
           </div>
 
-          {/* Floating Action Panels (Array, Text) */}
-          <div className="absolute right-4 top-4 z-10 flex flex-col gap-2 max-w-[280px]">
+          {/* Floating Tool Parameters (Array, Text) - positioned to avoid sidebars if possible */}
+          <div className="absolute left-16 top-4 z-30 flex flex-col gap-2 max-w-[280px]">
             {editor.arrayTool.mode && (
               <ArrayToolPanel
                 mode={editor.arrayTool.mode}
@@ -148,6 +149,13 @@ export default function EditTab(props: EditTabProps) {
               isTransforming={editor.isTransforming}
             />
           </div>
+
+          {/* Quick Constraints Bar */}
+          {props.selection.ids.length > 0 && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-12 z-20">
+              <QuickConstraintBar onAdd={editor.addQuickConstraint} />
+            </div>
+          )}
 
           {/* Quick Generate Button */}
           <button

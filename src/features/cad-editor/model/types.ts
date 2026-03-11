@@ -193,26 +193,30 @@ export type SketchBSpline = SketchBase & {
 
 export type SketchText = SketchBase & {
   type: "text";
-  anchorPoint: string; // Point ID
+  x: number;
+  y: number;
   text: string;
   height: number;
   letterSpacing: number;
   fontFile: string;
   rotation?: number;
+  scale?: number;
   align?: "left" | "center" | "right";
   cutMode?: "outline" | "pocket";
 };
 
 export type SketchSvg = SketchBase & {
   type: "svg";
-  anchorPoint: string; // Point ID
+  x: number;
+  y: number;
   width: number;
   height: number;
   sourceWidth: number;
   sourceHeight: number;
   preserveAspectRatio: boolean;
-  contours: string[][]; // Array of arrays of point IDs
+  contours: string[][]; // Array of polylines, each a string of "x,y" coordinates
   rotation?: number;
+  scale?: number;
 };
 
 export interface CadShapeRegistry {

@@ -19,7 +19,7 @@ export function TextShapeView({
   documentHeight,
   view,
   isSelected,
-  polylines,
+  polylines: _polylines,
   onPointerDown,
 }: TextShapeViewProps) {
   const { theme } = useTheme();
@@ -27,12 +27,18 @@ export function TextShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
+  const scale = shape.scale ?? 1;
+
   return (
     <g onPointerDown={onPointerDown}>
-      {polylines.map((polyline, index) => {
+      {_polylines.map((polyline, index) => {
         const points = polyline
           .map((point) => {
-            const p = cadToScreenPoint(point, documentHeight, view);
+            const scaledPoint = {
+              x: shape.x + (point.x - shape.x) * scale,
+              y: shape.y + (point.y - shape.y) * scale,
+            };
+            const p = cadToScreenPoint(scaledPoint, documentHeight, view);
             return `${p.x},${p.y}`;
           })
           .join(" ");

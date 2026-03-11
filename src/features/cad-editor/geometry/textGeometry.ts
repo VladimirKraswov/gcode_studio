@@ -4,20 +4,19 @@ import type { SketchText, SketchPoint } from "../model/types";
 
 export type { CadPoint };
 
-export async function getTextPolylines(shape: SketchText, points: SketchPoint[]): Promise<CadPoint[][]> {
-  return buildTextPolylines(shape, points);
+export async function getTextPolylines(shape: SketchText, _points: SketchPoint[]): Promise<CadPoint[][]> {
+  return buildTextPolylines(shape, _points);
 }
 
 export async function getTextBounds(shape: SketchText, points: SketchPoint[]) {
   const polylines = await getTextPolylines(shape, points);
 
   if (polylines.length === 0) {
-    const anchor = points.find(p => p.id === shape.anchorPoint) || { x: 0, y: 0 };
     return {
-      minX: anchor.x,
-      minY: anchor.y,
-      maxX: anchor.x,
-      maxY: anchor.y,
+      minX: shape.x,
+      minY: shape.y,
+      maxX: shape.x + 10,
+      maxY: shape.y + 10,
     };
   }
 

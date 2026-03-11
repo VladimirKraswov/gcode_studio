@@ -31,44 +31,40 @@ export type SvgShapeViewProps = {
 
 export function SvgShapeView({
   shape,
-  points: allPoints,
   documentHeight,
   view,
   isSelected,
   onPointerDown,
-}: SvgShapeViewProps) {
+}: Omit<SvgShapeViewProps, 'points'>) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(allPoints.map(p => [p.id, p]));
-  const anchor = pointMap.get(shape.anchorPoint) || { x: 0, y: 0 };
-
-  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
-  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+  const scaleX = (shape.width / Math.max(shape.sourceWidth, 0.0001)) * (shape.scale ?? 1);
+  const scaleY = (shape.height / Math.max(shape.sourceHeight, 0.0001)) * (shape.scale ?? 1);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
   const rotation = shape.rotation ?? 0;
   const center = {
-    x: anchor.x + shape.width / 2,
-    y: anchor.y + shape.height / 2,
+    x: shape.x + shape.width / 2,
+    y: shape.y + shape.height / 2,
   };
 
   return (
     <g onPointerDown={onPointerDown}>
       {shape.contours.map((contour, index) => {
         const points = contour
-          .map((id) => {
-            const point = pointMap.get(id) || { x: 0, y: 0 };
+          .map((pointStr) => {
+            const [px, py] = pointStr.split(',').map(Number);
             const cadPoint = {
-              x: anchor.x + point.x * scaleX,
-              y: anchor.y + point.y * scaleY,
+              x: shape.x + px * scaleX,
+              y: shape.y + py * scaleY,
             };
 
             const rotated = rotation
               ? rotatePoint(cadPoint, center, rotation)
               : cadPoint;
 
-            const p = cadToScreenPoint(rotated, documentHeight, view);
-            return `${p.x},${p.y}`;
+            const screenP = cadToScreenPoint(rotated, documentHeight, view);
+            return `${screenP.x},${screenP.y}`;
           })
           .join(" ");
 

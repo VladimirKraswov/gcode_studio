@@ -194,22 +194,19 @@ async function textToContours(shape: SketchText, points: SketchPoint[]): Promise
   }));
 }
 
-function svgToContours(shape: SketchSvg, points: SketchPoint[]): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
-  const anchor = pointMap.get(shape.anchorPoint) || { x: 0, y: 0 };
-
-  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
-  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+function svgToContours(shape: SketchSvg, _points: SketchPoint[]): GeometryContour[] {
+  const scaleX = (shape.width / Math.max(shape.sourceWidth, 0.0001)) * (shape.scale ?? 1);
+  const scaleY = (shape.height / Math.max(shape.sourceHeight, 0.0001)) * (shape.scale ?? 1);
   const rotation = shape.rotation ?? 0;
-  const center = { x: anchor.x + shape.width / 2, y: anchor.y + shape.height / 2 };
+  const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
 
   return shape.contours
     .map((contour) => {
-      const contourPoints = contour.map((id) => {
-        const point = pointMap.get(id) || { x: 0, y: 0 };
+      const contourPoints = contour.map((pointStr) => {
+        const [px, py] = pointStr.split(',').map(Number);
         const next = {
-          x: round(anchor.x + point.x * scaleX),
-          y: round(anchor.y + point.y * scaleY),
+          x: round(shape.x + px * scaleX),
+          y: round(shape.y + py * scaleY),
         };
         return rotation ? rotatePoint(next, center, rotation) : next;
       });

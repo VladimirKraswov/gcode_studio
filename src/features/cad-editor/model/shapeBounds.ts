@@ -95,10 +95,20 @@ export function shapeBounds(shape: SketchShape, points: SketchPoint[]): Bounds2D
       return boundsFromPoints(shape.controlPointIds.map(getPoint));
 
     case "text":
-      return { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+      return {
+        minX: shape.x,
+        minY: shape.y,
+        maxX: shape.x + 50 * (shape.scale ?? 1),
+        maxY: shape.y + 10 * (shape.scale ?? 1)
+      };
 
     case "svg":
-      return { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+      return {
+        minX: shape.x,
+        minY: shape.y,
+        maxX: shape.x + shape.width * (shape.scale ?? 1),
+        maxY: shape.y + shape.height * (shape.scale ?? 1)
+      };
 
     default:
       return { minX: 0, minY: 0, maxX: 10, maxY: 10 };

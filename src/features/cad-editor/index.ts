@@ -16,6 +16,7 @@ export { TextToolPanel } from "./panels/TextToolPanel";
 export { DocumentSettingsPanel } from "./panels/DocumentSettingsPanel";
 export { ShapePropertiesPanel } from "./panels/ShapePropertiesPanel";
 export { ObjectListPanel } from "./panels/ObjectListPanel";
+export { QuickConstraintBar } from "./panels/QuickConstraintBar";
 
 // Plugins
 export * from "./plugins/types";

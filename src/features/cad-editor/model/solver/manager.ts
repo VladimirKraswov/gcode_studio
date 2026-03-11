@@ -15,12 +15,18 @@ export function movePointsAndSolve(
   dx: number,
   dy: number
 ): SketchDocument {
+  if (pointIds.size === 0) return document;
+
   const nextPoints = document.points.map(p => {
     if (pointIds.has(p.id)) {
       return { ...p, x: p.x + dx, y: p.y + dy };
     }
     return p;
   });
+
+  // If a point is fixed, we should probably not allow it to move,
+  // or use its movement to shift other things?
+  // In most CAD, dragging a fixed point does nothing.
 
   const solvedPoints = solveConstraints(nextPoints, document.constraints);
 

@@ -184,7 +184,8 @@ export function createPolylineShape(
 
 export function createTextShape(
   name: string,
-  anchorPoint: string,
+  x: number,
+  y: number,
   text: string,
   height: number,
   letterSpacing: number,
@@ -194,12 +195,14 @@ export function createTextShape(
     id: createId("text"),
     type: "text",
     name,
-    anchorPoint,
+    x,
+    y,
     text,
     height,
     letterSpacing,
     fontFile,
     rotation: 0,
+    scale: 1,
     align: "left",
     cutMode: "outline",
     cutZ: null,
@@ -210,7 +213,8 @@ export function createTextShape(
 
 export function createSvgShape(params: {
   name: string;
-  anchorPoint: string;
+  x: number;
+  y: number;
   width: number;
   height: number;
   sourceWidth: number;
@@ -222,7 +226,8 @@ export function createSvgShape(params: {
     id: createId("svg"),
     type: "svg",
     name: params.name,
-    anchorPoint: params.anchorPoint,
+    x: params.x,
+    y: params.y,
     width: params.width,
     height: params.height,
     sourceWidth: params.sourceWidth,
@@ -230,6 +235,7 @@ export function createSvgShape(params: {
     preserveAspectRatio: params.preserveAspectRatio,
     contours: params.contours,
     rotation: 0,
+    scale: 1,
     cutZ: null,
     strokeWidth: 1,
     ...baseShapeFields,
