@@ -1,9 +1,8 @@
 import {
   boundsFromPoints,
-  rotateCadPoint,
   sampleArcPoints,
 } from "@/features/cad-editor/geometry/geometryEngine";
-import type { SketchDocument, SketchShape } from "./types";
+import type { SketchDocument, SketchShape, SketchPoint } from "./types";
 
 export type Bounds2D = {
   minX: number;
@@ -12,123 +11,97 @@ export type Bounds2D = {
   maxY: number;
 };
 
-export function shapeBounds(shape: SketchShape): Bounds2D {
+export function shapeBounds(shape: SketchShape, points: SketchPoint[]): Bounds2D {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const getPoint = (id: string) => pointMap.get(id) || { x: 0, y: 0 };
+
   switch (shape.type) {
     case "rectangle": {
-      const rotation = shape.rotation ?? 0;
-
-      if (!rotation) {
-        return {
-          minX: shape.x,
-          minY: shape.y,
-          maxX: shape.x + shape.width,
-          maxY: shape.y + shape.height,
-        };
-      }
-
-      const cx = shape.x + shape.width / 2;
-      const cy = shape.y + shape.height / 2;
-
-      const points = [
-        { x: shape.x, y: shape.y },
-        { x: shape.x + shape.width, y: shape.y },
-        { x: shape.x + shape.width, y: shape.y + shape.height },
-        { x: shape.x, y: shape.y + shape.height },
-      ].map((point) => rotateCadPoint(point, { x: cx, y: cy }, rotation));
-
-      return boundsFromPoints(points);
+      const p1 = getPoint(shape.p1);
+      const p2 = getPoint(shape.p2);
+      return {
+        minX: Math.min(p1.x, p2.x),
+        minY: Math.min(p1.y, p2.y),
+        maxX: Math.max(p1.x, p2.x),
+        maxY: Math.max(p1.y, p2.y),
+      };
     }
 
-    case "circle":
+    case "circle": {
+      const center = getPoint(shape.center);
       return {
-        minX: shape.cx - shape.radius,
-        minY: shape.cy - shape.radius,
-        maxX: shape.cx + shape.radius,
-        maxY: shape.cy + shape.radius,
+        minX: center.x - shape.radius,
+        minY: center.y - shape.radius,
+        maxX: center.x + shape.radius,
+        maxY: center.y + shape.radius,
       };
+    }
 
-    case "line":
-      return boundsFromPoints([
-        { x: shape.x1, y: shape.y1 },
-        { x: shape.x2, y: shape.y2 },
-      ]);
+    case "line": {
+      const p1 = getPoint(shape.p1);
+      const p2 = getPoint(shape.p2);
+      return boundsFromPoints([p1, p2]);
+    }
 
     case "arc": {
-      const points = sampleArcPoints(
-        { x: shape.cx, y: shape.cy },
+      const center = getPoint(shape.center);
+      const start = getPoint(shape.p1);
+      const end = getPoint(shape.p2);
+      const startAngle = (Math.atan2(start.y - center.y, start.x - center.x) * 180) / Math.PI;
+      const endAngle = (Math.atan2(end.y - center.y, end.x - center.x) * 180) / Math.PI;
+
+      const pts = sampleArcPoints(
+        center,
         shape.radius,
-        shape.startAngle,
-        shape.endAngle,
+        startAngle,
+        endAngle,
         shape.clockwise,
         72,
       );
 
-      return boundsFromPoints(points);
+      return boundsFromPoints(pts);
+    }
+
+    case "ellipse": {
+      const center = getPoint(shape.center);
+      const major = getPoint(shape.majorAxisPoint);
+      const dist = Math.sqrt((major.x - center.x) ** 2 + (major.y - center.y) ** 2);
+      const maxRadius = Math.max(dist, shape.minorAxisRadius);
+      return {
+        minX: center.x - maxRadius,
+        minY: center.y - maxRadius,
+        maxX: center.x + maxRadius,
+        maxY: center.y + maxRadius,
+      };
+    }
+
+    case "ellipse-arc": {
+      const center = getPoint(shape.center);
+      const major = getPoint(shape.majorAxisPoint);
+      const dist = Math.sqrt((major.x - center.x) ** 2 + (major.y - center.y) ** 2);
+      const maxRadius = Math.max(dist, shape.minorAxisRadius);
+      return {
+        minX: center.x - maxRadius,
+        minY: center.y - maxRadius,
+        maxX: center.x + maxRadius,
+        maxY: center.y + maxRadius,
+      };
     }
 
     case "polyline":
-      return boundsFromPoints(shape.points);
+      return boundsFromPoints(shape.pointIds.map(getPoint));
 
-    case "text": {
-      const widthApprox =
-        Math.max(1, shape.text.length) * (shape.height * 0.62 + shape.letterSpacing);
+    case "bspline":
+      return boundsFromPoints(shape.controlPointIds.map(getPoint));
 
-      const baseBounds = {
-        minX:
-          shape.align === "center"
-            ? shape.x - widthApprox / 2
-            : shape.align === "right"
-              ? shape.x - widthApprox
-              : shape.x,
-        minY: shape.y - shape.height * 0.25,
-        maxX:
-          shape.align === "center"
-            ? shape.x + widthApprox / 2
-            : shape.align === "right"
-              ? shape.x
-              : shape.x + widthApprox,
-        maxY: shape.y + shape.height,
-      };
+    case "text":
+      return { minX: 0, minY: 0, maxX: 10, maxY: 10 };
 
-      const rotation = shape.rotation ?? 0;
-      if (!rotation) {
-        return baseBounds;
-      }
+    case "svg":
+      return { minX: 0, minY: 0, maxX: 10, maxY: 10 };
 
-      const corners = [
-        { x: baseBounds.minX, y: baseBounds.minY },
-        { x: baseBounds.maxX, y: baseBounds.minY },
-        { x: baseBounds.maxX, y: baseBounds.maxY },
-        { x: baseBounds.minX, y: baseBounds.maxY },
-      ].map((point) => rotateCadPoint(point, { x: shape.x, y: shape.y }, rotation));
-
-      return boundsFromPoints(corners);
-    }
-
-    case "svg": {
-      const rotation = shape.rotation ?? 0;
-
-      if (!rotation) {
-        return {
-          minX: shape.x,
-          minY: shape.y,
-          maxX: shape.x + shape.width,
-          maxY: shape.y + shape.height,
-        };
-      }
-
-      const cx = shape.x + shape.width / 2;
-      const cy = shape.y + shape.height / 2;
-
-      const corners = [
-        { x: shape.x, y: shape.y },
-        { x: shape.x + shape.width, y: shape.y },
-        { x: shape.x + shape.width, y: shape.y + shape.height },
-        { x: shape.x, y: shape.y + shape.height },
-      ].map((point) => rotateCadPoint(point, { x: cx, y: cy }, rotation));
-
-      return boundsFromPoints(corners);
-    }
+    default:
+      return { minX: 0, minY: 0, maxX: 10, maxY: 10 };
   }
 }
 
@@ -137,15 +110,15 @@ export function documentBounds(document: SketchDocument): Bounds2D {
     return { minX: 0, minY: 0, maxX: document.width, maxY: document.height };
   }
 
-  return selectionBounds(document.shapes);
+  return selectionBounds(document.shapes, document.points);
 }
 
-export function selectionBounds(shapes: SketchShape[]): Bounds2D {
+export function selectionBounds(shapes: SketchShape[], points: SketchPoint[]): Bounds2D {
   if (shapes.length === 0) {
     return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   }
 
-  const bounds = shapes.map(shapeBounds);
+  const bounds = shapes.map(s => shapeBounds(s, points));
   return {
     minX: Math.min(...bounds.map((b) => b.minX)),
     minY: Math.min(...bounds.map((b) => b.minY)),
@@ -155,5 +128,8 @@ export function selectionBounds(shapes: SketchShape[]): Bounds2D {
 }
 
 export function groupBounds(document: SketchDocument, groupId: string): Bounds2D {
-  return selectionBounds(document.shapes.filter((shape) => shape.groupId === groupId));
+  return selectionBounds(
+    document.shapes.filter((shape) => shape.groupId === groupId),
+    document.points
+  );
 }

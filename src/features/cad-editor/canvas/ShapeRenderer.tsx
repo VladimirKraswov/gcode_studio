@@ -1,10 +1,11 @@
 import type { CadPoint } from "@/utils/fontGeometry";
 import type { ViewTransform } from "../model/view";
-import type { SketchShape } from "../model/types";
+import type { SketchShape, SketchPoint } from "../model/types";
 import { useShapePlugin } from "../plugins/registry";
 
 type ShapeRendererProps = {
   shape: SketchShape;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
@@ -14,6 +15,7 @@ type ShapeRendererProps = {
 
 export function ShapeRenderer({
   shape,
+  points,
   documentHeight,
   view,
   isSelected,
@@ -31,6 +33,7 @@ export function ShapeRenderer({
     <>
       {plugin.render({
         shape,
+        points,
         documentHeight,
         view,
         isSelected,

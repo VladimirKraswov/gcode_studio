@@ -1,7 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type { ViewTransform } from "../model/view";
-import type { SketchSvg } from "../model/types";
+import type { SketchSvg, SketchPoint } from "../model/types";
 
 function rotatePoint(
   point: { x: number; y: number },
@@ -20,8 +20,9 @@ function rotatePoint(
   };
 }
 
-type SvgShapeViewProps = {
+export type SvgShapeViewProps = {
   shape: SketchSvg;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
@@ -30,6 +31,7 @@ type SvgShapeViewProps = {
 
 export function SvgShapeView({
   shape,
+  points: allPoints,
   documentHeight,
   view,
   isSelected,
@@ -37,24 +39,28 @@ export function SvgShapeView({
 }: SvgShapeViewProps) {
   const { theme } = useTheme();
 
+  const pointMap = new Map(allPoints.map(p => [p.id, p]));
+  const anchor = pointMap.get(shape.anchorPoint) || { x: 0, y: 0 };
+
   const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
   const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
   const rotation = shape.rotation ?? 0;
   const center = {
-    x: shape.x + shape.width / 2,
-    y: shape.y + shape.height / 2,
+    x: anchor.x + shape.width / 2,
+    y: anchor.y + shape.height / 2,
   };
 
   return (
     <g onPointerDown={onPointerDown}>
-      {shape.contours.map((polyline, index) => {
-        const points = polyline
-          .map((point) => {
+      {shape.contours.map((contour, index) => {
+        const points = contour
+          .map((id) => {
+            const point = pointMap.get(id) || { x: 0, y: 0 };
             const cadPoint = {
-              x: shape.x + point.x * scaleX,
-              y: shape.y + point.y * scaleY,
+              x: anchor.x + point.x * scaleX,
+              y: anchor.y + point.y * scaleY,
             };
 
             const rotated = rotation

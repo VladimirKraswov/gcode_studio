@@ -1,10 +1,11 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type { ViewTransform } from "../model/view";
-import type { SketchLine } from "../model/types";
+import type { SketchLine, SketchPoint } from "../model/types";
 
-type LineShapeViewProps = {
+export type LineShapeViewProps = {
   shape: SketchLine;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
@@ -13,6 +14,7 @@ type LineShapeViewProps = {
 
 export function LineShapeView({
   shape,
+  points,
   documentHeight,
   view,
   isSelected,
@@ -20,8 +22,12 @@ export function LineShapeView({
 }: LineShapeViewProps) {
   const { theme } = useTheme();
 
-  const p1 = cadToScreenPoint({ x: shape.x1, y: shape.y1 }, documentHeight, view);
-  const p2 = cadToScreenPoint({ x: shape.x2, y: shape.y2 }, documentHeight, view);
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const p1_cad = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2_cad = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  const p1 = cadToScreenPoint(p1_cad, documentHeight, view);
+  const p2 = cadToScreenPoint(p2_cad, documentHeight, view);
 
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);

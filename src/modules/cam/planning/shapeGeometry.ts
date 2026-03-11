@@ -157,7 +157,7 @@ function ellipseToContours(shape: SketchEllipse | SketchEllipseArc, points: Sket
   return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
 }
 
-function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 100): GeometryContour[] {
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], _segments = 100): GeometryContour[] {
   const pointMap = new Map(points.map(p => [p.id, p]));
   const ctrlPoints = shape.controlPointIds.map(id => pointMap.get(id) || { x: 0, y: 0 });
 
@@ -187,7 +187,7 @@ function polylineToContours(shape: SketchPolyline, points: SketchPoint[]): Geome
 }
 
 async function textToContours(shape: SketchText, points: SketchPoint[]): Promise<GeometryContour[]> {
-  const polylines = await getTextPolylines(shape);
+  const polylines = await getTextPolylines(shape, points);
   return polylines.map((poly) => ({
     points: ensureClosed(poly.map((p) => ({ x: p.x, y: p.y }))),
     closed: true,

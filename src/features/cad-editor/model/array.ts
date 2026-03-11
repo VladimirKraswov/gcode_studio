@@ -1,4 +1,4 @@
-import { cloneShape, createPoint } from "./shapeFactory";
+import { createPoint } from "./shapeFactory";
 import type {
   SketchArrayDefinition,
   SketchCircularArrayParams,
@@ -8,6 +8,9 @@ import type {
   SketchPoint,
 } from "./types";
 import { createId } from "./ids";
+
+export type CircularArrayParams = SketchCircularArrayParams;
+export type LinearArrayParams = SketchLinearArrayParams;
 
 type ArrayResult = {
   document: SketchDocument;

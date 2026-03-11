@@ -1,4 +1,4 @@
-import type { SketchDocument, SketchShape } from "./types";
+import type { SketchDocument } from "./types";
 
 export type ValidationResult = {
   isValid: boolean;
@@ -19,7 +19,7 @@ export function validateSketch(document: SketchDocument): ValidationResult {
   // 1. Check for open contours in closed shapes
   document.shapes.forEach(shape => {
     if (shape.type === "polyline" && shape.closed) {
-      if (!isContourClosed(shape, document)) {
+      if (!isContourClosed(shape)) {
         result.errors.push(`Shape "${shape.name}" is marked as closed but its contour is open.`);
         result.isValid = false;
       }
@@ -34,13 +34,10 @@ export function validateSketch(document: SketchDocument): ValidationResult {
     });
   });
 
-  // 3. Detect redundant constraints (simplified)
-  // Real implementation would use the GCS Jacobian rank
-
   return result;
 }
 
-function isContourClosed(shape: any, document: SketchDocument): boolean {
+function isContourClosed(shape: any): boolean {
   if (shape.type === "polyline") {
     const pointIds = shape.pointIds;
     if (pointIds.length < 2) return false;

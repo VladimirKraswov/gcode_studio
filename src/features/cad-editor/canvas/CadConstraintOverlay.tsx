@@ -17,58 +17,89 @@ export function CadConstraintOverlay({
   document,
   documentHeight,
   view,
-}: CadConstraintOverlayProps) {
+  onPointerDown,
+}: CadConstraintOverlayProps & { onPointerDown?: (e: any, id: string) => void }) {
   const { theme } = useTheme();
+
+  // Group constraints by point for better icon placement
+  const constraintsByPoint = new Map<string, SketchConstraint[]>();
+  document.constraints.forEach(c => {
+    if (c.pointIds.length > 0) {
+      const pId = c.pointIds[0];
+      const list = constraintsByPoint.get(pId) || [];
+      list.push(c);
+      constraintsByPoint.set(pId, list);
+    }
+  });
 
   return (
     <g pointerEvents="none">
-      {document.constraints.map((c: SketchConstraint) => {
-        const p1 = document.points.find(p => p.id === c.pointIds[0]);
+      {Array.from(constraintsByPoint.entries()).map(([pointId, constraints]) => {
+        const p1 = document.points.find(p => p.id === pointId);
         if (!p1) return null;
-
         const screen = cadToScreenPoint(p1, documentHeight, view);
 
         return (
-          <g key={c.id} transform={`translate(${screen.x}, ${screen.y})`}>
-            {/* Constraint Icon */}
-            <rect
-              x="-8"
-              y="-24"
-              width="16"
-              height="16"
-              rx="2"
-              fill={theme.cad.constraintLabelFill}
-              stroke={theme.cad.constraintLabelStroke}
-              strokeWidth="1"
-            />
-            <text
-              x="0"
-              y="-12"
-              fontSize="10"
-              textAnchor="middle"
-              fill={theme.cad.constraintLabelText}
-              fontWeight="bold"
-            >
-              {getConstraintSymbol(c.type)}
-            </text>
+          <g key={pointId} transform={`translate(${screen.x}, ${screen.y})`}>
+            {constraints.map((c, index) => {
+              const offsetX = index * 18 - (constraints.length - 1) * 9;
+              const offsetY = -28;
+
+              return (
+                <g
+                  key={c.id}
+                  transform={`translate(${offsetX}, ${offsetY})`}
+                  onPointerDown={(e) => onPointerDown?.(e, c.id)}
+                  style={{ cursor: "pointer", pointerEvents: "all" }}
+                >
+                  <rect
+                    x="-8"
+                    y="-8"
+                    width="16"
+                    height="16"
+                    rx="3"
+                    fill={theme.cad.constraintLabelFill}
+                    stroke={theme.cad.constraintLabelStroke}
+                    strokeWidth="1.5"
+                    className="hover:stroke-primary transition-colors"
+                  />
+                  <text
+                    x="0"
+                    y="4"
+                    fontSize="10"
+                    textAnchor="middle"
+                    fill={theme.cad.constraintLabelText}
+                    fontWeight="bold"
+                    pointerEvents="none"
+                    style={{ userSelect: 'none' }}
+                  >
+                    {getConstraintSymbol(c.type)}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         );
       })}
 
-      {/* Degree of Freedom (DOF) Visualization for Points */}
+      {/* Degree of Freedom (DOF) Visualization */}
       {document.points.map((p: SketchPoint) => {
         const screen = cadToScreenPoint(p, documentHeight, view);
-        const isFullyConstrained = p.isFixed; // Simplified DOF check
+
+        // Count constraints for this point
+        const constraintCount = document.constraints.filter(c => c.pointIds.includes(p.id)).length;
+        const isConstrained = constraintCount > 0;
+        const isFixed = p.isFixed;
 
         return (
           <circle
             key={p.id}
             cx={screen.x}
             cy={screen.y}
-            r={3}
-            fill={isFullyConstrained ? "#000" : "#3b82f6"}
-            stroke="#fff"
-            strokeWidth="1"
+            r={3.5}
+            fill={isFixed ? "#ef4444" : isConstrained ? "#22c55e" : "#3b82f6"}
+            stroke="#ffffff"
+            strokeWidth="1.5"
           />
         );
       })}
@@ -86,6 +117,8 @@ function getConstraintSymbol(type: string): string {
     case "equal": return "=";
     case "tangent": return "T";
     case "distance": return "D";
+    case "distance-x": return "Dx";
+    case "distance-y": return "Dy";
     default: return "?";
   }
 }

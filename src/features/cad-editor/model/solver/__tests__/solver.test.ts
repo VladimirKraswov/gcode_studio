@@ -1,3 +1,4 @@
+import { describe, it, expect } from "vitest";
 import { solveConstraints } from "../newton";
 import type { SketchPoint, SketchConstraint } from "../../types";
 
@@ -46,28 +47,3 @@ describe("Geometric Constraint Solver", () => {
     expect(Math.sqrt(p2.x ** 2 + p2.y ** 2)).toBeCloseTo(20);
   });
 });
-
-function expect(actual: any) {
-  return {
-    toBeCloseTo: (expected: number, precision = 2) => {
-      if (Math.abs(actual - expected) > Math.pow(10, -precision)) {
-        throw new Error(`Expected ${actual} to be close to ${expected}`);
-      }
-    }
-  };
-}
-
-function describe(name: string, fn: () => void) {
-  console.log(`Running suite: ${name}`);
-  fn();
-}
-
-function it(name: string, fn: () => void) {
-  try {
-    fn();
-    console.log(`  ✓ ${name}`);
-  } catch (e: any) {
-    console.error(`  ✗ ${name}`);
-    console.error(`    ${e.message}`);
-  }
-}

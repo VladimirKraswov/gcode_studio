@@ -50,10 +50,7 @@ export function addConstraint(
   return updateGeometry(nextDoc);
 }
 
-export function getConstraintIssues(
-  document: SketchDocument,
-  shapeId?: string,
-): ConstraintIssue[] {
+export function getConstraintIssues(): ConstraintIssue[] {
   // TODO: Implement sophisticated constraint validation
   return [];
 }

@@ -11,7 +11,6 @@ export function solveConstraints(
 ): SketchPoint[] {
   let currentPoints = points.map(p => ({ ...p }));
 
-  // Identify free variables (points that are not fixed)
   const freePoints = currentPoints.filter(p => !p.isFixed);
   if (freePoints.length === 0 || constraints.length === 0) return currentPoints;
 
@@ -30,7 +29,6 @@ export function solveConstraints(
     const J = computeJacobian(currentPoints, constraints, variables);
     const delta = solveLinearSystem(J, residuals);
 
-    // Apply delta
     for (let i = 0; i < variables.length; i++) {
       const v = variables[i];
       const p = currentPoints.find(pt => pt.id === v.pointId)!;
@@ -85,7 +83,6 @@ function computeJacobian(
 
   for (let j = 0; j < variables.length; j++) {
     const v = variables[j];
-    const originalPoints = points.map(p => ({ ...p }));
     const p = points.find(pt => pt.id === v.pointId)!;
 
     if (v.axis === 'x') p.x += EPS;
@@ -93,7 +90,6 @@ function computeJacobian(
 
     const residuals1 = computeAllResiduals(points, constraints);
 
-    // Restore
     const pRestore = points.find(pt => pt.id === v.pointId)!;
     if (v.axis === 'x') pRestore.x -= EPS;
     else pRestore.y -= EPS;
@@ -106,16 +102,11 @@ function computeJacobian(
   return J;
 }
 
-/**
- * Solves J * delta = residuals using Least Squares (J^T * J * delta = J^T * residuals)
- * for over-determined or under-determined systems.
- */
 function solveLinearSystem(J: number[][], residuals: number[]): number[] {
   const rows = J.length;
   if (rows === 0) return [];
   const cols = J[0].length;
 
-  // A = J^T * J
   const A: number[][] = Array.from({ length: cols }, () => new Array(cols).fill(0));
   const b: number[] = new Array(cols).fill(0);
 
@@ -130,7 +121,6 @@ function solveLinearSystem(J: number[][], residuals: number[]): number[] {
     }
   }
 
-  // Add regularization for stability
   for (let i = 0; i < cols; i++) A[i][i] += 1e-6;
 
   return gaussianElimination(A, b);

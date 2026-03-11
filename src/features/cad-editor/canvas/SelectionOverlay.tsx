@@ -43,7 +43,7 @@ export function SelectionOverlay({
 
   const bounds = primary?.groupId
     ? groupBounds(document, primary.groupId)
-    : selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)));
+    : selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)), document.points);
 
   const topLeft = cadToScreenPoint(
     { x: bounds.minX, y: bounds.maxY },

@@ -2,10 +2,11 @@ import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type { ViewTransform } from "../model/view";
 import type { CadPoint } from "@/utils/fontGeometry";
-import type { SketchText } from "../model/types";
+import type { SketchText, SketchPoint } from "../model/types";
 
-type TextShapeViewProps = {
+export type TextShapeViewProps = {
   shape: SketchText;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;

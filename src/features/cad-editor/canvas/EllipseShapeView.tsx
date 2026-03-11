@@ -1,53 +1,63 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type { ViewTransform } from "../model/view";
-import type { SketchCircle, SketchPoint } from "../model/types";
+import type { SketchEllipse, SketchPoint } from "../model/types";
 
-export type CircleShapeViewProps = {
-  shape: SketchCircle;
+export type EllipseShapeViewProps = {
+  shape: SketchEllipse;
   points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
-  onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
+  onPointerDown: (event: React.PointerEvent<SVGEllipseElement>) => void;
 };
 
-export function CircleShapeView({
+export function EllipseShapeView({
   shape,
   points,
   documentHeight,
   view,
   isSelected,
   onPointerDown,
-}: CircleShapeViewProps) {
+}: EllipseShapeViewProps) {
   const { theme } = useTheme();
 
   const pointMap = new Map(points.map(p => [p.id, p]));
-  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+  const center_cad = pointMap.get(shape.center) || { x: 0, y: 0 };
+  const major_cad = pointMap.get(shape.majorAxisPoint) || { x: center_cad.x + 10, y: center_cad.y };
 
-  const p = cadToScreenPoint(center, documentHeight, view);
+  const dx = major_cad.x - center_cad.x;
+  const dy = major_cad.y - center_cad.y;
+  const majorRadius = Math.sqrt(dx * dx + dy * dy);
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+  const p = cadToScreenPoint(center_cad, documentHeight, view);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
   return (
     <>
-      <circle
+      <ellipse
         cx={p.x}
         cy={p.y}
-        r={shape.radius * view.scale}
+        rx={majorRadius * view.scale}
+        ry={shape.minorAxisRadius * view.scale}
         fill="none"
         stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        transform={`rotate(${-angle} ${p.x} ${p.y})`}
         pointerEvents="none"
       />
 
-      <circle
+      <ellipse
         cx={p.x}
         cy={p.y}
-        r={shape.radius * view.scale}
+        rx={majorRadius * view.scale}
+        ry={shape.minorAxisRadius * view.scale}
         fill="transparent"
         stroke="transparent"
         strokeWidth={hitStrokeWidth}
+        transform={`rotate(${-angle} ${p.x} ${p.y})`}
         onPointerDown={onPointerDown}
       />
     </>

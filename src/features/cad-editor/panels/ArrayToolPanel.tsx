@@ -24,7 +24,17 @@ export type ArrayToolPanelProps = {
 export function ArrayToolPanel({
   mode = "linear",
   linear = { count: 3, spacing: 20, axis: "x", direction: "positive" },
-  circular = { count: 6, centerX: 0, centerY: 0, radius: 30, totalAngle: 360, rotateItems: true },
+  circular = {
+    count: 6,
+    centerX: 0,
+    centerY: 0,
+    radius: 30,
+    totalAngle: 360,
+    rotateItems: true,
+    startAngle: 0,
+    endAngle: 360,
+    direction: "cw"
+  },
   onLinearChange = () => {},
   onCircularChange = () => {},
   onApply = () => {},

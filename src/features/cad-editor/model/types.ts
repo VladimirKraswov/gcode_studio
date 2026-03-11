@@ -2,6 +2,11 @@
 // FILE: src/modules/cad/model/types.ts
 // =============================
 
+export type SketchPolylinePoint = {
+  x: number;
+  y: number;
+};
+
 export type SketchPoint = {
   id: string;
   x: number;
@@ -15,6 +20,8 @@ export type SketchParameter = {
   value: number;
   expression?: string;
 };
+
+export type ConstraintEdge = "left" | "right" | "top" | "bottom";
 
 export type SketchConstraintType =
   | "coincident"
@@ -152,6 +159,7 @@ export type SketchArc = SketchBase & {
   p1: string; // Point ID (start)
   p2: string; // Point ID (end)
   clockwise: boolean;
+  radius: number;
 };
 
 export type SketchEllipse = SketchBase & {

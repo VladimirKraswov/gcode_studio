@@ -3,6 +3,7 @@ import type {
   SketchDocument,
   SketchShape,
   SketchTool,
+  SketchPoint,
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
@@ -10,6 +11,7 @@ import type { Bounds2D } from "../model/shapeBounds";
 
 export type ShapeRenderProps<TShape extends SketchShape = SketchShape> = {
   shape: TShape;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
@@ -20,10 +22,11 @@ export type ShapeRenderProps<TShape extends SketchShape = SketchShape> = {
 export type ShapePlugin<TShape extends SketchShape = SketchShape> = {
   type: TShape["type"];
   render: (props: ShapeRenderProps<TShape>) => React.ReactNode;
-  getBounds: (shape: TShape) => Bounds2D;
+  getBounds: (shape: TShape, points: SketchPoint[]) => Bounds2D;
   hitTest?: (
     point: { x: number; y: number },
     shape: TShape,
+    points: SketchPoint[],
     tolerance: number,
   ) => boolean;
 };

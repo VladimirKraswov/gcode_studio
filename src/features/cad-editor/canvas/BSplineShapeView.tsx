@@ -1,11 +1,10 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
-import { sampleArcPoints } from "@/features/cad-editor/geometry/geometryEngine";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type { ViewTransform } from "../model/view";
-import type { SketchArc, SketchPoint } from "../model/types";
+import type { SketchBSpline, SketchPoint } from "../model/types";
 
-export type ArcShapeViewProps = {
-  shape: SketchArc;
+export type BSplineShapeViewProps = {
+  shape: SketchBSpline;
   points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
@@ -13,34 +12,23 @@ export type ArcShapeViewProps = {
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
 };
 
-export function ArcShapeView({
+export function BSplineShapeView({
   shape,
   points: allPoints,
   documentHeight,
   view,
   isSelected,
   onPointerDown,
-}: ArcShapeViewProps) {
+}: BSplineShapeViewProps) {
   const { theme } = useTheme();
 
   const pointMap = new Map(allPoints.map(p => [p.id, p]));
-  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
-  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
-  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
 
-  const startAngle = (Math.atan2(p1.y - center.y, p1.x - center.x) * 180) / Math.PI;
-  const endAngle = (Math.atan2(p2.y - center.y, p2.x - center.x) * 180) / Math.PI;
-
-  const polyPoints = sampleArcPoints(
-    center,
-    shape.radius,
-    startAngle,
-    endAngle,
-    shape.clockwise,
-    72,
-  )
-    .map((point) => {
-      const p = cadToScreenPoint(point, documentHeight, view);
+  // For now, we render the control points as a polyline (simplified spline visualization)
+  const polyPoints = shape.controlPointIds
+    .map((id) => {
+      const p_cad = pointMap.get(id) || { x: 0, y: 0 };
+      const p = cadToScreenPoint(p_cad, documentHeight, view);
       return `${p.x},${p.y}`;
     })
     .join(" ");
@@ -50,6 +38,7 @@ export function ArcShapeView({
 
   return (
     <>
+      {/* Spline Curve (Simplified as polyline through control points) */}
       <polyline
         points={polyPoints}
         fill="none"
@@ -69,6 +58,18 @@ export function ArcShapeView({
         strokeLinejoin="round"
         onPointerDown={onPointerDown}
       />
+
+      {/* Control Polygon */}
+      {isSelected && (
+        <polyline
+          points={polyPoints}
+          fill="none"
+          stroke={theme.cad.draftGuide}
+          strokeWidth={1}
+          strokeDasharray="4 4"
+          pointerEvents="none"
+        />
+      )}
     </>
   );
 }

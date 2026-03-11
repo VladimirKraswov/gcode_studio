@@ -132,7 +132,6 @@ export default function EditTab(props: EditTabProps) {
               isDragging={editor.isDragging}
               isPanning={editor.isPanning}
               isSelectionHover={editor.isSelectionHover}
-              constraintDraft={editor.constraintDraft}
               arrayPreviewShapes={editor.arrayPreviewShapes}
               onSelectionHoverChange={editor.setIsSelectionHover}
               onPointerDown={editor.handleCanvasPointerDown}
@@ -146,8 +145,6 @@ export default function EditTab(props: EditTabProps) {
               onSelectionPointerDown={editor.bindSelectionDragStart}
               onScaleHandlePointerDown={editor.bindScaleHandleStart}
               onRotateHandlePointerDown={editor.bindRotateHandleStart}
-              onConstraintEdgeHandlePointerDown={editor.bindConstraintEdgeHandleStart}
-              onConstraintLabelPointerDown={editor.bindConstraintLabelDragStart}
               isTransforming={editor.isTransforming}
             />
           </div>

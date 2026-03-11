@@ -1,23 +1,19 @@
 import { createPoint } from "./shapeFactory";
-import { addPoint, updatePoint } from "./document";
-import type { SketchDocument, SketchShape, SketchPoint } from "./types";
+import { updatePoint } from "./document";
+import type { SketchDocument, SketchShape } from "./types";
 import { updateGeometry } from "./solver/manager";
 import { createId } from "./ids";
 
 /**
  * Trims a line by moving one of its end points to a new position.
- * In a real GCS, this might involve adding a coincident constraint.
  */
 export function trimLine(
   document: SketchDocument,
-  lineId: string,
+  _lineId: string,
   pointId: string,
   newX: number,
   newY: number
 ): SketchDocument {
-  const line = document.shapes.find(s => s.id === lineId);
-  if (!line || line.type !== "line") return document;
-
   return updatePoint(document, pointId, { x: newX, y: newY });
 }
 
@@ -38,7 +34,7 @@ export function splitLine(
     ...line,
     id: createId("line"),
     p1: splitPoint.id,
-    p2: line.p2,
+    p2: (line as any).p2,
     name: `${line.name} (split)`,
   };
 
@@ -68,16 +64,15 @@ export function mirrorShapes(
   let nextDoc = { ...document };
   const pointMap = new Map<string, string>();
 
-  // Mirror points first
   const affectedPointIds = new Set<string>();
   const shapesToMirror = document.shapes.filter(s => shapeIds.includes(s.id));
 
-  // Collect all points
   shapesToMirror.forEach(s => {
-    if ("p1" in s) affectedPointIds.add(s.p1);
-    if ("p2" in s) affectedPointIds.add(s.p2);
-    if ("center" in s) affectedPointIds.add(s.center);
-    if ("pointIds" in s) s.pointIds.forEach(id => affectedPointIds.add(id));
+    const shape = s as any;
+    if ("p1" in shape) affectedPointIds.add(shape.p1);
+    if ("p2" in shape) affectedPointIds.add(shape.p2);
+    if ("center" in shape) affectedPointIds.add(shape.center);
+    if ("pointIds" in shape) shape.pointIds.forEach((id: string) => affectedPointIds.add(id));
   });
 
   affectedPointIds.forEach(id => {
@@ -90,16 +85,16 @@ export function mirrorShapes(
     pointMap.set(id, newP.id);
   });
 
-  // Create mirrored shapes
   const mirroredShapes = shapesToMirror.map(s => {
-    const clone = { ...s, id: createId(s.type.slice(0, 4)) };
-    if ("p1" in clone) clone.p1 = pointMap.get(s.p1)!;
-    if ("p2" in clone) clone.p2 = pointMap.get(s.p2)!;
-    if ("center" in clone) clone.center = pointMap.get(s.center)!;
-    if ("pointIds" in clone) clone.pointIds = s.pointIds.map(id => pointMap.get(id)!);
+    const clone = { ...s, id: createId(s.type.slice(0, 4)) } as any;
+    const source = s as any;
+    if ("p1" in clone) clone.p1 = pointMap.get(source.p1)!;
+    if ("p2" in clone) clone.p2 = pointMap.get(source.p2)!;
+    if ("center" in clone) clone.center = pointMap.get(source.center)!;
+    if ("pointIds" in clone) clone.pointIds = source.pointIds.map((id: string) => pointMap.get(id)!);
     return clone as SketchShape;
   });
 
   nextDoc.shapes = nextDoc.shapes.concat(mirroredShapes);
-  return nextDoc;
+  return updateGeometry(nextDoc);
 }

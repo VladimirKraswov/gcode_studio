@@ -11,17 +11,9 @@ export type Variable = {
 export function computeResidual(
   constraint: SketchConstraint,
   points: Map<string, SketchPoint>,
-  parameters: Map<string, SketchParameter>
+  _parameters: Map<string, SketchParameter>
 ): number {
   switch (constraint.type) {
-    case "coincident": {
-      const p1 = points.get(constraint.pointIds[0]);
-      const p2 = points.get(constraint.pointIds[1]);
-      if (!p1 || !p2) return 0;
-      // We return two residuals usually for coincidence, but for simplicity here we handle one at a time
-      // This function might need to be split into multiple equations per constraint
-      return 0; // Handled by specialized calls
-    }
     case "horizontal": {
       const p1 = points.get(constraint.pointIds[0]);
       const p2 = points.get(constraint.pointIds[1]);
@@ -43,7 +35,6 @@ export function computeResidual(
       const dy = p1.y - p2.y;
       return Math.sqrt(dx * dx + dy * dy) - targetDist;
     }
-    // ... more equations
     default:
       return 0;
   }
@@ -69,13 +60,13 @@ export const Equations = {
     const v1y = p2.y - p1.y;
     const v2x = p4.x - p3.x;
     const v2y = p4.y - p3.y;
-    return v1x * v2x + v1y * v2y; // Dot product = 0
+    return v1x * v2x + v1y * v2y;
   },
   parallel: (p1: SketchPoint, p2: SketchPoint, p3: SketchPoint, p4: SketchPoint) => {
     const v1x = p2.x - p1.x;
     const v1y = p2.y - p1.y;
     const v2x = p4.x - p3.x;
     const v2y = p4.y - p3.y;
-    return v1x * v2y - v1y * v2x; // Cross product = 0
+    return v1x * v2y - v1y * v2x;
   }
 };

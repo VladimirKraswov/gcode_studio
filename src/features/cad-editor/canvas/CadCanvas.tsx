@@ -9,9 +9,7 @@ import { SelectionOverlay } from "./SelectionOverlay";
 import { CadConstraintOverlay } from "./CadConstraintOverlay";
 import type { DraftShape } from "../geometry/draftGeometry";
 import type {
-  ConstraintEdge,
   SketchDocument,
-  SketchPolylinePoint,
   SketchShape,
   SketchTool,
 } from "../model/types";
@@ -23,39 +21,20 @@ import type { CadPoint } from "../geometry/textGeometry";
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
 
-type ConstraintDraftTarget =
-  | {
-      kind: "sheet";
-      edge: ConstraintEdge;
-    }
-  | {
-      kind: "shape";
-      shapeId: string;
-      edge: ConstraintEdge;
-    };
-
-type ConstraintDraftState = {
-  shapeId: string;
-  edge: ConstraintEdge;
-  pointer: { x: number; y: number };
-  hoverTarget: ConstraintDraftTarget | null;
-} | null;
-
 type CadCanvasProps = {
   svgRef: React.RefObject<SVGSVGElement | null>;
   document: SketchDocument;
   selection: SelectionState;
   view: ViewTransform;
   draft: DraftShape;
-  polylineDraft: SketchPolylinePoint[];
-  polylineHoverPoint: SketchPolylinePoint | null;
+  polylineDraft: any[];
+  polylineHoverPoint: any | null;
   textPreviewMap: Record<string, CadPoint[][]>;
   tool: SketchTool;
   isDragging: boolean;
   isPanning: boolean;
   isSelectionHover: boolean;
   isTransforming: boolean;
-  constraintDraft: ConstraintDraftState;
   arrayPreviewShapes: SketchShape[];
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
@@ -72,23 +51,16 @@ type CadCanvasProps = {
     handle: ScaleHandle,
   ) => void;
   onRotateHandlePointerDown?: (event: React.PointerEvent<SVGCircleElement>) => void;
-  onConstraintEdgeHandlePointerDown?: (
-    event: React.PointerEvent<SVGCircleElement>,
-    edge: ConstraintEdge,
-  ) => void;
-  onConstraintLabelPointerDown?: (
-    event: React.PointerEvent<SVGRectElement>,
-    constraintId: string,
-  ) => void;
+  onConstraintPointerDown?: (event: React.PointerEvent<SVGElement>, constraintId: string) => void;
 };
 
 function ArrayPreviewOverlay({
   shapes,
-  documentHeight,
+  document,
   view,
 }: {
   shapes: SketchShape[];
-  documentHeight: number;
+  document: SketchDocument;
   view: ViewTransform;
 }) {
   const { theme } = useTheme();
@@ -98,10 +70,10 @@ function ArrayPreviewOverlay({
   return (
     <g pointerEvents="none">
       {shapes.map((shape) => {
-        const bounds = shapeBounds(shape);
+        const bounds = shapeBounds(shape, document.points);
         const topLeft = cadToScreenPoint(
           { x: bounds.minX, y: bounds.maxY },
-          documentHeight,
+          document.height,
           view,
         );
 
@@ -115,30 +87,11 @@ function ArrayPreviewOverlay({
               y={topLeft.y}
               width={width}
               height={height}
-              rx={8}
+              rx={4}
               fill={theme.cad.arrayPreviewFill}
               stroke={theme.cad.arrayPreviewStroke}
               strokeWidth={1.5}
               strokeDasharray="8 4"
-            />
-
-            <line
-              x1={topLeft.x}
-              y1={topLeft.y}
-              x2={topLeft.x + width}
-              y2={topLeft.y + height}
-              stroke={theme.cad.arrayPreviewGuide}
-              strokeWidth={1}
-              strokeDasharray="4 6"
-            />
-            <line
-              x1={topLeft.x + width}
-              y1={topLeft.y}
-              x2={topLeft.x}
-              y2={topLeft.y + height}
-              stroke={theme.cad.arrayPreviewGuide}
-              strokeWidth={1}
-              strokeDasharray="4 6"
             />
           </g>
         );
@@ -161,7 +114,6 @@ export function CadCanvas({
   isPanning,
   isSelectionHover,
   isTransforming,
-  constraintDraft,
   arrayPreviewShapes,
   onSelectionHoverChange,
   onPointerDown,
@@ -175,8 +127,7 @@ export function CadCanvas({
   onSelectionPointerDown,
   onScaleHandlePointerDown,
   onRotateHandlePointerDown,
-  onConstraintEdgeHandlePointerDown,
-  onConstraintLabelPointerDown,
+  onConstraintPointerDown,
 }: CadCanvasProps) {
   const { theme } = useTheme();
 
@@ -199,7 +150,6 @@ export function CadCanvas({
     if (tool !== "select") return "crosshair";
     if (isDragging || isTransforming) return "grabbing";
     if (isSelectionHover) return "grab";
-    if (constraintDraft) return "crosshair";
     return "default";
   }
 
@@ -236,6 +186,7 @@ export function CadCanvas({
         <ShapeRenderer
           key={shape.id}
           shape={shape}
+          points={document.points}
           documentHeight={document.height}
           view={view}
           isSelected={selectedIds.has(shape.id)}
@@ -246,7 +197,7 @@ export function CadCanvas({
 
       <ArrayPreviewOverlay
         shapes={arrayPreviewShapes}
-        documentHeight={document.height}
+        document={document}
         view={view}
       />
 
@@ -265,18 +216,12 @@ export function CadCanvas({
         />
       )}
 
-      {tool === "select" &&
-        selection.primaryId &&
-        onConstraintEdgeHandlePointerDown &&
-        onConstraintLabelPointerDown && (
+      {tool === "select" && (
           <CadConstraintOverlay
             document={document}
-            selection={selection}
             documentHeight={document.height}
             view={view}
-            constraintDraft={constraintDraft}
-            onEdgeHandlePointerDown={onConstraintEdgeHandlePointerDown}
-            onConstraintLabelPointerDown={onConstraintLabelPointerDown}
+            onPointerDown={onConstraintPointerDown}
           />
         )}
 
