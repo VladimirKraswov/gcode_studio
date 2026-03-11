@@ -35,7 +35,7 @@ export function CadConstraintOverlay({
   });
 
   return (
-    <g pointerEvents="none">
+    <g>
       {Array.from(constraintsByPoint.entries()).map(([pointId, constraints]) => {
         const p1 = document.points.find(p => p.id === pointId);
         if (!p1) return null;

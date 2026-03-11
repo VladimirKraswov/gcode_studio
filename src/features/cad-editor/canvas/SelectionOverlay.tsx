@@ -47,11 +47,7 @@ export function SelectionOverlay({
   // to avoid cluttering and allow direct interaction with vertices/edges
   if (isParametricOnly) return null;
 
-  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
-
-  const bounds = primary?.groupId
-    ? groupBounds(document, primary.groupId)
-    : selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)), document.points);
+  const bounds = selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)), document.points);
 
   const topLeft = cadToScreenPoint(
     { x: bounds.minX, y: bounds.maxY },
@@ -105,7 +101,7 @@ export function SelectionOverlay({
   ];
 
   return (
-    <g pointerEvents="none">
+    <g style={{ pointerEvents: 'none' }}>
       <rect
         x={x}
         y={y}

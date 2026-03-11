@@ -370,8 +370,8 @@ export function useCadEditor({
       if (!next) return;
 
       if (dragState.shapeId.startsWith("point:")) {
-        const pointId = dragState.shapeId.split(":")[1];
-        setDocumentSilently((prev) => movePointsAndSolve(prev, new Set([pointId]), next.dx, next.dy));
+        const pointIds = new Set(dragState.selectionIds.length > 0 ? dragState.selectionIds.map(id => id.startsWith("pt-") ? id : id) : [dragState.shapeId.split(":")[1]]);
+        setDocumentSilently((prev) => movePointsAndSolve(prev, pointIds, next.dx, next.dy));
         setDragState(next.next);
         return;
       }
@@ -380,17 +380,23 @@ export function useCadEditor({
       const affectedPointIds = new Set<string>();
       const nonParametricShapeIds = new Set<string>();
 
-      document.shapes.filter(s => selectedIds.includes(s.id)).forEach(s => {
-        if (s.type === "text" || s.type === "svg") {
-          nonParametricShapeIds.add(s.id);
+      selectedIds.forEach(id => {
+        if (id.startsWith("pt-")) {
+          affectedPointIds.add(id);
         } else {
-          const shape = s as any;
-          if ("p1" in shape) affectedPointIds.add(shape.p1);
-          if ("p2" in shape) affectedPointIds.add(shape.p2);
-          if ("center" in shape) affectedPointIds.add(shape.center);
-          if ("pointIds" in shape) shape.pointIds.forEach((id: string) => affectedPointIds.add(id));
-          if ("controlPointIds" in shape) shape.controlPointIds.forEach((id: string) => affectedPointIds.add(id));
-          if ("majorAxisPoint" in shape) affectedPointIds.add(shape.majorAxisPoint);
+          const s = document.shapes.find(shape => shape.id === id);
+          if (!s) return;
+          if (s.type === "text" || s.type === "svg") {
+            nonParametricShapeIds.add(s.id);
+          } else {
+            const shape = s as any;
+            if ("p1" in shape) affectedPointIds.add(shape.p1);
+            if ("p2" in shape) affectedPointIds.add(shape.p2);
+            if ("center" in shape) affectedPointIds.add(shape.center);
+            if ("pointIds" in shape) shape.pointIds.forEach((pid: string) => affectedPointIds.add(pid));
+            if ("controlPointIds" in shape) shape.controlPointIds.forEach((pid: string) => affectedPointIds.add(pid));
+            if ("majorAxisPoint" in shape) affectedPointIds.add(shape.majorAxisPoint);
+          }
         }
       });
 
@@ -480,10 +486,14 @@ export function useCadEditor({
     checkpointHistory(); setDocument(addShape(document, shape)); focusCreatedShape(shape.id);
   }
 
-  function bindSelectStart(event: React.PointerEvent<SVGElement>, id: string) {
+  function bindSelectStart(event: React.PointerEvent<SVGElement>, rawId: string) {
     if (tool !== "select") return;
     if (isPanMouseButton(event.button)) { event.stopPropagation(); startPan(event); return; }
     event.stopPropagation();
+
+    // Normalize id (strip "point:" prefix if it comes from ConstraintOverlay)
+    const id = rawId.startsWith("point:") ? rawId.split(":")[1] : rawId;
+
     const rawCad = getCadPoint(event); if (!rawCad) return;
     const cad = document.snapEnabled ? applyDefaultSnap(rawCad, { points: document.points }) : rawCad;
 
@@ -500,7 +510,7 @@ export function useCadEditor({
          shapeId: "point:" + id,
          startX: cad.x,
          startY: cad.y,
-         selectionIds: []
+         selectionIds: nextSelection.ids.filter(sid => sid.startsWith("pt-"))
        });
     } else {
        setDragState(startDrag(id, cad.x, cad.y, getDragShapeIds(document, id, nextSelection)));

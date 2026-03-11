@@ -191,6 +191,16 @@ export function CadCanvas({
         view={view}
       />
 
+      {tool === "select" && (
+          <CadConstraintOverlay
+            document={document}
+            documentHeight={document.height}
+            view={view}
+            selection={selection}
+            onPointerDown={onConstraintPointerDown}
+          />
+        )}
+
       {showSelection && (
         <SelectionOverlay
           document={document}
@@ -205,16 +215,6 @@ export function CadCanvas({
           onHoverChange={onSelectionHoverChange}
         />
       )}
-
-      {tool === "select" && (
-          <CadConstraintOverlay
-            document={document}
-            documentHeight={document.height}
-            view={view}
-            selection={selection}
-            onPointerDown={onConstraintPointerDown}
-          />
-        )}
 
       <DraftOverlay
         draft={draft}
