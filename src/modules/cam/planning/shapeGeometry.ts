@@ -7,6 +7,10 @@ import type {
   SketchShape,
   SketchSvg,
   SketchText,
+  SketchPoint,
+  SketchEllipse,
+  SketchEllipseArc,
+  SketchBSpline,
 } from "@/features/cad-editor/model/types";
 import { getTextPolylines } from "@/features/cad-editor/geometry/textGeometry";
 import { rotateCadPoint, sampleArcPoints } from "@/features/cad-editor/geometry/geometryEngine";
@@ -38,58 +42,82 @@ function ensureClosed(points: { x: number; y: number }[]): { x: number; y: numbe
   return [...points, { ...first }];
 }
 
-function rectangleToContours(shape: SketchRectangle): GeometryContour[] {
-  const points = [
-    { x: shape.x, y: shape.y },
-    { x: shape.x + shape.width, y: shape.y },
-    { x: shape.x + shape.width, y: shape.y + shape.height },
-    { x: shape.x, y: shape.y + shape.height },
+function rectangleToContours(shape: SketchRectangle, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  const minX = Math.min(p1.x, p2.x);
+  const maxX = Math.max(p1.x, p2.x);
+  const minY = Math.min(p1.y, p2.y);
+  const maxY = Math.max(p1.y, p2.y);
+
+  const rectPoints = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
   ];
 
   const rotation = shape.rotation ?? 0;
   const rotated = rotation
     ? (() => {
-        const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
-        return points.map((p) => rotatePoint(p, center, rotation));
+        const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+        return rectPoints.map((p) => rotatePoint(p, center, rotation));
       })()
-    : points;
+    : rectPoints;
 
   return [{ points: ensureClosed(rotated), closed: true }];
 }
 
-function circleToContours(shape: SketchCircle, segments = 96): GeometryContour[] {
-  const points: { x: number; y: number }[] = [];
+function circleToContours(shape: SketchCircle, points: SketchPoint[], segments = 96): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+
+  const contourPoints: { x: number; y: number }[] = [];
   for (let i = 0; i < segments; i++) {
     const t = (i / segments) * Math.PI * 2;
-    points.push({
-      x: round(shape.cx + Math.cos(t) * shape.radius),
-      y: round(shape.cy + Math.sin(t) * shape.radius),
+    contourPoints.push({
+      x: round(center.x + Math.cos(t) * shape.radius),
+      y: round(center.y + Math.sin(t) * shape.radius),
     });
   }
 
-  return [{ points: ensureClosed(points), closed: true }];
+  return [{ points: ensureClosed(contourPoints), closed: true }];
 }
 
-function lineToContours(shape: SketchLine): GeometryContour[] {
+function lineToContours(shape: SketchLine, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
   return [
     {
       points: [
-        { x: shape.x1, y: shape.y1 },
-        { x: shape.x2, y: shape.y2 },
+        { x: p1.x, y: p1.y },
+        { x: p2.x, y: p2.y },
       ],
       closed: false,
     },
   ];
 }
 
-function arcToContours(shape: SketchArc, segments = 72): GeometryContour[] {
+function arcToContours(shape: SketchArc, points: SketchPoint[], segments = 72): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  const startAngle = (Math.atan2(p1.y - center.y, p1.x - center.x) * 180) / Math.PI;
+  const endAngle = (Math.atan2(p2.y - center.y, p2.x - center.x) * 180) / Math.PI;
+
   return [
     {
       points: sampleArcPoints(
-        { x: shape.cx, y: shape.cy },
+        center,
         shape.radius,
-        shape.startAngle,
-        shape.endAngle,
+        startAngle,
+        endAngle,
         shape.clockwise,
         segments
       ),
@@ -98,17 +126,67 @@ function arcToContours(shape: SketchArc, segments = 72): GeometryContour[] {
   ];
 }
 
-function polylineToContours(shape: SketchPolyline): GeometryContour[] {
-  const points = shape.points.map((p) => ({ x: p.x, y: p.y }));
+function ellipseToContours(shape: SketchEllipse | SketchEllipseArc, points: SketchPoint[], segments = 96): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+  const majorPoint = pointMap.get(shape.majorAxisPoint) || { x: center.x + 10, y: center.y };
+
+  const dx = majorPoint.x - center.x;
+  const dy = majorPoint.y - center.y;
+  const majorRadius = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx);
+  const minorRadius = shape.minorAxisRadius;
+
+  const isArc = shape.type === "ellipse-arc";
+  const startT = isArc ? (shape as SketchEllipseArc).startAngle * Math.PI / 180 : 0;
+  const endT = isArc ? (shape as SketchEllipseArc).endAngle * Math.PI / 180 : Math.PI * 2;
+  const sweep = endT - startT;
+
+  const contourPoints: { x: number; y: number }[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = startT + (i / segments) * sweep;
+    const px = Math.cos(t) * majorRadius;
+    const py = Math.sin(t) * minorRadius;
+
+    contourPoints.push({
+      x: round(center.x + px * Math.cos(angle) - py * Math.sin(angle)),
+      y: round(center.y + px * Math.sin(angle) + py * Math.cos(angle)),
+    });
+  }
+
+  return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
+}
+
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 100): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const ctrlPoints = shape.controlPointIds.map(id => pointMap.get(id) || { x: 0, y: 0 });
+
+  if (ctrlPoints.length < 2) return [];
+
+  // Very simplified linear interpolation for BSpline for now
+  const contourPoints = ctrlPoints.map(p => ({ x: p.x, y: p.y }));
+  return [{
+    points: shape.periodic ? ensureClosed(contourPoints) : contourPoints,
+    closed: shape.periodic
+  }];
+}
+
+function polylineToContours(shape: SketchPolyline, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const contourPoints = shape.pointIds.map((id) => {
+    const p = pointMap.get(id) || { x: 0, y: 0 };
+    return { x: p.x, y: p.y };
+  });
+
   return [
     {
-      points: shape.closed ? ensureClosed(points) : points,
+      points: shape.closed ? ensureClosed(contourPoints) : contourPoints,
       closed: shape.closed,
     },
   ];
 }
 
-async function textToContours(shape: SketchText): Promise<GeometryContour[]> {
+async function textToContours(shape: SketchText, points: SketchPoint[]): Promise<GeometryContour[]> {
   const polylines = await getTextPolylines(shape);
   return polylines.map((poly) => ({
     points: ensureClosed(poly.map((p) => ({ x: p.x, y: p.y }))),
@@ -116,52 +194,63 @@ async function textToContours(shape: SketchText): Promise<GeometryContour[]> {
   }));
 }
 
-function svgToContours(shape: SketchSvg): GeometryContour[] {
+function svgToContours(shape: SketchSvg, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const anchor = pointMap.get(shape.anchorPoint) || { x: 0, y: 0 };
+
   const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
   const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
   const rotation = shape.rotation ?? 0;
-  const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
+  const center = { x: anchor.x + shape.width / 2, y: anchor.y + shape.height / 2 };
 
   return shape.contours
     .map((contour) => {
-      const points = contour.map((point) => {
+      const contourPoints = contour.map((id) => {
+        const point = pointMap.get(id) || { x: 0, y: 0 };
         const next = {
-          x: round(shape.x + point.x * scaleX),
-          y: round(shape.y + point.y * scaleY),
+          x: round(anchor.x + point.x * scaleX),
+          y: round(anchor.y + point.y * scaleY),
         };
         return rotation ? rotatePoint(next, center, rotation) : next;
       });
 
       const isClosed =
-        points.length >= 3 &&
+        contourPoints.length >= 3 &&
         Math.hypot(
-          points[0].x - points[points.length - 1].x,
-          points[0].y - points[points.length - 1].y
+          contourPoints[0].x - contourPoints[contourPoints.length - 1].x,
+          contourPoints[0].y - contourPoints[contourPoints.length - 1].y
         ) <= 0.001;
 
       return {
-        points: isClosed ? ensureClosed(points) : points,
+        points: isClosed ? ensureClosed(contourPoints) : contourPoints,
         closed: isClosed,
       };
     })
     .filter((c) => c.points.length >= 2);
 }
 
-export async function extractShapeContours(shape: SketchShape): Promise<GeometryContour[]> {
+export async function extractShapeContours(shape: SketchShape, points: SketchPoint[]): Promise<GeometryContour[]> {
   switch (shape.type) {
     case "rectangle":
-      return rectangleToContours(shape);
+      return rectangleToContours(shape, points);
     case "circle":
-      return circleToContours(shape);
+      return circleToContours(shape, points);
     case "line":
-      return lineToContours(shape);
+      return lineToContours(shape, points);
     case "arc":
-      return arcToContours(shape);
+      return arcToContours(shape, points);
+    case "ellipse":
+    case "ellipse-arc":
+      return ellipseToContours(shape, points);
+    case "bspline":
+      return bsplineToContours(shape, points);
     case "polyline":
-      return polylineToContours(shape);
+      return polylineToContours(shape, points);
     case "text":
-      return textToContours(shape);
+      return textToContours(shape, points);
     case "svg":
-      return svgToContours(shape);
+      return svgToContours(shape, points);
+    default:
+      return [];
   }
 }

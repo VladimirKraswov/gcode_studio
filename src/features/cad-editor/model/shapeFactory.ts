@@ -3,11 +3,14 @@ import type {
   SketchCircle,
   SketchLine,
   SketchPolyline,
-  SketchPolylinePoint,
   SketchRectangle,
   SketchShape,
   SketchSvg,
   SketchText,
+  SketchPoint,
+  SketchEllipse,
+  SketchEllipseArc,
+  SketchBSpline,
 } from "./types";
 import { createId } from "./ids";
 import { createDefaultCamSettings } from "./document";
@@ -18,21 +21,25 @@ const baseShapeFields = {
   camSettings: createDefaultCamSettings(),
 } as const;
 
+export function createPoint(x: number, y: number): SketchPoint {
+  return {
+    id: createId("pt"),
+    x,
+    y,
+  };
+}
+
 export function createRectangleShape(
   name: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
+  p1: string,
+  p2: string,
 ): SketchRectangle {
   return {
     id: createId("rect"),
     type: "rectangle",
     name,
-    x,
-    y,
-    width,
-    height,
+    p1,
+    p2,
     rotation: 0,
     cutZ: null,
     strokeWidth: 1,
@@ -42,16 +49,14 @@ export function createRectangleShape(
 
 export function createCircleShape(
   name: string,
-  cx: number,
-  cy: number,
+  center: string,
   radius: number,
 ): SketchCircle {
   return {
     id: createId("circle"),
     type: "circle",
     name,
-    cx,
-    cy,
+    center,
     radius,
     cutZ: null,
     strokeWidth: 1,
@@ -61,19 +66,15 @@ export function createCircleShape(
 
 export function createLineShape(
   name: string,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
+  p1: string,
+  p2: string,
 ): SketchLine {
   return {
     id: createId("line"),
     type: "line",
     name,
-    x1,
-    y1,
-    x2,
-    y2,
+    p1,
+    p2,
     cutZ: null,
     strokeWidth: 1,
     camSettings: {
@@ -97,22 +98,18 @@ export function createLineShape(
 
 export function createArcShape(params: {
   name: string;
-  cx: number;
-  cy: number;
-  radius: number;
-  startAngle: number;
-  endAngle: number;
+  center: string;
+  p1: string;
+  p2: string;
   clockwise?: boolean;
 }): SketchArc {
   return {
     id: createId("arc"),
     type: "arc",
     name: params.name,
-    cx: params.cx,
-    cy: params.cy,
-    radius: params.radius,
-    startAngle: params.startAngle,
-    endAngle: params.endAngle,
+    center: params.center,
+    p1: params.p1,
+    p2: params.p2,
     clockwise: params.clockwise ?? false,
     cutZ: null,
     strokeWidth: 1,
@@ -135,16 +132,77 @@ export function createArcShape(params: {
   };
 }
 
+export function createEllipseShape(
+  name: string,
+  center: string,
+  majorAxisPoint: string,
+  minorAxisRadius: number,
+): SketchEllipse {
+  return {
+    id: createId("ellipse"),
+    type: "ellipse",
+    name,
+    center,
+    majorAxisPoint,
+    minorAxisRadius,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
+export function createEllipseArcShape(params: {
+  name: string,
+  center: string,
+  majorAxisPoint: string,
+  minorAxisRadius: number,
+  startAngle: number,
+  endAngle: number,
+}): SketchEllipseArc {
+  return {
+    id: createId("ellarc"),
+    type: "ellipse-arc",
+    name: params.name,
+    center: params.center,
+    majorAxisPoint: params.majorAxisPoint,
+    minorAxisRadius: params.minorAxisRadius,
+    startAngle: params.startAngle,
+    endAngle: params.endAngle,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
+export function createBSplineShape(
+  name: string,
+  controlPointIds: string[],
+  degree = 3,
+  periodic = false,
+): SketchBSpline {
+  return {
+    id: createId("bspline"),
+    type: "bspline",
+    name,
+    controlPointIds,
+    degree,
+    periodic,
+    cutZ: null,
+    strokeWidth: 1,
+    ...baseShapeFields,
+  };
+}
+
 export function createPolylineShape(
   name: string,
-  points: SketchPolylinePoint[],
+  pointIds: string[],
   closed = false,
 ): SketchPolyline {
   return {
     id: createId("poly"),
     type: "polyline",
     name,
-    points,
+    pointIds,
     closed,
     cutZ: null,
     strokeWidth: 1,
@@ -169,8 +227,7 @@ export function createPolylineShape(
 
 export function createTextShape(
   name: string,
-  x: number,
-  y: number,
+  anchorPoint: string,
   text: string,
   height: number,
   letterSpacing: number,
@@ -180,8 +237,7 @@ export function createTextShape(
     id: createId("text"),
     type: "text",
     name,
-    x,
-    y,
+    anchorPoint,
     text,
     height,
     letterSpacing,
@@ -197,21 +253,19 @@ export function createTextShape(
 
 export function createSvgShape(params: {
   name: string;
-  x: number;
-  y: number;
+  anchorPoint: string;
   width: number;
   height: number;
   sourceWidth: number;
   sourceHeight: number;
   preserveAspectRatio: boolean;
-  contours: SketchPolylinePoint[][];
+  contours: string[][];
 }): SketchSvg {
   return {
     id: createId("svg"),
     type: "svg",
     name: params.name,
-    x: params.x,
-    y: params.y,
+    anchorPoint: params.anchorPoint,
     width: params.width,
     height: params.height,
     sourceWidth: params.sourceWidth,
@@ -239,11 +293,20 @@ export function cloneShape(shape: SketchShape): SketchShape {
     case "arc":
       return { ...shape, id: createId("arc") };
 
+    case "ellipse":
+      return { ...shape, id: createId("ellipse") };
+
+    case "ellipse-arc":
+      return { ...shape, id: createId("ellarc") };
+
+    case "bspline":
+      return { ...shape, id: createId("bspline"), controlPointIds: [...shape.controlPointIds] };
+
     case "polyline":
       return {
         ...shape,
         id: createId("poly"),
-        points: shape.points.map((point) => ({ ...point })),
+        pointIds: [...shape.pointIds],
       };
 
     case "text":
@@ -253,9 +316,10 @@ export function cloneShape(shape: SketchShape): SketchShape {
       return {
         ...shape,
         id: createId("svg"),
-        contours: shape.contours.map((polyline) =>
-          polyline.map((point) => ({ ...point })),
-        ),
+        contours: shape.contours.map((polyline) => [...polyline]),
       };
+
+    default:
+      return { ...shape, id: createId("shape") };
   }
 }

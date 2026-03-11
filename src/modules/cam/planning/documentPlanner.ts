@@ -29,7 +29,7 @@ export async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpa
 
   for (let shapeIndex = 0; shapeIndex < visibleShapes.length; shapeIndex++) {
     const shape = visibleShapes[shapeIndex];
-    const contours = await extractShapeContours(shape);
+    const contours = await extractShapeContours(shape, doc.points);
 
     for (let contourIndex = 0; contourIndex < contours.length; contourIndex++) {
       const contour = contours[contourIndex];
