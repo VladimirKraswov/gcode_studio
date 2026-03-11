@@ -1,5 +1,4 @@
 import { cloneShape, createPoint } from "./shapeFactory";
-import { moveShape, rotateShape } from "./shapeTransforms";
 import type {
   SketchArrayDefinition,
   SketchCircularArrayParams,
@@ -10,9 +9,14 @@ import type {
 } from "./types";
 import { createId } from "./ids";
 
+type ArrayResult = {
+  document: SketchDocument;
+  createdShapeIds: string[];
+  groupId: string | null;
+};
+
 /**
  * Rebuilds an array group parametrically.
- * Instead of static copies, it generates geometry based on source and params.
  */
 export function rebuildArrayGroup(
   document: SketchDocument,
@@ -24,16 +28,21 @@ export function rebuildArrayGroup(
   );
   if (sourceShapes.length === 0) return document;
 
-  // 1. Remove old generated shapes and points
-  const nextShapes = document.shapes.filter(
-    (s) => s.groupId !== groupId || definition.sourceShapeIds.includes(s.id)
+  const shapesToRemove = document.shapes.filter(
+    (s) => s.groupId === groupId && !definition.sourceShapeIds.includes(s.id)
   );
+  const shapeIdsToRemove = new Set(shapesToRemove.map(s => s.id));
 
-  // For simplicity in this implementation, we assume generated points have specific IDs or are managed
-  // Real implementation would need a way to track points created by the array
-  let nextPoints = [...document.points];
+  const allUsedPointIds = new Set<string>();
+  document.shapes.forEach(s => {
+    if (!shapeIdsToRemove.has(s.id)) {
+      getShapePointIds(s).forEach(id => allUsedPointIds.add(id));
+    }
+  });
 
-  // 2. Generate new copies
+  const nextShapes = document.shapes.filter(s => !shapeIdsToRemove.has(s.id));
+  const nextPoints = document.points.filter(p => allUsedPointIds.has(p.id) || isSourcePoint(p.id, sourceShapes));
+
   const generatedShapes: SketchShape[] = [];
   const generatedPoints: SketchPoint[] = [];
 
@@ -49,7 +58,6 @@ export function rebuildArrayGroup(
       generatedPoints.push(...points);
     }
   } else {
-    // Circular
     const params = definition.params;
     const center = typeof params.centerX === "number" ? { x: params.centerX, y: params.centerY as number } :
                    document.points.find(p => p.id === params.centerX)!;
@@ -69,6 +77,67 @@ export function rebuildArrayGroup(
   };
 }
 
+export function applyLinearArray(
+  document: SketchDocument,
+  selection: { ids: string[] },
+  params: SketchLinearArrayParams
+): ArrayResult {
+  const groupId = createId("group");
+  const definition: SketchArrayDefinition = {
+    type: "linear",
+    sourceShapeIds: [...selection.ids],
+    params
+  };
+
+  const nextDoc = {
+    ...document,
+    groups: [...document.groups, { id: groupId, name: "Linear Array", array: definition }],
+    shapes: document.shapes.map(s => selection.ids.includes(s.id) ? { ...s, groupId } : s)
+  };
+
+  const finalDoc = rebuildArrayGroup(nextDoc, groupId, definition);
+
+  return {
+    document: finalDoc,
+    createdShapeIds: finalDoc.shapes.filter(s => s.groupId === groupId && !selection.ids.includes(s.id)).map(s => s.id),
+    groupId
+  };
+}
+
+export function applyCircularArray(
+  document: SketchDocument,
+  selection: { ids: string[] },
+  params: SketchCircularArrayParams
+): ArrayResult {
+  const groupId = createId("group");
+  const definition: SketchArrayDefinition = {
+    type: "circular",
+    sourceShapeIds: [...selection.ids],
+    params
+  };
+
+  const nextDoc = {
+    ...document,
+    groups: [...document.groups, { id: groupId, name: "Circular Array", array: definition }],
+    shapes: document.shapes.map(s => selection.ids.includes(s.id) ? { ...s, groupId } : s)
+  };
+
+  const finalDoc = rebuildArrayGroup(nextDoc, groupId, definition);
+
+  return {
+    document: finalDoc,
+    createdShapeIds: finalDoc.shapes.filter(s => s.groupId === groupId && !selection.ids.includes(s.id)).map(s => s.id),
+    groupId
+  };
+}
+
+function isSourcePoint(pointId: string, sourceShapes: SketchShape[]): boolean {
+  for (const s of sourceShapes) {
+    if (getShapePointIds(s).includes(pointId)) return true;
+  }
+  return false;
+}
+
 function duplicateShapesWithOffset(
   sources: SketchShape[],
   allPoints: SketchPoint[],
@@ -80,7 +149,6 @@ function duplicateShapesWithOffset(
   const newPoints: SketchPoint[] = [];
   const newShapes: SketchShape[] = [];
 
-  // Clone points
   sources.forEach(s => {
     const pids = getShapePointIds(s);
     pids.forEach(id => {
@@ -93,7 +161,6 @@ function duplicateShapesWithOffset(
     });
   });
 
-  // Clone shapes
   sources.forEach(s => {
     const clone = { ...s, id: createId(s.type), groupId };
     updateShapePointIds(clone, pointMap);
