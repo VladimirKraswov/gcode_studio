@@ -44,7 +44,7 @@ export function useGCodeWorker(source: string) {
   }, []);
 
   useEffect(() => {
-    if (!source.trim()) {
+    if (!source || !source.trim()) {
       requestIdRef.current += 1;
       setParsed(null);
       setIsParsing(false);
