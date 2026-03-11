@@ -17,6 +17,7 @@ import type {
   SketchShape,
 } from "../model/types";
 import { updateShape } from "../model/document";
+import { updateGeometry } from "../model/solver/manager";
 import type { SelectionState } from "../model/selection";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -111,6 +112,14 @@ export function ShapePropertiesPanel({
     () => selectedShape ? resolveShapeCamSettings(selectedShape, document) : null,
     [selectedShape, document],
   );
+
+  const lineLength = useMemo(() => {
+    if (selectedShape?.type !== "line") return null;
+    const p1 = document.points.find(p => p.id === (selectedShape as any).p1);
+    const p2 = document.points.find(p => p.id === (selectedShape as any).p2);
+    if (!p1 || !p2) return 0;
+    return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+  }, [selectedShape, document.points]);
 
   if (!selectedShape && !selectedPoint) {
     return (
@@ -248,6 +257,77 @@ export function ShapePropertiesPanel({
 
         <div>
           <SectionTitle title="Геометрия" />
+
+          {selectedShape?.type === "line" && (
+            <div className="grid gap-1.5 mb-3">
+              <Label>Длина</Label>
+              <Input
+                type="number"
+                value={lineLength?.toFixed(3)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (isNaN(val)) return;
+                  setDocument(prev => {
+                    // Try to find existing distance constraint
+                    const s = selectedShape as any;
+                    const existing = prev.constraints.find(c =>
+                      c.type === "distance" &&
+                      c.pointIds.includes(s.p1) &&
+                      c.pointIds.includes(s.p2)
+                    );
+
+                    let nextConstraints = prev.constraints;
+                    if (existing) {
+                      nextConstraints = prev.constraints.map(c => c.id === existing.id ? { ...c, value: val } : c);
+                    } else {
+                      const newC = {
+                        id: `const-${Math.random()}`,
+                        type: "distance" as const,
+                        pointIds: [s.p1, s.p2],
+                        shapeIds: [s.id],
+                        value: val,
+                        enabled: true
+                      };
+                      nextConstraints = [...prev.constraints, newC];
+                    }
+                    return updateGeometry({ ...prev, constraints: nextConstraints });
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {(selectedShape?.type === "circle" || selectedShape?.type === "arc") && (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid gap-1.5">
+                <Label>Радиус</Label>
+                <Input
+                  type="number"
+                  value={(selectedShape as any).radius?.toFixed(3)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (isNaN(val)) return;
+                    updateSelected({ radius: val });
+                    setDocument(prev => updateGeometry(prev));
+                  }}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Диаметр</Label>
+                <Input
+                  type="number"
+                  value={((selectedShape as any).radius * 2)?.toFixed(3)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (isNaN(val)) return;
+                    updateSelected({ radius: val / 2 });
+                    setDocument(prev => updateGeometry(prev));
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Глубина Z</Label>

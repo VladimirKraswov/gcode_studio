@@ -666,7 +666,25 @@ export function useCadEditor({
       setDocument(nextDocument);
       onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
     },
-    deleteShape: (id: string) => setDocument(d => ({ ...d, shapes: d.shapes.filter(s => s.id !== id) })),
+    deleteShape: (id: string) => setDocument(d => {
+      const remainingShapes = d.shapes.filter(s => s.id !== id);
+      const usedPointIds = new Set<string>();
+      remainingShapes.forEach(s => {
+        const shape = s as any;
+        if (shape.p1) usedPointIds.add(shape.p1);
+        if (shape.p2) usedPointIds.add(shape.p2);
+        if (shape.center) usedPointIds.add(shape.center);
+        if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
+        if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => usedPointIds.add(pid));
+        if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
+      });
+      return {
+        ...d,
+        shapes: remainingShapes,
+        points: d.points.filter(p => usedPointIds.has(p.id)),
+        constraints: d.constraints.filter(c => !c.shapeIds.includes(id))
+      };
+    }),
     renameShape: (id: string, name: string) => setDocument(d => { const next = { ...d, shapes: d.shapes.map(s => s.id === id ? { ...s, name } : s) }; return next; }),
     toggleShapeVisibility: (id: string) => setDocument(d => { const next = { ...d, shapes: d.shapes.map(s => s.id === id ? { ...s, visible: !s.visible } : s) }; return next; }),
     groupSelected: () => setDocument(d => groupSelectedShapes(d, selection)),

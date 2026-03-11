@@ -146,6 +146,7 @@ export default function EditTab(props: EditTabProps) {
               onSelectionPointerDown={editor.bindSelectionDragStart}
               onScaleHandlePointerDown={editor.bindScaleHandleStart}
               onRotateHandlePointerDown={editor.bindRotateHandleStart}
+              onConstraintPointerDown={editor.onConstraintPointerDown}
               isTransforming={editor.isTransforming}
             />
           </div>
