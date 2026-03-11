@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 :root {
+  /* Основные цвета (светлая тема) */
   --color-bg: #fcf8f3;
   --color-bg-soft: #f5efe8;
   --color-app: #f5efe8;
@@ -22,12 +23,58 @@
   --color-danger: #ef4444;
   --color-danger-soft: #fee2e2;
 
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+  /* Тени */
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.02);
   --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.03);
 
+  /* Радиусы */
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-pill: 9999px;
+
+  /* CAD-специфичные цвета */
+  --cad-canvas-bg: #fcf8f3;
+  --cad-sheet-fill: rgba(255, 255, 255, 0.86);
+  --cad-sheet-stroke: #d6c9b8;
+  --cad-grid-minor: #e8dccc;
+  --cad-grid-major: #d6c9b8;
+  --cad-ruler: #d6c9b8;
+  --cad-ruler-tick-major: #8b7f72;
+  --cad-ruler-tick-minor: #b3a693;
+  --cad-ruler-text: #5a4f45;
+  --cad-axis-x: #f87171;
+  --cad-axis-y: #d97706;
+  --cad-axis-text: #2c2c2c;
+  --cad-origin: #f87171;
+  --cad-origin-text: #2c2c2c;
+  --cad-shape-stroke: #5a4f45;
+  --cad-selected-stroke: #d97706;
+  --cad-selection-stroke: #d97706;
+  --cad-selection-fill: rgba(217, 119, 6, 0.06);
+  --cad-selection-hover-fill: rgba(217, 119, 6, 0.12);
+  --cad-selection-drag-stroke: #d97706;
+  --cad-selection-drag-fill: rgba(245, 158, 11, 0.12);
+  --cad-draft-stroke: #d97706;
+  --cad-draft-fill: rgba(217, 119, 6, 0.12);
+  --cad-draft-accent: #f87171;
+  --cad-draft-guide: #fdba74;
+  --cad-constraint-stroke: #2c2c2c;
+  --cad-constraint-muted: #b3a693;
+  --cad-constraint-source: #d97706;
+  --cad-constraint-target: #5a4f45;
+  --cad-constraint-handle-x: #d97706;
+  --cad-constraint-handle-y: #fbbf24;
+  --cad-constraint-label-fill: #ffffff;
+  --cad-constraint-label-stroke: #d6c9b8;
+  --cad-constraint-label-text: #2c2c2c;
+  --cad-constraint-preview-stroke: #f59e0b;
+  --cad-constraint-preview-fill: #fff7ed;
+  --cad-constraint-preview-border: #fdba74;
+  --cad-constraint-preview-text: #9a3412;
+  --cad-array-preview-stroke: #d97706;
+  --cad-array-preview-fill: rgba(217, 119, 6, 0.08);
+  --cad-array-preview-guide: rgba(217, 119, 6, 0.35);
 }
 
 [data-theme="dark"] {
@@ -54,4 +101,79 @@
 
   --shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 8px 18px rgba(0, 0, 0, 0.5);
   --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  --cad-canvas-bg: #1c1917;
+  --cad-sheet-fill: rgba(28, 25, 23, 0.72);
+  --cad-sheet-stroke: #57534e;
+  --cad-grid-minor: #44403c;
+  --cad-grid-major: #57534e;
+  --cad-ruler: #57534e;
+  --cad-ruler-tick-major: #a8a29e;
+  --cad-ruler-tick-minor: #78716c;
+  --cad-ruler-text: #d6d3d1;
+  --cad-axis-x: #f87171;
+  --cad-axis-y: #fbbf24;
+  --cad-axis-text: #f5f5f4;
+  --cad-origin: #f87171;
+  --cad-origin-text: #f5f5f4;
+  --cad-shape-stroke: #d6d3d1;
+  --cad-selected-stroke: #f59e0b;
+  --cad-selection-stroke: #f59e0b;
+  --cad-selection-fill: rgba(245, 158, 11, 0.1);
+  --cad-selection-hover-fill: rgba(245, 158, 11, 0.16);
+  --cad-selection-drag-stroke: #d97706;
+  --cad-selection-drag-fill: rgba(217, 119, 6, 0.16);
+  --cad-draft-stroke: #f59e0b;
+  --cad-draft-fill: rgba(245, 158, 11, 0.14);
+  --cad-draft-accent: #f87171;
+  --cad-draft-guide: #fde68a;
+  --cad-constraint-stroke: #f5f5f4;
+  --cad-constraint-muted: #78716c;
+  --cad-constraint-source: #f59e0b;
+  --cad-constraint-target: #a8a29e;
+  --cad-constraint-handle-x: #f59e0b;
+  --cad-constraint-handle-y: #fbbf24;
+  --cad-constraint-label-fill: #292524;
+  --cad-constraint-label-stroke: #57534e;
+  --cad-constraint-label-text: #f5f5f4;
+  --cad-constraint-preview-stroke: #d97706;
+  --cad-constraint-preview-fill: #3f2a12;
+  --cad-constraint-preview-border: #b45309;
+  --cad-constraint-preview-text: #fdba74;
+  --cad-array-preview-stroke: #f59e0b;
+  --cad-array-preview-fill: rgba(245, 158, 11, 0.12);
+  --cad-array-preview-guide: rgba(245, 158, 11, 0.35);
+}
+
+/* Кастомные компонентные классы */
+@layer components {
+  .ui-panel {
+    @apply rounded-xl border border-border bg-panel/80 backdrop-blur-sm;
+    box-shadow: var(--shadow-soft);
+  }
+  .ui-panel-inset {
+    @apply rounded-xl border border-border bg-panel-muted;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+  }
+  .ui-label {
+    @apply flex flex-col gap-1.5 text-xs font-semibold text-text-soft;
+  }
+  .ui-input {
+    @apply rounded-lg border border-border bg-panel-solid px-3 py-2 text-text outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/30;
+  }
+  .ui-input.error {
+    @apply border-danger focus:ring-danger/30;
+  }
+  .ui-app-shell {
+    @apply h-screen w-screen overflow-hidden;
+  }
+  .ui-page {
+    @apply h-full w-full;
+  }
+  .ui-page-grid {
+    @apply grid h-full grid-cols-[280px_1fr_320px] gap-px bg-border;
+  }
+  .ui-column {
+    @apply h-full overflow-auto bg-bg;
+  }
 }

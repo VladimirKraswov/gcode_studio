@@ -13,23 +13,49 @@ interface TabsProps {
   className?: string;
 }
 
-export const Tabs: React.FC<TabsProps> = ({ tabs, activeTab, onChange, className = "" }) => {
+export const Tabs: React.FC<TabsProps> = ({
+  tabs,
+  activeTab,
+  onChange,
+  className = "",
+}) => {
   return (
-    <div className={`flex p-1 bg-panel-muted rounded-xl border border-border ${className}`}>
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => onChange(tab.id)}
-          className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[13px] font-bold transition-all ${
-            activeTab === tab.id
-              ? "bg-panel-solid text-primary shadow-sm border border-border"
-              : "text-text-muted hover:text-text hover:bg-panel-solid/50"
-          }`}
-        >
-          {tab.icon}
-          {tab.label}
-        </button>
-      ))}
+    <div
+      className={`flex rounded-xl border p-1 ${className}`}
+      style={{
+        background: "var(--color-panel-muted)",
+        borderColor: "var(--color-border)",
+      }}
+    >
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            className="flex h-9 flex-1 items-center justify-center gap-2 rounded-lg border text-[13px] font-bold transition-all"
+            style={
+              isActive
+                ? {
+                    background: "var(--color-panel-solid)",
+                    color: "var(--color-primary)",
+                    borderColor: "var(--color-border)",
+                    boxShadow: "var(--shadow-soft)",
+                  }
+                : {
+                    background: "transparent",
+                    color: "var(--color-text-muted)",
+                    borderColor: "transparent",
+                  }
+            }
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        );
+      })}
     </div>
   );
 };

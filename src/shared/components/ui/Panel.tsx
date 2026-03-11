@@ -11,8 +11,8 @@ export const Panel = React.forwardRef<HTMLDivElement, PanelProps>(
     const variantStyles = {
       default: "ui-panel",
       inset: "ui-panel-inset",
-      solid: "ui-panel border border-border bg-panel-solid",
-      muted: "ui-panel-inset border border-border bg-panel-muted",
+      solid: "border border-border-strong bg-panel-solid",
+      muted: "border border-border bg-panel-muted",
     };
 
     return (
