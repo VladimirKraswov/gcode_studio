@@ -508,7 +508,7 @@ export function ObjectListPanel({
     <>
       <div
         ref={rootRef}
-        className="ui-panel scrollbar-thin relative flex h-full min-h-0 w-[320px] min-w-[260px] max-w-[360px] flex-col overflow-hidden rounded-2xl p-2"
+        className="scrollbar-thin relative flex h-full min-h-0 w-full flex-col overflow-hidden p-2"
         onContextMenu={(e) => {
           if (e.target === e.currentTarget) {
             e.preventDefault();

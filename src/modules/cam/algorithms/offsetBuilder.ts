@@ -105,10 +105,6 @@ function mul(v: Vec2, s: number): Vec2 {
   return { x: v.x * s, y: v.y * s };
 }
 
-function dot(a: Vec2, b: Vec2): number {
-  return a.x * b.x + a.y * b.y;
-}
-
 function cross(a: Vec2, b: Vec2): number {
   return a.x * b.y - a.y * b.x;
 }
@@ -480,7 +476,8 @@ function traceFace(
     for (const candIdx of outs) {
       const cand = edges[candIdx];
       if (cand.used) continue;
-      const turn = angleDeltaCW(arrivalAngle, cand.angle);
+      const arrival = arrivalAngle; // Use arrivalAngle directly
+      const turn = angleDeltaCW(arrival, cand.angle);
       if (turn < bestTurn) {
         bestTurn = turn;
         bestIdx = candIdx;

@@ -61,7 +61,7 @@ export default function EditTab(props: EditTabProps) {
 
   return (
     <CadRegistryProvider registry={cadRegistry}>
-      <div className="flex flex-1 flex-col overflow-hidden bg-bg-soft rounded-2xl border border-border shadow-inner">
+      <div className="flex flex-1 flex-col overflow-hidden bg-bg rounded-2xl border border-border">
         {/* Workspace Area */}
         <div className="flex-1 relative flex overflow-hidden">
 
@@ -107,16 +107,18 @@ export default function EditTab(props: EditTabProps) {
             )}
 
             {editor.tool === "text" && (
-              <TextToolPanel
-                value={editor.textTool}
-                fontOptions={editor.fontOptions}
-                onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
-              />
+              <div className="bg-panel border border-border rounded-xl shadow-lg p-1">
+                <TextToolPanel
+                  value={editor.textTool}
+                  fontOptions={editor.fontOptions}
+                  onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
+                />
+              </div>
             )}
           </div>
 
           {/* Canvas Wrapper */}
-          <div className="flex-1 min-h-0 min-w-0">
+          <div className="flex-1 min-h-0 min-w-0 bg-[#fcf8f3] dark:bg-[#1c1917]">
             <CadCanvas
               svgRef={editor.svgRef}
               document={props.document}
@@ -154,7 +156,7 @@ export default function EditTab(props: EditTabProps) {
           <button
             onClick={editor.handleGenerateClick}
             disabled={editor.isGenerating}
-            className="absolute bottom-6 right-6 h-12 w-12 rounded-full bg-primary text-white shadow-xl hover:scale-105 transition-all flex items-center justify-center disabled:opacity-50"
+            className="absolute bottom-6 right-6 h-12 w-12 rounded-full bg-primary text-white shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-50 z-20"
             title="Сгенерировать G-code"
           >
              <FiPlay size={20} className={editor.isGenerating ? "animate-pulse" : ""} />

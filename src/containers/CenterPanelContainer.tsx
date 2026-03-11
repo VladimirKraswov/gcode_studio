@@ -46,8 +46,12 @@ export function CenterPanelContainer() {
     applyGeneratedGCode,
   } = useApp();
 
+  // "edit" tab is edge-to-edge for a professional CAD feel.
+  // Other tabs keep the standard panel look with padding.
+  const isEdit = activeTab === "edit";
+
   return (
-    <div className="ui-panel flex flex-1 min-h-0 flex-col overflow-hidden bg-panel-solid p-4">
+    <div className={`${isEdit ? "flex flex-1 min-h-0 min-w-0" : "ui-panel flex flex-1 min-h-0 flex-col overflow-hidden bg-panel-solid p-4"}`}>
       {activeTab === "view" && (
         <div className="flex flex-1 min-h-0 flex-col">
           <div className="mb-3 flex shrink-0 flex-wrap justify-between gap-3 rounded-[14px] border border-border bg-panel-muted px-3 py-2.5 text-xs text-text-muted">
