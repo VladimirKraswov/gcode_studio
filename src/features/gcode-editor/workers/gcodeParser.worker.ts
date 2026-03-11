@@ -129,7 +129,7 @@ function parseGCode(text: string): ParsedGCode {
       mode: effectiveMode,
       start: { ...state },
       end: { ...next },
-      feed: next.f,
+      feed: next.f ?? 0,
       lineNumber: i + 1,
       raw,
       isCutting,

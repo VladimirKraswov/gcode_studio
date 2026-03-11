@@ -26,7 +26,7 @@ function to2D(points: ToolpathPoint[]) {
 }
 
 function is3DPath(points: ToolpathPoint[]): boolean {
-  return points.some((point) => typeof point.z === "number");
+  return points.some((point) => typeof point.z === "number" && point.z !== 0);
 }
 
 function buildDepthPasses(targetCutZ: number, passDepth: number): number[] {
@@ -139,7 +139,7 @@ function emitContourPass(
         doc,
         path,
         passZ,
-        toolpath.cutZ,
+        toolpath.cutZ ?? doc.cutZ,
         toolpath.bridgeHeight ?? 1,
         Math.max(1, toolpath.bridgeCount ?? 2),
         Math.max(0.1, toolpath.bridgeWidth ?? Math.max(doc.toolDiameter * 2, 3))
@@ -189,8 +189,9 @@ export async function generateSketchGCode(doc: SketchDocument): Promise<string> 
       continue;
     }
 
+    const cutZ = toolpath.cutZ ?? doc.cutZ;
     const passDepth = Math.max(0.001, Math.abs(toolpath.stepdown ?? doc.passDepth));
-    const passes = buildDepthPasses(toolpath.cutZ, passDepth);
+    const passes = buildDepthPasses(cutZ, passDepth);
 
     let previousZ = doc.safeZ;
     for (const passZ of passes) {

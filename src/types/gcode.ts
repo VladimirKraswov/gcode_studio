@@ -22,14 +22,23 @@ export type Toolpath = {
   name?: string;
   points: ToolPoint[];
   closed: boolean;
-  useRamping: boolean;
-  rampTurns: number;
-  useBridges: boolean;
-  bridgeCount: number;
-  bridgeWidth: number;
-  bridgeHeight: number;
-  cutZ: number;
-  stepdown: number;
+  useRamping?: boolean;
+  rampTurns?: number;
+  useBridges?: boolean;
+  bridgeCount?: number;
+  bridgeWidth?: number;
+  bridgeHeight?: number;
+  cutZ?: number;
+  stepdown?: number;
+  kind?: "contour" | "pocket";
+  leadIn?: {
+    enabled: boolean;
+    length: number;
+  };
+  leadOut?: {
+    enabled: boolean;
+    length: number;
+  };
 };
 
 export type Segment = {

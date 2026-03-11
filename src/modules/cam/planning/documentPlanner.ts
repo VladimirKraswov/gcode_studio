@@ -1,7 +1,7 @@
 import type { SketchDocument, SketchShape } from "@/features/cad-editor/model/types";
 import { collectVisibleShapes } from "@/features/cad-editor/model/grouping";
 import { optimizeTravel } from "../algorithms/travelOptimizer";
-import type { Toolpath } from "@/types/gcode";
+import type { Toolpath, ToolPoint } from "@/types/gcode";
 import { extractShapeContours } from "./shapeGeometry";
 import { planContourOperationFromGeometry } from "./operationPlanner";
 
@@ -64,7 +64,7 @@ export async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpa
 
     return {
       ...source,
-      points: item.points.map((p) => ({ x: p.x, y: p.y })),
+      points: item.points.map((p): ToolPoint => ({ x: p.x, y: p.y, z: 0 })),
     };
   });
 

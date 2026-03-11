@@ -1,6 +1,4 @@
 import {
-  arcEndPoint,
-  arcStartPoint,
   boundsFromPoints,
   rotateCadPoint,
   sampleArcPoints,

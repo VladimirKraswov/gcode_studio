@@ -1,6 +1,6 @@
 // src/contexts/AppContext.tsx
-import React, { createContext, useContext } from 'react';
-import { useAppState } from '../hooks/useAppState';
+import { createContext, useContext } from 'react';
+import { useAppState } from '@/hooks/useAppState';
 import type { ReactNode } from 'react';
 
 type AppContextType = ReturnType<typeof useAppState>;

@@ -5,7 +5,7 @@ import type {
 } from "@/features/cad-editor/model/types";
 import { buildOffset } from "../algorithms/offsetBuilder";
 import { generateBestPocket } from "../algorithms/pocketing";
-import type { Toolpath } from "@/types/gcode";
+import type { Toolpath, ToolPoint } from "@/types/gcode";
 import type { GeometryContour } from "./shapeGeometry";
 
 type ResolvedCamSettings = {
@@ -136,10 +136,9 @@ function makeToolpath(
 ): Toolpath {
   return {
     name,
-    points: points.map((p) => ({ x: p.x, y: p.y })),
+    points: points.map((p): ToolPoint => ({ x: p.x, y: p.y, z: 0 })),
     closed: options.closed,
     cutZ: resolveCutZ(shape, doc),
-    kind: options.kind,
     useRamping: options.allowRamping,
     useBridges: options.allowTabs,
     bridgeCount: options.allowTabs ? cam.tabs.count : 0,
@@ -147,14 +146,6 @@ function makeToolpath(
     bridgeHeight: options.allowTabs ? cam.tabs.height : 0,
     rampTurns: options.allowRamping ? cam.ramping.turns : 0,
     stepdown: cam.stepdown ?? doc.passDepth,
-    leadIn: {
-      enabled: false,
-      length: 0,
-    },
-    leadOut: {
-      enabled: false,
-      length: 0,
-    },
   };
 }
 
