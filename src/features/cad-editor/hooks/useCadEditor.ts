@@ -480,42 +480,33 @@ export function useCadEditor({
     checkpointHistory(); setDocument(addShape(document, shape)); focusCreatedShape(shape.id);
   }
 
-  function bindSelectStart(event: React.PointerEvent<SVGElement>, shapeId: string) {
+  function bindSelectStart(event: React.PointerEvent<SVGElement>, id: string) {
     if (tool !== "select") return;
     if (isPanMouseButton(event.button)) { event.stopPropagation(); startPan(event); return; }
     event.stopPropagation();
     const rawCad = getCadPoint(event); if (!rawCad) return;
     const cad = document.snapEnabled ? applyDefaultSnap(rawCad, { points: document.points }) : rawCad;
 
-    // If shape is parametric, we don't start a shape drag on click,
-    // instead we let point dragging handle it OR we could drag all points.
-    // For now, let's keep it but make it clear that it moves the WHOLE shape if selected.
-
-    let nextSelection = event.shiftKey ? toggleSelection(selection, shapeId) : (isSelected(selection, shapeId) ? selection : selectOnly(shapeId));
+    let nextSelection = event.shiftKey ? toggleSelection(selection, id) : (isSelected(selection, id) ? selection : selectOnly(id));
     if (nextSelection !== selection) onSelectionChangeSilently(nextSelection);
+
     if (event.button !== 0 || event.shiftKey) return;
-    checkpointHistory();
-    setDragState(startDrag(shapeId, cad.x, cad.y, getDragShapeIds(document, shapeId, nextSelection)));
-  }
-
-  function bindPointDragStart(event: React.PointerEvent<SVGElement>, pointId: string) {
-    if (tool !== "select") return;
-    event.stopPropagation();
-    if (isPanMouseButton(event.button)) { startPan(event); return; }
-    if (event.button !== 0) return;
-
-    const rawCad = getCadPoint(event); if (!rawCad) return;
-    const cad = document.snapEnabled ? applyDefaultSnap(rawCad, { points: document.points }) : rawCad;
 
     checkpointHistory();
-    // Drag state for a point
-    setDragState({
-      shapeId: "point:" + pointId,
-      startX: cad.x,
-      startY: cad.y,
-      selectionIds: [] // Point drag is handled specially
-    });
+
+    // Check if we are dragging a point or a shape
+    if (id.startsWith("pt-")) {
+       setDragState({
+         shapeId: "point:" + id,
+         startX: cad.x,
+         startY: cad.y,
+         selectionIds: []
+       });
+    } else {
+       setDragState(startDrag(id, cad.x, cad.y, getDragShapeIds(document, id, nextSelection)));
+    }
   }
+
 
   function bindSelectionDragStart(event: React.PointerEvent<SVGRectElement>) {
     if (isPanMouseButton(event.button)) { startPan(event); return; }
@@ -538,7 +529,8 @@ export function useCadEditor({
     cloneSelected: () => {
       checkpointHistory();
       const selectedShapes = document.shapes.filter(s => selection.ids.includes(s.id));
-      if (selectedShapes.length === 0) return;
+      const selectedPoints = document.points.filter(p => selection.ids.includes(p.id));
+      if (selectedShapes.length === 0 && selectedPoints.length === 0) return;
 
       const pointMap = new Map<string, string>();
       const clonedPoints: any[] = [];
@@ -643,8 +635,10 @@ export function useCadEditor({
     },
     deleteSelected: () => {
       checkpointHistory();
-      const shapesToDelete = new Set(selection.ids);
-      const remainingShapes = document.shapes.filter(s => !shapesToDelete.has(s.id));
+      const selectedItemIds = new Set(selection.ids);
+
+      const remainingShapes = document.shapes.filter(s => !selectedItemIds.has(s.id));
+      const remainingPoints = document.points.filter(p => !selectedItemIds.has(p.id));
 
       const usedPointIds = new Set<string>();
       remainingShapes.forEach(s => {
@@ -657,10 +651,10 @@ export function useCadEditor({
         if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
       });
 
-      const nextPoints = document.points.filter(p => usedPointIds.has(p.id));
+      const nextPoints = remainingPoints.filter(p => usedPointIds.has(p.id));
       const nextConstraints = document.constraints.filter(c =>
         c.pointIds.every(pid => usedPointIds.has(pid)) &&
-        !c.shapeIds.some(sid => shapesToDelete.has(sid))
+        !c.shapeIds.some(sid => selectedItemIds.has(sid))
       );
 
       const nextDocument = {
@@ -795,7 +789,7 @@ export function useCadEditor({
       e.stopPropagation();
       if (id.startsWith("point:")) {
         const pointId = id.split(":")[1];
-        bindPointDragStart(e, pointId);
+        bindSelectStart(e, pointId);
         return;
       }
       const constraint = document.constraints.find(c => c.id === id);

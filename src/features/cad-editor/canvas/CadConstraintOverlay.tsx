@@ -5,6 +5,7 @@ import type {
   SketchPoint,
   SketchConstraint,
 } from "../model/types";
+import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
 
 type CadConstraintOverlayProps = {
@@ -17,8 +18,9 @@ export function CadConstraintOverlay({
   document,
   documentHeight,
   view,
+  selection,
   onPointerDown,
-}: CadConstraintOverlayProps & { onPointerDown?: (e: any, id: string) => void }) {
+}: CadConstraintOverlayProps & { selection?: SelectionState, onPointerDown?: (e: any, id: string) => void }) {
   const { theme } = useTheme();
 
   // Group constraints by point for better icon placement
@@ -90,6 +92,7 @@ export function CadConstraintOverlay({
         const constraintCount = document.constraints.filter(c => c.pointIds.includes(p.id)).length;
         const isConstrained = constraintCount > 0;
         const isFixed = p.isFixed;
+        const isSelected = document.shapes.some(s => s.id === p.id) || (selection && selection.ids.includes(p.id));
 
         return (
           <g key={p.id}>
@@ -105,9 +108,9 @@ export function CadConstraintOverlay({
               cx={screen.x}
               cy={screen.y}
               r={5}
-              fill={isFixed ? "#ef4444" : isConstrained ? "#22c55e" : "#3b82f6"}
+              fill={isSelected ? theme.cad.selectedStroke : (isFixed ? "#ef4444" : isConstrained ? "#22c55e" : "#3b82f6")}
               stroke="#ffffff"
-              strokeWidth="1.5"
+              strokeWidth={isSelected ? 2 : 1.5}
               pointerEvents="none"
             />
           </g>

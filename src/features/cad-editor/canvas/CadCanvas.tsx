@@ -131,18 +131,8 @@ export function CadCanvas({
 }: CadCanvasProps) {
   const { theme } = useTheme();
 
-  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
   const showSelection = tool === "select";
-
-  const selectedIds = new Set(
-    showSelection
-      ? primary?.groupId
-        ? document.shapes
-            .filter((shape) => shape.groupId === primary.groupId)
-            .map((shape) => shape.id)
-        : selection.ids
-      : [],
-  );
+  const selectedIds = new Set(showSelection ? selection.ids : []);
 
   function resolveCanvasCursor() {
     if (isPanning) return "grabbing";
@@ -221,6 +211,7 @@ export function CadCanvas({
             document={document}
             documentHeight={document.height}
             view={view}
+            selection={selection}
             onPointerDown={onConstraintPointerDown}
           />
         )}

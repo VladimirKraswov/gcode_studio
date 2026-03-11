@@ -94,6 +94,11 @@ export function ShapePropertiesPanel({
     [document.shapes, selection.primaryId]
   );
 
+  const selectedPoint = useMemo(
+    () => document.points.find(p => p.id === selection.primaryId) ?? null,
+    [document.points, selection.primaryId]
+  );
+
   const selectedGroup = useMemo(
     () =>
       selectedShape?.groupId
@@ -107,11 +112,70 @@ export function ShapePropertiesPanel({
     [selectedShape, document],
   );
 
-  if (!selectedShape) {
+  if (!selectedShape && !selectedPoint) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <FiInfo size={32} className="text-border mb-3" />
         <div className="text-xs text-text-muted">Выберите объект на холсте для просмотра свойств</div>
+      </div>
+    );
+  }
+
+  if (selectedPoint) {
+    return (
+      <div className="flex flex-col gap-4 p-1">
+        <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
+          <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
+            <FiMove size={14} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-bold text-text truncate">
+              Точка {selectedPoint.id}
+            </div>
+            <div className="text-[11px] text-text-muted capitalize">
+              Vertex
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <SectionTitle title="Геометрия" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label>X</Label>
+                <Input
+                  type="number"
+                  value={selectedPoint.x.toFixed(3)}
+                  disabled
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Y</Label>
+                <Input
+                  type="number"
+                  value={selectedPoint.y.toFixed(3)}
+                  disabled
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-4">
+              <input
+                type="checkbox"
+                id="isFixed"
+                checked={!!selectedPoint.isFixed}
+                onChange={(e) => {
+                  setDocument(prev => ({
+                    ...prev,
+                    points: prev.points.map(p => p.id === selectedPoint.id ? { ...p, isFixed: e.target.checked } : p)
+                  }));
+                }}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="isFixed" className="mb-0 cursor-pointer">Закрепить (Lock)</Label>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -146,14 +210,14 @@ export function ShapePropertiesPanel({
     <div className="flex flex-col gap-4 p-1">
       <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
         <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
-          {getShapeIcon(selectedShape.type)}
+          {selectedShape ? getShapeIcon(selectedShape.type) : null}
         </div>
         <div className="min-w-0">
           <div className="text-[13px] font-bold text-text truncate">
-            {selectedShape.name}
+            {selectedShape?.name}
           </div>
           <div className="text-[11px] text-text-muted capitalize">
-            {selectedShape.type}
+            {selectedShape?.type}
           </div>
         </div>
       </div>
@@ -165,7 +229,7 @@ export function ShapePropertiesPanel({
             <div className="grid gap-1.5">
               <Label>Имя объекта</Label>
               <Input
-                value={selectedShape.name}
+                value={selectedShape?.name || ""}
                 onChange={(e) => updateSelected({ name: e.target.value })}
               />
             </div>
@@ -173,7 +237,7 @@ export function ShapePropertiesPanel({
               <input
                 type="checkbox"
                 id="isConstruction"
-                checked={!!selectedShape.isConstruction}
+                checked={!!selectedShape?.isConstruction}
                 onChange={(e) => updateSelected({ isConstruction: e.target.checked })}
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
               />
@@ -189,7 +253,7 @@ export function ShapePropertiesPanel({
               <Label>Глубина Z</Label>
               <Input
                 type="number"
-                value={selectedShape.cutZ ?? document.cutZ}
+                value={selectedShape?.cutZ ?? document.cutZ}
                 onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
               />
             </div>
@@ -199,7 +263,7 @@ export function ShapePropertiesPanel({
                 type="number"
                 min="0.1"
                 step="0.1"
-                value={selectedShape.strokeWidth ?? 1}
+                value={selectedShape?.strokeWidth ?? 1}
                 onChange={(e) =>
                   updateSelected({
                     strokeWidth: Math.max(0.1, Number(e.target.value) || 0.1),
