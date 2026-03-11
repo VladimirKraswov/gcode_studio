@@ -17,7 +17,7 @@ function renumberToolpaths(toolpaths: Toolpath[]): Toolpath[] {
 }
 
 export async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
-  const visibleShapes = collectVisibleShapes(doc);
+  const visibleShapes = collectVisibleShapes(doc).filter(s => !s.isConstruction);
   const rawToolpaths: Array<
     Toolpath & {
       __shapeOrder: number;

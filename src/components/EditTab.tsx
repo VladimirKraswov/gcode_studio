@@ -177,6 +177,7 @@ export default function EditTab(props: EditTabProps) {
             isPanning={editor.isPanning}
             isTransforming={editor.isTransforming}
             hasDraft={hasDraft}
+            dof={editor.dof}
           />
         </div>
 

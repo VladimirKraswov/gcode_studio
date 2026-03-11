@@ -68,6 +68,27 @@ function computeAllResiduals(points: SketchPoint[], constraints: SketchConstrain
       case "perpendicular":
         residuals.push(Equations.perpendicular(pts[0], pts[1], pts[2], pts[3]));
         break;
+      case "distance-x":
+        residuals.push(Equations.distanceX(pts[0], pts[1], c.value ?? 0));
+        break;
+      case "distance-y":
+        residuals.push(Equations.distanceY(pts[0], pts[1], c.value ?? 0));
+        break;
+      case "equal":
+        residuals.push(Equations.equal(pts[0], pts[1], pts[2], pts[3]));
+        break;
+      case "tangent":
+        residuals.push(Equations.tangent(pts[0], c.value ?? 0, pts[1], pts[2]));
+        break;
+      case "symmetric":
+        residuals.push(Equations.symmetry(pts[0], pts[1], pts[2], pts[3]));
+        break;
+      case "angle":
+        residuals.push(Equations.angle(pts[0], pts[1], pts[2], pts[3], c.value ?? 0));
+        break;
+      case "radius":
+        residuals.push(Equations.radius(pts[0], pts[1], c.value ?? 0));
+        break;
     }
   }
   return residuals;

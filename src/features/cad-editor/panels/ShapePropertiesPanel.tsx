@@ -169,6 +169,16 @@ export function ShapePropertiesPanel({
                 onChange={(e) => updateSelected({ name: e.target.value })}
               />
             </div>
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                id="isConstruction"
+                checked={!!selectedShape.isConstruction}
+                onChange={(e) => updateSelected({ isConstruction: e.target.checked })}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="isConstruction" className="mb-0 cursor-pointer">Вспомогательная геометрия</Label>
+            </div>
           </div>
         </div>
 

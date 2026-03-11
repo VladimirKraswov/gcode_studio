@@ -29,6 +29,10 @@ export function CircleShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
+  const strokeColor = shape.isConstruction
+    ? (isSelected ? "#60a5fa" : "#3b82f6")
+    : (isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke);
+
   return (
     <>
       <circle
@@ -36,8 +40,9 @@ export function CircleShapeView({
         cy={p.y}
         r={shape.radius * view.scale}
         fill="none"
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        strokeDasharray={shape.isConstruction ? "4 4" : undefined}
         pointerEvents="none"
       />
 

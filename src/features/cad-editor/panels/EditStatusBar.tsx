@@ -8,6 +8,7 @@ type EditStatusBarProps = {
   isPanning: boolean;
   isTransforming: boolean;
   hasDraft: boolean;
+  dof?: number;
 };
 
 export function EditStatusBar({
@@ -17,6 +18,7 @@ export function EditStatusBar({
   isPanning,
   isTransforming,
   hasDraft,
+  dof,
 }: EditStatusBarProps) {
   const interactionLabel = isTransforming
     ? "Трансформация"
@@ -42,6 +44,12 @@ export function EditStatusBar({
         </Badge>
         <span className="h-3 w-px bg-border" />
         <span className="font-medium">Объектов в сцене: <span className="text-text">{objectCount}</span></span>
+        {typeof dof === "number" && (
+           <>
+             <span className="h-3 w-px bg-border" />
+             <span className="font-medium">DoF: <span className={dof === 0 ? "text-success font-bold" : "text-primary font-bold"}>{dof}</span></span>
+           </>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

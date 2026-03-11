@@ -37,7 +37,8 @@ export type SketchConstraintType =
   | "distance-y"
   | "angle"
   | "radius"
-  | "diameter";
+  | "diameter"
+  | "lock";
 
 export type SketchConstraint = {
   id: string;
@@ -129,6 +130,7 @@ export type SketchBase = {
   cutZ?: number | null;
   strokeWidth?: number;
   visible: boolean;
+  isConstruction?: boolean;
   groupId: string | null;
   camSettings?: Partial<SketchCamSettings>;
 };

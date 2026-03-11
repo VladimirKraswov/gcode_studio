@@ -92,17 +92,25 @@ export function CadConstraintOverlay({
         const isFixed = p.isFixed;
 
         return (
-          <circle
-            key={p.id}
-            cx={screen.x}
-            cy={screen.y}
-            r={5}
-            fill={isFixed ? "#ef4444" : isConstrained ? "#22c55e" : "#3b82f6"}
-            stroke="#ffffff"
-            strokeWidth="1.5"
-            onPointerDown={(e) => onPointerDown?.(e, "point:" + p.id)}
-            style={{ cursor: 'move', pointerEvents: 'all' }}
-          />
+          <g key={p.id}>
+            <circle
+              cx={screen.x}
+              cy={screen.y}
+              r={12}
+              fill="transparent"
+              onPointerDown={(e) => onPointerDown?.(e, "point:" + p.id)}
+              style={{ cursor: 'move', pointerEvents: 'all' }}
+            />
+            <circle
+              cx={screen.x}
+              cy={screen.y}
+              r={5}
+              fill={isFixed ? "#ef4444" : isConstrained ? "#22c55e" : "#3b82f6"}
+              stroke="#ffffff"
+              strokeWidth="1.5"
+              pointerEvents="none"
+            />
+          </g>
         );
       })}
     </g>

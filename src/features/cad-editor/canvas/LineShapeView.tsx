@@ -32,6 +32,10 @@ export function LineShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
+  const strokeColor = shape.isConstruction
+    ? (isSelected ? "#60a5fa" : "#3b82f6")
+    : (isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke);
+
   return (
     <>
       <line
@@ -39,8 +43,9 @@ export function LineShapeView({
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        strokeDasharray={shape.isConstruction ? "4 4" : undefined}
         strokeLinecap="round"
         pointerEvents="none"
       />
