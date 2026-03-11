@@ -7,12 +7,21 @@ interface SliderProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const Slider: React.FC<SliderProps> = ({ label, value, className = "", ...props }) => {
   return (
-    <div className="ui-panel-inset mb-2.5 p-3">
+    <div className="ui-panel-inset mb-2.5 p-3 bg-panel-muted border border-border rounded-lg">
       <div className="mb-2 flex justify-between gap-3">
-        <span className="text-[13px] font-bold text-text">{label}</span>
-        <span className="text-[13px] font-extrabold text-primary-text">{value}</span>
+        <span className="text-[13px] font-bold text-text">
+          {label}
+        </span>
+        <span className="text-[13px] font-extrabold text-primary-text">
+          {value}
+        </span>
       </div>
-      <input type="range" className={`w-full ${className}`} {...props} />
+
+      <input
+        type="range"
+        className={`w-full ${className}`}
+        {...props}
+      />
     </div>
   );
 };

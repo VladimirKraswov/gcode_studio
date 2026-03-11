@@ -8,7 +8,7 @@ type ToolHeadProps = {
   toScenePoint: (p: Point3) => THREE.Vector3;
 };
 
-export default function ToolHead({
+export function ToolHead({
   position,
   cutting,
   toolDiameter = 3,

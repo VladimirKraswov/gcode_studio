@@ -1,5 +1,8 @@
 import type { Bounds, PlacementMode, StockDimensions } from "@/types/gcode";
 import { getStockPlacement, toSceneCoords } from "@/shared/utils/common";
+import { useTheme } from "@/shared/hooks/useTheme";
+import { useMemo } from "react";
+import * as THREE from "three";
 
 type WorkAreaProps = {
   bounds: Bounds;
@@ -8,18 +11,19 @@ type WorkAreaProps = {
 };
 
 export function WorkArea({ bounds, stock, placementMode }: WorkAreaProps) {
+  const { theme } = useTheme();
   const placement = getStockPlacement(bounds, stock, placementMode);
   const center = toSceneCoords(placement.centerGcode);
 
+  const colors = useMemo(() => ({
+    grid: new THREE.Color(theme.cad.gridMajor),
+    lines: new THREE.Color(theme.cad.gridMinor),
+  }), [theme]);
+
   return (
     <group>
-      {/* <mesh position={[center.x, -stock.thickness - 0.2, center.z]} receiveShadow>
-        <boxGeometry args={[stock.width + 20, 0.4, stock.height + 20]} />
-        <meshStandardMaterial color="#e2e8f0" metalness={0.05} roughness={0.85} />
-      </mesh> */}
-
       <gridHelper
-        args={[Math.max(stock.width + 20, stock.height + 20), 20, 0x94a3b8, 0xcbd5e1]}
+        args={[Math.max(stock.width + 20, stock.height + 20), 20, colors.grid, colors.lines]}
         position={[center.x, -stock.thickness, center.z]}
       />
     </group>

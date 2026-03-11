@@ -34,14 +34,16 @@ export function CollapsibleSection({
           collapsed ? "mb-0" : "mb-3.5"
         }`}
       >
-        <div className="flex items-center gap-2.5 text-base font-bold text-text">
+        <div className="m-0 flex items-center gap-2.5 text-base font-bold text-text">
           <Badge variant="primary" icon={icon} />
           <span>{title}</span>
         </div>
+
         <div className="text-text-soft">
           {collapsed ? <FiChevronDown size={18} /> : <FiChevronUp size={18} />}
         </div>
       </div>
+
       {!collapsed && children}
     </Panel>
   );

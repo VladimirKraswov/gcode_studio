@@ -10,22 +10,8 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 }
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
-  (
-    {
-      variant = "ghost",
-      size = "md",
-      icon,
-      active = false,
-      className = "",
-      type = "button",
-      ...props
-    },
-    ref,
-  ) => {
-    const baseStyles =
-      "inline-flex items-center justify-center shrink-0 rounded-lg border transition-all duration-150 " +
-      "disabled:opacity-40 disabled:cursor-not-allowed " +
-      "focus:outline-none focus:ring-2 focus:ring-[var(--ring)]";
+  ({ variant = "ghost", size = "md", icon, active, className = "", ...props }, ref) => {
+    const baseStyles = "inline-flex items-center justify-center shrink-0 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed";
 
     const sizeStyles = {
       sm: "h-8 w-8 text-xs",
@@ -35,29 +21,24 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 
     const variantStyles = {
       ghost: active
-        ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]"
-        : "border-[var(--color-border)] bg-[var(--color-panel-solid)] text-[var(--color-text-muted)] hover:bg-[var(--color-panel-muted)] hover:text-[var(--color-text)]",
-      primary:
-        "border-[var(--color-primary)] bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-text)]",
-      secondary:
-        "border-[var(--color-border)] bg-[var(--color-panel-solid)] text-[var(--color-text)] hover:bg-[var(--color-panel-muted)]",
-      danger:
-        "border-[var(--color-danger)] bg-transparent text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)]",
-      success:
-        "border-[var(--color-success)] bg-transparent text-[var(--color-success)] hover:bg-[var(--color-success-soft)]",
+        ? "bg-primary-soft text-primary-text border border-primary/20"
+        : "text-text-muted hover:text-text hover:bg-panel-muted",
+      primary: "bg-primary text-white hover:bg-primary-text",
+      secondary: "bg-panel-solid text-text border border-border hover:bg-panel-muted",
+      danger: "text-danger hover:bg-danger-soft",
+      success: "text-success hover:bg-success-soft",
     };
 
     return (
       <button
         ref={ref}
-        type={type}
         className={`${baseStyles} ${sizeStyles[size]} ${variantStyles[variant]} ${className}`}
         {...props}
       >
         {icon}
       </button>
     );
-  },
+  }
 );
 
 IconButton.displayName = "IconButton";

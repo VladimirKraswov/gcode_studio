@@ -16,8 +16,9 @@ import { CameraDebug } from "./CameraDebug";
 import { MaterialRemovalMesh } from "./MaterialRemovalMesh";
 import { ProgressBillboard } from "./ProgressBillboard";
 import { SimpleLine } from "./SimpleLine";
-import ToolHead from "./ToolHead";
+import { ToolHead } from "./ToolHead";
 import { WorkArea } from "./WorkArea";
+import { useTheme } from "@/shared/hooks/useTheme";
 
 type PathSceneProps = {
   parsed: ParsedGCode;
@@ -32,12 +33,6 @@ type PathSceneProps = {
   toolDiameter?: number;
   onCameraUpdate: (camera: CameraInfo) => void;
 };
-
-function readCssVar(name: string, fallback: string) {
-  if (typeof window === "undefined") return fallback;
-  const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
-}
 
 function buildAxisLine(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
   return [from.clone(), to.clone()];
@@ -91,21 +86,24 @@ export function PathScene({
   onCameraUpdate,
 }: PathSceneProps) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const { theme, isDark } = useTheme();
 
-  const theme = useMemo(
-    () => ({
-      bgSoft: readCssVar("--color-bg-soft", "#f5efe8"),
-      border: readCssVar("--color-border", "#e8dccc"),
-      primary: readCssVar("--color-primary", "#d97706"),
-      primarySoft: readCssVar("--color-primary-soft", "#fef3c7"),
-      primaryText: readCssVar("--color-primary-text", "#b45309"),
-      success: readCssVar("--color-success", "#10b981"),
-      danger: readCssVar("--color-danger", "#ef4444"),
-      text: readCssVar("--color-text", "#2c2c2c"),
-      textSoft: readCssVar("--color-text-soft", "#5a4f45"),
-    }),
-    [],
-  );
+  const colors = useMemo(() => ({
+    gridMinor: theme.cad.gridMinor,
+    gridMajor: theme.cad.gridMajor,
+    axisX: theme.cad.axisX,
+    axisY: theme.cad.axisY,
+    axisZ: isDark ? "#f59e0b" : "#b45309",
+    text: theme.text,
+    bg: theme.bgSoft,
+    border: theme.border,
+    primary: theme.primary,
+    primarySoft: isDark ? "rgba(245, 158, 11, 0.15)" : theme.primarySoft,
+    primaryText: theme.primaryText,
+    success: theme.success,
+    danger: theme.danger,
+    lineMuted: isDark ? "#44403c" : "#e2e8f0",
+  }), [theme, isDark]);
 
   const placement = useMemo(
     () => getStockPlacement(parsed.bounds, stock, placementMode),
@@ -164,8 +162,8 @@ export function PathScene({
 
       xTicks.push(
         <group key={`x-tick-${value}`}>
-          <Line points={[from, to]} color={theme.danger} lineWidth={1} />
-          <AxisLabel position={labelPos} color={theme.danger} fontSize={tickFontSize}>
+          <Line points={[from, to]} color={colors.axisX} lineWidth={1} />
+          <AxisLabel position={labelPos} color={colors.axisX} fontSize={tickFontSize}>
             {value}
           </AxisLabel>
         </group>,
@@ -186,8 +184,8 @@ export function PathScene({
 
       yTicks.push(
         <group key={`y-tick-${value}`}>
-          <Line points={[from, to]} color={theme.success} lineWidth={1} />
-          <AxisLabel position={labelPos} color={theme.success} fontSize={tickFontSize}>
+          <Line points={[from, to]} color={colors.axisY} lineWidth={1} />
+          <AxisLabel position={labelPos} color={colors.axisY} fontSize={tickFontSize}>
             {value}
           </AxisLabel>
         </group>,
@@ -208,8 +206,8 @@ export function PathScene({
 
       zTicks.push(
         <group key={`z-tick-${value}`}>
-          <Line points={[from, to]} color={theme.primary} lineWidth={1} />
-          <AxisLabel position={labelPos} color={theme.primary} fontSize={tickFontSize}>
+          <Line points={[from, to]} color={colors.axisZ} lineWidth={1} />
+          <AxisLabel position={labelPos} color={colors.axisZ} fontSize={tickFontSize}>
             {value}
           </AxisLabel>
         </group>,
@@ -218,9 +216,9 @@ export function PathScene({
 
     return (
       <group>
-        <Line points={buildAxisLine(xNeg, xPos)} color={theme.danger} lineWidth={2} />
-        <Line points={buildAxisLine(yNeg, yPos)} color={theme.success} lineWidth={2} />
-        <Line points={buildAxisLine(zNeg, zPos)} color={theme.primary} lineWidth={2} />
+        <Line points={buildAxisLine(xNeg, xPos)} color={colors.axisX} lineWidth={2} />
+        <Line points={buildAxisLine(yNeg, yPos)} color={colors.axisY} lineWidth={2} />
+        <Line points={buildAxisLine(zNeg, zPos)} color={colors.axisZ} lineWidth={2} />
 
         {xTicks}
         {yTicks}
@@ -228,7 +226,7 @@ export function PathScene({
 
         <AxisLabel
           position={toScenePoint({ x: length + labelOffset, y: 0, z: 0 })}
-          color={theme.danger}
+          color={colors.axisX}
           fontSize={axisFontSize}
           anchorX="left"
         >
@@ -237,7 +235,7 @@ export function PathScene({
 
         <AxisLabel
           position={toScenePoint({ x: -length - labelOffset, y: 0, z: 0 })}
-          color={theme.danger}
+          color={colors.axisX}
           fontSize={axisFontSize}
           anchorX="right"
         >
@@ -246,7 +244,7 @@ export function PathScene({
 
         <AxisLabel
           position={toScenePoint({ x: 0, y: length + labelOffset, z: 0 })}
-          color={theme.success}
+          color={colors.axisY}
           fontSize={axisFontSize}
         >
           +Y
@@ -254,7 +252,7 @@ export function PathScene({
 
         <AxisLabel
           position={toScenePoint({ x: 0, y: -length - labelOffset, z: 0 })}
-          color={theme.success}
+          color={colors.axisY}
           fontSize={axisFontSize}
         >
           -Y
@@ -262,7 +260,7 @@ export function PathScene({
 
         <AxisLabel
           position={toScenePoint({ x: 0, y: 0, z: length + labelOffset })}
-          color={theme.primary}
+          color={colors.axisZ}
           fontSize={axisFontSize}
         >
           +Z
@@ -270,7 +268,7 @@ export function PathScene({
 
         <AxisLabel
           position={toScenePoint({ x: 0, y: 0, z: -length - labelOffset })}
-          color={theme.primary}
+          color={colors.axisZ}
           fontSize={axisFontSize}
         >
           -Z
@@ -278,7 +276,7 @@ export function PathScene({
 
         <AxisLabel
           position={origin}
-          color={theme.text}
+          color={colors.text}
           fontSize={originFontSize}
           anchorX="left"
           anchorY="bottom"
@@ -287,7 +285,7 @@ export function PathScene({
         </AxisLabel>
       </group>
     );
-  }, [parsed.bounds, stock, theme]);
+  }, [parsed.bounds, stock, colors]);
 
   const rulers = useMemo(() => {
     const { minX, maxX, minY, maxY, minZ, maxZ } = parsed.bounds;
@@ -339,7 +337,7 @@ export function PathScene({
           <Line
             key={`ruler-${idx}`}
             points={[start, end]}
-            color={theme.border}
+            color={colors.border}
             lineWidth={1}
             dashed
             dashScale={1}
@@ -349,7 +347,7 @@ export function PathScene({
         );
       })
       .filter(Boolean);
-  }, [parsed.bounds, theme]);
+  }, [parsed.bounds, colors]);
 
   const renderSegments = parsed.renderSegments;
   const renderedDoneCount = Math.floor((progress / 100) * renderSegments.length);
@@ -357,12 +355,12 @@ export function PathScene({
 
   return (
     <Canvas camera={{ position: [0, 300, 0], fov: 50 }} shadows={{ type: THREE.PCFShadowMap }}>
-      <color attach="background" args={[theme.bgSoft]} />
-      <ambientLight intensity={0.85} />
-      <hemisphereLight intensity={0.45} groundColor={theme.border} />
+      <color attach="background" args={[colors.bg]} />
+      <ambientLight intensity={isDark ? 0.4 : 0.85} />
+      <hemisphereLight intensity={0.45} groundColor={colors.border} />
       <directionalLight
         position={[80, 110, 60]}
-        intensity={1.25}
+        intensity={isDark ? 0.8 : 1.25}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -385,7 +383,7 @@ export function PathScene({
         <mesh position={[stockCenter.x, stockCenter.y, stockCenter.z]} receiveShadow renderOrder={1}>
           <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
           <meshStandardMaterial
-            color="#c89d67"
+            color={isDark ? "#78350f" : "#c89d67"}
             transparent
             opacity={0.7}
             roughness={0.6}
@@ -414,7 +412,7 @@ export function PathScene({
               key={`bg-${seg.id}`}
               start={seg.start}
               end={seg.end}
-              color={seg.mode === "G0" ? theme.primarySoft : theme.border}
+              color={seg.mode === "G0" ? colors.primarySoft : colors.lineMuted}
               opacity={0.55}
             />
           ))}
@@ -426,10 +424,10 @@ export function PathScene({
               end={seg.end}
               color={
                 seg.mode === "G0"
-                  ? theme.primary
+                  ? colors.primary
                   : seg.isCutting
-                    ? theme.text
-                    : theme.textSoft
+                    ? colors.text
+                    : colors.primaryText
               }
               opacity={1}
             />
@@ -440,7 +438,7 @@ export function PathScene({
               <SimpleLine
                 start={currentState.segment.start}
                 end={currentState.position}
-                color={currentState.segment.mode === "G0" ? theme.primaryText : theme.danger}
+                color={currentState.segment.mode === "G0" ? colors.primaryText : colors.danger}
                 opacity={1}
               />
               <ProgressBillboard position={currentState.position} progress={progress} />
