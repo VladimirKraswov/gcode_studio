@@ -5,7 +5,7 @@ import type {
 } from "@/features/cad-editor/model/types";
 import { buildOffset } from "../algorithms/offsetBuilder";
 import { generateBestPocket } from "../algorithms/pocketing";
-import type { Toolpath } from "@/types";
+import type { Toolpath } from "@/types/gcode";
 import type { GeometryContour } from "./shapeGeometry";
 
 type ResolvedCamSettings = {

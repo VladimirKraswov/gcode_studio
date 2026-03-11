@@ -1,7 +1,7 @@
 import type { SketchDocument, SketchShape } from "@/features/cad-editor/model/types";
 import { collectVisibleShapes } from "@/features/cad-editor/model/grouping";
 import { optimizeTravel } from "../algorithms/travelOptimizer";
-import type { Toolpath } from "@/types";
+import type { Toolpath } from "@/types/gcode";
 import { extractShapeContours } from "./shapeGeometry";
 import { planContourOperationFromGeometry } from "./operationPlanner";
 

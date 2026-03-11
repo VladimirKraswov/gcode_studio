@@ -54,13 +54,11 @@ export function RightPanelContainer() {
           <div className="flex flex-col gap-4">
             <ArrayToolPanel
               document={editDocument}
-              setDocument={setEditDocument}
               selection={selection}
               onSelectionChange={setSelection}
             />
             <TextToolPanel
               document={editDocument}
-              setDocument={setEditDocument}
               selection={selection}
               onSelectionChange={setSelection}
             />
@@ -79,28 +77,30 @@ export function RightPanelContainer() {
 
   return (
     <RightPanel>
-      <CollapsibleSection title="Состояние" icon={<FiInfo size={18} />}>
-        <InfoPanelSection
-          bounds={parsed?.bounds ?? { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 }}
-          stock={stock}
-          parsedStats={{
-            totalLines: parsed?.stats?.totalLines ?? 0,
-            totalMoves: parsed?.stats?.totalMoves ?? 0,
-            rapidMoves: parsed?.stats?.rapidMoves ?? 0,
-            workMoves: parsed?.stats?.workMoves ?? 0,
-            cuttingMoves: parsed?.stats?.cuttingMoves ?? 0,
-            renderMoves: parsed?.stats?.renderMoves ?? 0,
-            renderStep: parsed?.stats?.renderStep ?? 0,
-          }}
-          currentState={currentState}
-          cameraInfo={cameraInfo}
-          totalLength={parsed?.totalLength ?? 0}
-        />
-      </CollapsibleSection>
+      <div className="flex flex-col gap-4">
+        <CollapsibleSection title="Состояние" icon={<FiInfo size={18} />}>
+          <InfoPanelSection
+            bounds={parsed?.bounds ?? { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 }}
+            stock={stock}
+            parsedStats={parsed?.stats ?? {
+              totalLines: 0,
+              totalMoves: 0,
+              rapidMoves: 0,
+              workMoves: 0,
+              cuttingMoves: 0,
+              renderMoves: 0,
+              renderStep: 0,
+            }}
+            currentState={currentState}
+            cameraInfo={cameraInfo}
+            totalLength={parsed?.totalLength ?? 0}
+          />
+        </CollapsibleSection>
 
-      <CollapsibleSection title="Статистика" icon={<FiBarChart2 size={18} />}>
-        <GCodeStatsSection parsed={parsed!} />
-      </CollapsibleSection>
+        <CollapsibleSection title="Статистика" icon={<FiBarChart2 size={18} />}>
+          <GCodeStatsSection parsed={parsed ?? undefined} />
+        </CollapsibleSection>
+      </div>
     </RightPanel>
   );
 }

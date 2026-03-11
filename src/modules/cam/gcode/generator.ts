@@ -17,7 +17,7 @@ import {
   isInsideAnyBridge,
   pointAtLength,
 } from "../algorithms/bridges";
-import type { Toolpath, ToolpathPoint } from "@/types";
+import type { Toolpath, ToolpathPoint } from "@/types/gcode";
 
 const EPS = 1e-6;
 

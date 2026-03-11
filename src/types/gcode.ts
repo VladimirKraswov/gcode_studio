@@ -9,8 +9,27 @@ export type Point3 = {
   z: number;
 };
 
-export type ToolPoint = Point3 & {
-  f: number;
+export type ToolPoint = {
+  x: number;
+  y: number;
+  z: number;
+  f?: number;
+};
+
+export type ToolpathPoint = ToolPoint;
+
+export type Toolpath = {
+  name?: string;
+  points: ToolPoint[];
+  closed: boolean;
+  useRamping: boolean;
+  rampTurns: number;
+  useBridges: boolean;
+  bridgeCount: number;
+  bridgeWidth: number;
+  bridgeHeight: number;
+  cutZ: number;
+  stepdown: number;
 };
 
 export type Segment = {
@@ -41,6 +60,9 @@ export type ParsedStats = {
   cuttingMoves: number;
   renderMoves: number;
   renderStep: number;
+  lines?: number;
+  commands?: number;
+  warnings?: number;
 };
 
 export type ParsedGCode = {

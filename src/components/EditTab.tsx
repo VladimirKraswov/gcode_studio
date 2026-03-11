@@ -12,7 +12,7 @@ import {
   type ViewTransform,
   createDefaultCadRegistry,
   CadRegistryProvider,
-} from "../modules/cad";
+} from "@/features/cad-editor";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 
 type EditTabProps = {
