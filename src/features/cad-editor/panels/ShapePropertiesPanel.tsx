@@ -9,15 +9,22 @@ import {
   FiRefreshCw,
   FiType,
   FiInfo,
+  FiSettings,
+  FiLayers,
+  FiTool,
 } from "react-icons/fi";
-import { createDefaultCamSettings } from "../model/document";
+
+import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
+
+import { createDefaultCamSettings, updateShape } from "../model/document";
 import type {
   SketchCamSettings,
   SketchDocument,
   SketchShape,
 } from "../model/types";
-import { updateShape } from "../model/document";
+
 import type { SelectionState } from "../model/selection";
+
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
 import { Button } from "@/shared/components/ui/Button";
@@ -29,14 +36,6 @@ export type ShapePropertiesPanelProps = {
 };
 
 const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <div className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wider text-text-muted first:mt-0">
-      {title}
-    </div>
-  );
-}
 
 function getShapeIcon(type: SketchShape["type"]) {
   switch (type) {
@@ -89,6 +88,7 @@ export function ShapePropertiesPanel({
   setDocument,
   selection,
 }: ShapePropertiesPanelProps) {
+
   const selectedShape = useMemo(
     () => document.shapes.find(s => s.id === selection.primaryId) ?? null,
     [document.shapes, selection.primaryId]
@@ -97,7 +97,7 @@ export function ShapePropertiesPanel({
   const selectedGroup = useMemo(
     () =>
       selectedShape?.groupId
-        ? document.groups.find((group) => group.id === selectedShape.groupId) ?? null
+        ? document.groups.find(g => g.id === selectedShape.groupId) ?? null
         : null,
     [document.groups, selectedShape?.groupId],
   );
@@ -111,15 +111,18 @@ export function ShapePropertiesPanel({
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <FiInfo size={32} className="text-border mb-3" />
-        <div className="text-xs text-text-muted">Выберите объект на холсте для просмотра свойств</div>
+        <div className="text-xs text-text-muted">
+          Выберите объект на холсте для просмотра свойств
+        </div>
       </div>
     );
   }
 
   function updateSelected(patch: Record<string, any>) {
     if (!selectedShape) return;
-    setDocument((prev) =>
-      updateShape(prev, selectedShape.id, patch as Partial<SketchShape>),
+
+    setDocument(prev =>
+      updateShape(prev, selectedShape.id, patch as Partial<SketchShape>)
     );
   }
 
@@ -129,25 +132,30 @@ export function ShapePropertiesPanel({
       | ((prev: SketchCamSettings) => SketchCamSettings),
   ) {
     if (!selectedShape) return;
+
     const current = resolveShapeCamSettings(selectedShape, document);
+
     const next =
       typeof patch === "function"
         ? patch(current)
         : { ...current, ...patch };
 
-    setDocument((prev) =>
+    setDocument(prev =>
       updateShape(prev, selectedShape.id, {
         camSettings: next,
-      } as Partial<SketchShape>),
+      })
     );
   }
 
   return (
-    <div className="flex flex-col gap-4 p-1">
+    <div className="flex flex-col gap-3">
+
+      {/* HEADER */}
       <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
         <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
           {getShapeIcon(selectedShape.type)}
         </div>
+
         <div className="min-w-0">
           <div className="text-[13px] font-bold text-text truncate">
             {selectedShape.name}
@@ -158,112 +166,151 @@ export function ShapePropertiesPanel({
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <SectionTitle title="Идентификация" />
-          <div className="space-y-3">
-            <div className="grid gap-1.5">
-              <Label>Имя объекта</Label>
-              <Input
-                value={selectedShape.name}
-                onChange={(e) => updateSelected({ name: e.target.value })}
-              />
-            </div>
-          </div>
+      {/* IDENTIFICATION */}
+      <CollapsibleSection
+        title="Идентификация"
+        icon={<FiLayers size={16} />}
+        defaultCollapsed={false}
+      >
+        <div className="grid gap-2">
+          <Label>Имя объекта</Label>
+
+          <Input
+            value={selectedShape.name}
+            onChange={(e) =>
+              updateSelected({ name: e.target.value })
+            }
+          />
         </div>
+      </CollapsibleSection>
 
-        <div>
-          <SectionTitle title="Геометрия" />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label>Глубина Z</Label>
-              <Input
-                type="number"
-                value={selectedShape.cutZ ?? document.cutZ}
-                onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label>Толщина линии</Label>
-              <Input
-                type="number"
-                min="0.1"
-                step="0.1"
-                value={selectedShape.strokeWidth ?? 1}
-                onChange={(e) =>
-                  updateSelected({
-                    strokeWidth: Math.max(0.1, Number(e.target.value) || 0.1),
-                  })
-                }
-              />
-            </div>
+      {/* GEOMETRY */}
+      <CollapsibleSection
+        title="Геометрия"
+        icon={<FiSettings size={16} />}
+        defaultCollapsed={false}
+      >
+        <div className="grid grid-cols-2 gap-3">
+
+          <div className="grid gap-1">
+            <Label>Глубина Z</Label>
+
+            <Input
+              type="number"
+              value={selectedShape.cutZ ?? document.cutZ}
+              onChange={(e) =>
+                updateSelected({
+                  cutZ: Number(e.target.value) || 0,
+                })
+              }
+            />
           </div>
+
+          <div className="grid gap-1">
+            <Label>Толщина линии</Label>
+
+            <Input
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={selectedShape.strokeWidth ?? 1}
+              onChange={(e) =>
+                updateSelected({
+                  strokeWidth: Math.max(
+                    0.1,
+                    Number(e.target.value) || 0.1
+                  ),
+                })
+              }
+            />
+          </div>
+
         </div>
+      </CollapsibleSection>
 
-        {selectedGroup?.array && (
-          <div>
-            <SectionTitle title="Массив" />
-            <div className="p-3 bg-primary-soft/30 border border-primary-soft rounded-lg space-y-3">
-              <div className="flex items-center gap-2 text-[12px] font-bold text-primary">
-                <FiRefreshCw size={14} />
-                {selectedGroup.array.type === "linear"
-                  ? "Линейный массив"
-                  : "Круговой массив"}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full bg-panel-solid"
-                onClick={() => openArrayEditor(selectedGroup.id)}
-              >
-                <FiEdit3 size={14} className="mr-2" />
-                Настроить массив
-              </Button>
+      {/* ARRAY */}
+      {selectedGroup?.array && (
+        <CollapsibleSection
+          title="Массив"
+          icon={<FiRefreshCw size={16} />}
+        >
+          <div className="p-3 bg-primary-soft/30 border border-primary-soft rounded-lg space-y-3">
+
+            <div className="flex items-center gap-2 text-[12px] font-bold text-primary">
+              <FiRefreshCw size={14} />
+
+              {selectedGroup.array.type === "linear"
+                ? "Линейный массив"
+                : "Круговой массив"}
             </div>
-          </div>
-        )}
 
-        <div>
-          <SectionTitle title="CAM Обработка" />
-          <div className="space-y-3">
-            <div className="grid gap-1.5">
-              <Label>Тип операции</Label>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full bg-panel-solid"
+              onClick={() =>
+                openArrayEditor(selectedGroup.id)
+              }
+            >
+              <FiEdit3 size={14} className="mr-2" />
+              Настроить массив
+            </Button>
+
+          </div>
+        </CollapsibleSection>
+      )}
+
+      {/* CAM */}
+      <CollapsibleSection
+        title="CAM Обработка"
+        icon={<FiTool size={16} />}
+      >
+        <div className="space-y-3">
+
+          <div className="grid gap-1">
+            <Label>Тип операции</Label>
+
+            <select
+              value={shapeCamSettings?.operation}
+              onChange={(e) =>
+                updateSelectedCam({
+                  operation: e.target.value as SketchCamSettings["operation"],
+                })
+              }
+              className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm"
+            >
+              <option value="follow-path">Follow path</option>
+              <option value="profile-inside">Inside</option>
+              <option value="profile-outside">Outside</option>
+              <option value="pocket">Pocket</option>
+            </select>
+
+          </div>
+
+          {shapeCamSettings?.operation !== "follow-path" && (
+            <div className="grid gap-1">
+
+              <Label>Направление</Label>
+
               <select
-                value={shapeCamSettings?.operation}
+                value={shapeCamSettings?.direction}
                 onChange={(e) =>
                   updateSelectedCam({
-                    operation: e.target.value as SketchCamSettings["operation"],
+                    direction: e.target.value as SketchCamSettings["direction"],
                   })
                 }
-                className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm"
               >
-                <option value="follow-path">По контуру (Follow path)</option>
-                <option value="profile-inside">Внутри (Inside)</option>
-                <option value="profile-outside">Снаружи (Outside)</option>
-                <option value="pocket">Карман (Pocket)</option>
+                <option value="climb">Climb</option>
+                <option value="conventional">Conventional</option>
               </select>
-            </div>
 
-            {shapeCamSettings?.operation !== "follow-path" && (
-              <div className="grid gap-1.5">
-                <Label>Направление</Label>
-                <select
-                  value={shapeCamSettings?.direction}
-                  onChange={(e) =>
-                    updateSelectedCam({
-                      direction: e.target.value as SketchCamSettings["direction"],
-                    })
-                  }
-                  className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="climb">Попутное (Climb)</option>
-                  <option value="conventional">Встречное (Conventional)</option>
-                </select>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+
         </div>
-      </div>
+      </CollapsibleSection>
+
     </div>
   );
 }

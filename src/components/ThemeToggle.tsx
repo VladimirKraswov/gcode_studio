@@ -7,7 +7,6 @@ export function ThemeToggle() {
   return (
     <button onClick={toggleTheme} className="ui-btn-ghost">
       {isDark ? <FiSun size={16} /> : <FiMoon size={16} />}
-      <span>{isDark ? "Светлая" : "Тёмная"}</span>
     </button>
   );
 }

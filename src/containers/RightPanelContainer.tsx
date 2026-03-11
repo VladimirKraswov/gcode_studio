@@ -43,24 +43,20 @@ export function RightPanelContainer() {
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
           {cadTab === "cad" && (
             <div className="flex flex-col gap-4">
-              <CollapsibleSection title="Свойства объекта" icon={<FiEdit size={18} />}>
-                <ShapePropertiesPanel
-                  document={editDocument}
-                  setDocument={setEditDocument}
-                  selection={selection}
-                />
-              </CollapsibleSection>
+              <ShapePropertiesPanel
+                document={editDocument}
+                setDocument={setEditDocument}
+                selection={selection}
+              />
             </div>
           )}
 
           {cadTab === "cam" && (
             <div className="flex flex-col gap-4">
-              <CollapsibleSection title="Настройки документа" icon={<FiSettings size={18} />}>
-                <DocumentSettingsPanel
-                  document={editDocument}
-                  setDocument={setEditDocument}
-                />
-              </CollapsibleSection>
+              <DocumentSettingsPanel
+                document={editDocument}
+                setDocument={setEditDocument}
+              />
             </div>
           )}
         </div>
@@ -71,7 +67,6 @@ export function RightPanelContainer() {
   return (
     <RightPanel>
       <div className="flex flex-col gap-4">
-        <CollapsibleSection title="Состояние" icon={<FiInfo size={18} />}>
           <InfoPanelSection
             bounds={parsed?.bounds ?? { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 }}
             stock={stock}
@@ -88,11 +83,7 @@ export function RightPanelContainer() {
             cameraInfo={cameraInfo}
             totalLength={parsed?.totalLength ?? 0}
           />
-        </CollapsibleSection>
-
-        <CollapsibleSection title="Статистика" icon={<FiBarChart2 size={18} />}>
           <GCodeStatsSection parsed={parsed ?? undefined} />
-        </CollapsibleSection>
       </div>
     </RightPanel>
   );

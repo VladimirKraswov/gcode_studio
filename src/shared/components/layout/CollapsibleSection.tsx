@@ -27,7 +27,7 @@ export function CollapsibleSection({
   };
 
   return (
-    <Panel className="p-4">
+    <Panel>
       <div
         onClick={handleToggle}
         className={`flex cursor-pointer items-center justify-between gap-3 ${
