@@ -1,7 +1,9 @@
 // src/components/AppHeader.tsx
-import { MainTabs } from "./MainTabs";
 import { ThemeToggle } from "./ThemeToggle";
 import type { MainTab } from "@/types/ui";
+import { FiCode, FiEye, FiTool, FiFolder, FiSave, FiDownload } from "react-icons/fi";
+import { IconButton } from "@/shared/components/ui/IconButton";
+import { Separator } from "@/shared/components/ui/Separator";
 
 type AppHeaderProps = {
   fileName: string;
@@ -14,27 +16,53 @@ export function AppHeader({
   fileName,
   activeTab,
   onTabChange,
-  tabMeta,
 }: AppHeaderProps) {
+  const tabs: { id: MainTab; label: string; icon: React.ReactNode }[] = [
+    { id: "edit", label: "Конструктор", icon: <FiTool size={14} /> },
+    { id: "view", label: "Превью", icon: <FiEye size={14} /> },
+    { id: "gcode", label: "G-code", icon: <FiCode size={14} /> },
+  ];
+
   return (
-    <div className="ui-panel flex shrink-0 items-center justify-between gap-3 bg-[var(--color-panel-solid)] px-3 py-2">
-      <div className="flex items-center gap-2">
-        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
-          {tabMeta.icon}
+    <div className="h-12 flex items-center justify-between px-3 bg-panel-solid border-b border-border shadow-sm">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 mr-2">
+          <div className="w-8 h-8 rounded bg-primary grid place-items-center text-white font-black text-lg">G</div>
+          <span className="font-bold text-sm tracking-tight hidden sm:inline">GCode Studio</span>
         </div>
 
-        <span className="text-sm font-semibold text-[var(--color-text)]">
-          {tabMeta.title}
-        </span>
+        <Separator orientation="vertical" className="h-6" />
 
-        <span className="ml-1 max-w-40 truncate whitespace-nowrap text-xs text-[var(--color-text-muted)]">
-          {fileName}
-        </span>
+        <div className="flex items-center gap-1 ml-2 overflow-hidden">
+          <IconButton icon={<FiFolder size={16} />} title="Открыть проект" />
+          <IconButton icon={<FiSave size={16} />} title="Сохранить проект" />
+          <IconButton icon={<FiDownload size={16} />} title="Экспорт G-code" />
+          <span className="text-[12px] font-medium text-text-muted truncate ml-2">
+            {fileName || "Untitled project"}
+          </span>
+        </div>
+      </div>
+
+      {/* Center Workflow Switcher */}
+      <div className="flex p-1 bg-panel-muted rounded-lg border border-border">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={`flex items-center gap-2 px-4 h-8 rounded text-[13px] font-bold transition-all ${
+              activeTab === tab.id
+                ? "bg-panel-solid text-primary shadow-sm border border-border"
+                : "text-text-muted hover:text-text"
+            }`}
+          >
+            {tab.icon}
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <MainTabs activeTab={activeTab} onChange={onTabChange} />
       </div>
     </div>
   );

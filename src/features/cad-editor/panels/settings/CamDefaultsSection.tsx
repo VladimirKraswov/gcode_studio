@@ -1,7 +1,9 @@
-// src/modules/cad/panels/settings/CamDefaultsSection.tsx
+// src/features/cad-editor/panels/settings/CamDefaultsSection.tsx
 import type { SketchCamSettings, SketchDocument } from "@/features/cad-editor/model/types";
 import { createDefaultCamSettings } from "@/features/cad-editor/model/document";
-import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
+import { Label } from "@/shared/components/ui/Label";
+import { Input } from "@/shared/components/ui/Input";
+import { Switch } from "@/shared/components/ui/Switch";
 
 type CamDefaultsSectionProps = {
   document: SketchDocument;
@@ -54,108 +56,62 @@ export function CamDefaultsSection({
   }
 
   return (
-    <CollapsibleCardBlock title="CAM defaults">
-      <div className="grid gap-2.5">
-        <div className="grid min-w-0 grid-cols-2 gap-2.5">
-          <label className="ui-label">
-            Операция по умолчанию
-            <select
-              value={defaultCamSettings.operation}
-              onChange={(e) =>
-                updateDefaultCam({
-                  operation: e.target.value as SketchCamSettings["operation"],
-                })
-              }
-              className="ui-input"
-            >
-              <option value="follow-path">Follow path</option>
-              <option value="profile-inside">Profile inside</option>
-              <option value="profile-outside">Profile outside</option>
-              <option value="pocket">Pocket</option>
-            </select>
-          </label>
-
-          <label className="ui-label">
-            Направление
-            <select
-              value={defaultCamSettings.direction}
-              onChange={(e) =>
-                updateDefaultCam({
-                  direction: e.target.value as SketchCamSettings["direction"],
-                })
-              }
-              className="ui-input"
-            >
-              <option value="climb">Climb</option>
-              <option value="conventional">Conventional</option>
-            </select>
-          </label>
-
-          <label className="ui-label">
-            Stepdown override
-            <input
-              className="ui-input"
-              type="number"
-              step="0.001"
-              value={defaultCamSettings.stepdown ?? ""}
-              onChange={(e) =>
-                updateDefaultCam({
-                  stepdown:
-                    e.target.value === ""
-                      ? null
-                      : Math.max(0.001, Number(e.target.value) || 0.001),
-                })
-              }
-              placeholder="inherit passDepth"
-            />
-          </label>
-
-          <label className="ui-label">
-            Stepover override
-            <input
-              className="ui-input"
-              type="number"
-              min="0.05"
-              max="1"
-              step="0.01"
-              value={defaultCamSettings.stepover ?? ""}
-              onChange={(e) =>
-                updateDefaultCam({
-                  stepover:
-                    e.target.value === ""
-                      ? null
-                      : Math.min(1, Math.max(0.05, Number(e.target.value) || 0.05)),
-                })
-              }
-              placeholder="inherit document stepover"
-            />
-          </label>
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>Операция</Label>
+          <select
+            value={defaultCamSettings.operation}
+            onChange={(e) =>
+              updateDefaultCam({
+                operation: e.target.value as SketchCamSettings["operation"],
+              })
+            }
+            className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="follow-path">По контуру</option>
+            <option value="profile-inside">Внутри</option>
+            <option value="profile-outside">Снаружи</option>
+            <option value="pocket">Карман</option>
+          </select>
         </div>
 
-        <label className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3 text-[13px] font-bold text-[var(--color-text)]">
-          <input
-            type="checkbox"
-            checked={defaultCamSettings.ramping.enabled}
+        <div className="space-y-1.5">
+          <Label>Направление</Label>
+          <select
+            value={defaultCamSettings.direction}
             onChange={(e) =>
+              updateDefaultCam({
+                direction: e.target.value as SketchCamSettings["direction"],
+              })
+            }
+            className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="climb">Попутное</option>
+            <option value="conventional">Встречное</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="font-bold">Ramping (Врезание)</Label>
+          <Switch
+            checked={defaultCamSettings.ramping.enabled}
+            onCheckedChange={(checked) =>
               updateDefaultCam((prev) => ({
                 ...prev,
-                ramping: {
-                  ...prev.ramping,
-                  enabled: e.target.checked,
-                },
+                ramping: { ...prev.ramping, enabled: checked },
               }))
             }
           />
-          <span>Ramping по умолчанию</span>
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Количество витков ramping
-          <input
-            className="ui-input"
+        <div className="space-y-1.5">
+          <Label>Витков врезания</Label>
+          <Input
             type="number"
             min="1"
-            step="1"
             value={defaultCamSettings.ramping.turns}
             onChange={(e) =>
               updateDefaultCam((prev) => ({
@@ -167,33 +123,29 @@ export function CamDefaultsSection({
               }))
             }
           />
-        </label>
+        </div>
+      </div>
 
-        <label className="flex items-center gap-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-3 text-[13px] font-bold text-[var(--color-text)]">
-          <input
-            type="checkbox"
+      <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
+        <div className="flex items-center justify-between">
+          <Label className="font-bold">Tabs (Перемычки)</Label>
+          <Switch
             checked={defaultCamSettings.tabs.enabled}
-            onChange={(e) =>
+            onCheckedChange={(checked) =>
               updateDefaultCam((prev) => ({
                 ...prev,
-                tabs: {
-                  ...prev.tabs,
-                  enabled: e.target.checked,
-                },
+                tabs: { ...prev.tabs, enabled: checked },
               }))
             }
           />
-          <span>Tabs / bridges по умолчанию</span>
-        </label>
+        </div>
 
-        <div className="grid min-w-0 grid-cols-3 gap-2.5">
-          <label className="ui-label">
-            Count
-            <input
-              className="ui-input"
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-[10px]">Кол-во</Label>
+            <Input
               type="number"
               min="0"
-              step="1"
               value={defaultCamSettings.tabs.count}
               onChange={(e) =>
                 updateDefaultCam((prev) => ({
@@ -205,15 +157,12 @@ export function CamDefaultsSection({
                 }))
               }
             />
-          </label>
-
-          <label className="ui-label">
-            Width
-            <input
-              className="ui-input"
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[10px]">Ширина</Label>
+            <Input
               type="number"
               min="0.1"
-              step="0.1"
               value={defaultCamSettings.tabs.width}
               onChange={(e) =>
                 updateDefaultCam((prev) => ({
@@ -225,15 +174,12 @@ export function CamDefaultsSection({
                 }))
               }
             />
-          </label>
-
-          <label className="ui-label">
-            Height
-            <input
-              className="ui-input"
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-[10px]">Высота</Label>
+            <Input
               type="number"
               min="0.1"
-              step="0.1"
               value={defaultCamSettings.tabs.height}
               onChange={(e) =>
                 updateDefaultCam((prev) => ({
@@ -245,9 +191,9 @@ export function CamDefaultsSection({
                 }))
               }
             />
-          </label>
+          </div>
         </div>
       </div>
-    </CollapsibleCardBlock>
+    </div>
   );
 }

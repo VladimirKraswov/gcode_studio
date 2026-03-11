@@ -1,6 +1,6 @@
-// src/modules/cad/panels/settings/GenerationBasicsSection.tsx
+// src/features/cad-editor/panels/settings/GenerationBasicsSection.tsx
 import type { SketchDocument } from "@/features/cad-editor/model/types";
-import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
+import { Label } from "@/shared/components/ui/Label";
 
 type GenerationBasicsSectionProps = {
   document: SketchDocument;
@@ -12,10 +12,10 @@ export function GenerationBasicsSection({
   setDocument,
 }: GenerationBasicsSectionProps) {
   return (
-    <CollapsibleCardBlock title="Основные настройки генерации">
-      <div className="grid min-w-0 grid-cols-2 gap-2.5">
-        <label className="ui-label">
-          Единицы
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>Единицы (Units)</Label>
           <select
             value={document.units}
             onChange={(e) =>
@@ -24,15 +24,15 @@ export function GenerationBasicsSection({
                 units: e.target.value as SketchDocument["units"],
               }))
             }
-            className="ui-input"
+            className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="mm">мм (G21)</option>
             <option value="inch">дюймы (G20)</option>
           </select>
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Work offset
+        <div className="space-y-1.5">
+          <Label>Смещение (Offset)</Label>
           <select
             value={document.workOffset}
             onChange={(e) =>
@@ -41,7 +41,7 @@ export function GenerationBasicsSection({
                 workOffset: e.target.value as SketchDocument["workOffset"],
               }))
             }
-            className="ui-input"
+            className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="G54">G54</option>
             <option value="G55">G55</option>
@@ -50,8 +50,8 @@ export function GenerationBasicsSection({
             <option value="G58">G58</option>
             <option value="G59">G59</option>
           </select>
-        </label>
+        </div>
       </div>
-    </CollapsibleCardBlock>
+    </div>
   );
 }

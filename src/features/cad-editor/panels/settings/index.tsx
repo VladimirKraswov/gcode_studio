@@ -1,5 +1,4 @@
-// src/modules/cad/panels/settings/index.ts
-export { CollapsibleCardBlock } from "./CollapsibleCardBlock";
+// src/features/cad-editor/panels/settings/index.ts
 export { GridSheetSection } from "./GridSheetSection";
 export { GenerationBasicsSection } from "./GenerationBasicsSection";
 export { ZAxisSection } from "./ZAxisSection";

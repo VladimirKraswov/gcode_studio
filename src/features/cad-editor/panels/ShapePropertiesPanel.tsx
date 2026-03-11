@@ -8,6 +8,8 @@ import {
   FiMove,
   FiRefreshCw,
   FiType,
+  FiInfo,
+  FiCrosshair,
 } from "react-icons/fi";
 import { createDefaultCamSettings } from "../model/document";
 import type {
@@ -17,6 +19,9 @@ import type {
 } from "../model/types";
 import { updateShape } from "../model/document";
 import type { SelectionState } from "../model/selection";
+import { Label } from "@/shared/components/ui/Label";
+import { Input } from "@/shared/components/ui/Input";
+import { Button } from "@/shared/components/ui/Button";
 
 export type ShapePropertiesPanelProps = {
   document: SketchDocument;
@@ -26,35 +31,24 @@ export type ShapePropertiesPanelProps = {
 
 const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
-function CardBlock({
-  children,
-  title,
-}: {
-  children: React.ReactNode;
-  title?: string;
-}) {
+function SectionTitle({ title }: { title: string }) {
   return (
-    <div className="min-w-0 rounded-[14px] border border-border bg-panel-solid p-3">
-      {title && (
-        <div className="mb-2.5 text-[13px] font-extrabold text-text">
-          {title}
-        </div>
-      )}
-      {children}
+    <div className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wider text-text-muted first:mt-0">
+      {title}
     </div>
   );
 }
 
 function getShapeIcon(type: SketchShape["type"]) {
   switch (type) {
-    case "rectangle": return <FiBox size={18} />;
-    case "circle": return <FiCircle size={18} />;
-    case "line": return <FiMinus size={18} />;
-    case "arc": return <FiCircle size={18} />;
-    case "polyline": return <FiMove size={18} />;
-    case "text": return <FiType size={18} />;
-    case "svg": return <FiImage size={18} />;
-    default: return <FiEdit3 size={18} />;
+    case "rectangle": return <FiBox size={14} />;
+    case "circle": return <FiCircle size={14} />;
+    case "line": return <FiMinus size={14} />;
+    case "arc": return <FiCircle size={14} />;
+    case "polyline": return <FiMove size={14} />;
+    case "text": return <FiType size={14} />;
+    case "svg": return <FiImage size={14} />;
+    default: return <FiEdit3 size={14} />;
   }
 }
 
@@ -115,7 +109,12 @@ export function ShapePropertiesPanel({
   );
 
   if (!selectedShape) {
-    return <div className="p-4 text-xs text-text-muted">Выберите объект, чтобы увидеть его свойства.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center p-8 text-center">
+        <FiInfo size={32} className="text-border mb-3" />
+        <div className="text-xs text-text-muted">Выберите объект на холсте для просмотра свойств</div>
+      </div>
+    );
   }
 
   function updateSelected(patch: Record<string, any>) {
@@ -145,115 +144,127 @@ export function ShapePropertiesPanel({
   }
 
   return (
-    <div className="grid gap-3">
-      <div className="mb-1 flex items-center gap-3">
-        <div className="ui-icon-badge">{getShapeIcon(selectedShape.type)}</div>
-        <div>
-          <div className="text-base font-extrabold text-text">
+    <div className="flex flex-col gap-4 p-1">
+      <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
+        <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
+          {getShapeIcon(selectedShape.type)}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[13px] font-bold text-text truncate">
             {selectedShape.name}
           </div>
-          <div className="mt-0.5 text-xs text-text-muted">
-            Тип: {selectedShape.type}
+          <div className="text-[11px] text-text-muted capitalize">
+            {selectedShape.type}
           </div>
         </div>
       </div>
 
-      {selectedGroup?.array && (
-        <CardBlock title="Параметры массива">
-          <div className="grid gap-2.5">
-            <div
-              className="inline-flex w-fit items-center gap-2 rounded-full px-2.5 py-1.5 text-xs font-extrabold"
-              style={{
-                border:
-                  selectedGroup.array.type === "linear"
-                    ? "1px solid #a5f3fc"
-                    : "1px solid #c4b5fd",
-                background:
-                  selectedGroup.array.type === "linear" ? "#ecfeff" : "#f5f3ff",
-                color:
-                  selectedGroup.array.type === "linear" ? "#155e75" : "#5b21b6",
-              }}
-            >
-              <FiRefreshCw size={12} />
-              {selectedGroup.array.type === "linear"
-                ? "Linear array"
-                : "Circular array"}
+      <div className="space-y-4">
+        <div>
+          <SectionTitle title="Идентификация" />
+          <div className="space-y-3">
+            <div className="grid gap-1.5">
+              <Label>Имя объекта</Label>
+              <Input
+                value={selectedShape.name}
+                onChange={(e) => updateSelected({ name: e.target.value })}
+              />
             </div>
-
-            <button
-              type="button"
-              onClick={() => openArrayEditor(selectedGroup.id)}
-              className="ui-btn-primary"
-            >
-              <FiEdit3 size={15} />
-              Редактировать
-            </button>
           </div>
-        </CardBlock>
-      )}
-
-      <CardBlock>
-        <label className="ui-label">
-          Имя
-          <input
-            className="ui-input"
-            type="text"
-            value={selectedShape.name}
-            onChange={(e) => updateSelected({ name: e.target.value })}
-          />
-        </label>
-      </CardBlock>
-
-      <CardBlock>
-        <div className="grid min-w-0 grid-cols-2 gap-2.5">
-          <label className="ui-label">
-            Глубина Z
-            <input
-              className="ui-input"
-              type="number"
-              value={selectedShape.cutZ ?? document.cutZ}
-              onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
-            />
-          </label>
-
-          <label className="ui-label">
-            Толщина
-            <input
-              className="ui-input"
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={selectedShape.strokeWidth ?? 1}
-              onChange={(e) =>
-                updateSelected({
-                  strokeWidth: Math.max(0.1, Number(e.target.value) || 0.1),
-                })
-              }
-            />
-          </label>
         </div>
-      </CardBlock>
 
-      <CardBlock title="CAM операция">
-        {shapeCamSettings && (
-          <div className="grid gap-2.5">
-            <select
-              value={shapeCamSettings.operation}
-              onChange={(e) =>
-                updateSelectedCam({
-                  operation: e.target.value as SketchCamSettings["operation"],
-                })
-              }
-              className="ui-input"
-            >
-              <option value="follow-path">Follow path</option>
-              <option value="profile-inside">Profile inside</option>
-              <option value="profile-outside">Profile outside</option>
-              <option value="pocket">Pocket</option>
-            </select>
+        <div>
+          <SectionTitle title="Геометрия" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label>Глубина Z</Label>
+              <Input
+                type="number"
+                value={selectedShape.cutZ ?? document.cutZ}
+                onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Толщина линии</Label>
+              <Input
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={selectedShape.strokeWidth ?? 1}
+                onChange={(e) =>
+                  updateSelected({
+                    strokeWidth: Math.max(0.1, Number(e.target.value) || 0.1),
+                  })
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        {selectedGroup?.array && (
+          <div>
+            <SectionTitle title="Массив" />
+            <div className="p-3 bg-primary-soft/30 border border-primary-soft rounded-lg space-y-3">
+              <div className="flex items-center gap-2 text-[12px] font-bold text-primary">
+                <FiRefreshCw size={14} />
+                {selectedGroup.array.type === "linear"
+                  ? "Линейный массив"
+                  : "Круговой массив"}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full bg-panel-solid"
+                onClick={() => openArrayEditor(selectedGroup.id)}
+              >
+                <FiEdit3 size={14} className="mr-2" />
+                Настроить массив
+              </Button>
+            </div>
           </div>
         )}
-      </CardBlock>
+
+        <div>
+          <SectionTitle title="CAM Обработка" />
+          <div className="space-y-3">
+            <div className="grid gap-1.5">
+              <Label>Тип операции</Label>
+              <select
+                value={shapeCamSettings?.operation}
+                onChange={(e) =>
+                  updateSelectedCam({
+                    operation: e.target.value as SketchCamSettings["operation"],
+                  })
+                }
+                className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="follow-path">По контуру (Follow path)</option>
+                <option value="profile-inside">Внутри (Inside)</option>
+                <option value="profile-outside">Снаружи (Outside)</option>
+                <option value="pocket">Карман (Pocket)</option>
+              </select>
+            </div>
+
+            {shapeCamSettings?.operation !== "follow-path" && (
+              <div className="grid gap-1.5">
+                <Label>Направление</Label>
+                <select
+                  value={shapeCamSettings?.direction}
+                  onChange={(e) =>
+                    updateSelectedCam({
+                      direction: e.target.value as SketchCamSettings["direction"],
+                    })
+                  }
+                  className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="climb">Попутное (Climb)</option>
+                  <option value="conventional">Встречное (Conventional)</option>
+                </select>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

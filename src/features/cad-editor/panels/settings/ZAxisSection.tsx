@@ -1,6 +1,7 @@
-// src/modules/cad/panels/settings/ZAxisSection.tsx
+// src/features/cad-editor/panels/settings/ZAxisSection.tsx
 import type { SketchDocument } from "@/features/cad-editor/model/types";
-import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
+import { Label } from "@/shared/components/ui/Label";
+import { Input } from "@/shared/components/ui/Input";
 
 type ZAxisSectionProps = {
   document: SketchDocument;
@@ -9,12 +10,11 @@ type ZAxisSectionProps = {
 
 export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
   return (
-    <CollapsibleCardBlock title="Оси Z и проходы">
-      <div className="grid min-w-0 grid-cols-2 gap-2.5">
-        <label className="ui-label">
-          Start Z
-          <input
-            className="ui-input"
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label>Верх заготовки (Start Z)</Label>
+          <Input
             type="number"
             value={document.startZ}
             onChange={(e) =>
@@ -24,12 +24,11 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Safe Z
-          <input
-            className="ui-input"
+        <div className="space-y-1.5">
+          <Label>Безопасная высота (Safe Z)</Label>
+          <Input
             type="number"
             value={document.safeZ}
             onChange={(e) =>
@@ -39,12 +38,11 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Cut Z по умолчанию
-          <input
-            className="ui-input"
+        <div className="space-y-1.5">
+          <Label>Глубина (Cut Z)</Label>
+          <Input
             type="number"
             value={document.cutZ}
             onChange={(e) =>
@@ -54,12 +52,11 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Pass depth
-          <input
-            className="ui-input"
+        <div className="space-y-1.5">
+          <Label>Шаг по Z (Pass depth)</Label>
+          <Input
             type="number"
             min="0.001"
             step="0.001"
@@ -71,8 +68,8 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
       </div>
-    </CollapsibleCardBlock>
+    </div>
   );
 }

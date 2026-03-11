@@ -1,6 +1,8 @@
-// src/components/sections/StockSceneSection.tsx
 import type { PlacementMode, StockDimensions } from "@/types/gcode";
-import { RangeCard } from "./RangeCard";
+import { Label } from "@/shared/components/ui/Label";
+import { Input } from "@/shared/components/ui/Input";
+import { Switch } from "@/shared/components/ui/Switch";
+import { Slider } from "@/shared/components/ui/Slider";
 
 type StockSceneSectionProps = {
   placementMode: PlacementMode;
@@ -24,100 +26,105 @@ export function StockSceneSection({
   onDetailLevelChange,
 }: StockSceneSectionProps) {
   return (
-    <>
-      <div className="ui-panel-inset mb-3 p-3">
-        <div className="mb-2.5 text-[13px] font-extrabold text-[var(--color-text)]">
-          Позиционирование
+    <div className="space-y-5 pt-1">
+      <div className="space-y-2.5">
+        <Label className="text-[11px] uppercase font-bold text-text-muted tracking-wider">Позиционирование</Label>
+        <div className="space-y-2">
+          <label className="flex items-center gap-3 p-2 rounded-md hover:bg-panel-muted cursor-pointer transition-colors border border-transparent has-[:checked]:border-primary/30 has-[:checked]:bg-primary-soft/20">
+            <input
+              type="radio"
+              checked={placementMode === "origin"}
+              onChange={() => onPlacementModeChange("origin")}
+              className="w-4 h-4 text-primary focus:ring-primary accent-primary"
+            />
+            <span className="text-[13px] font-medium">Левый нижний угол (X0 Y0)</span>
+          </label>
+
+          <label className="flex items-center gap-3 p-2 rounded-md hover:bg-panel-muted cursor-pointer transition-colors border border-transparent has-[:checked]:border-primary/30 has-[:checked]:bg-primary-soft/20">
+            <input
+              type="radio"
+              checked={placementMode === "center"}
+              onChange={() => onPlacementModeChange("center")}
+              className="w-4 h-4 text-primary focus:ring-primary accent-primary"
+            />
+            <span className="text-[13px] font-medium">Центрировать по траектории</span>
+          </label>
         </div>
-
-        <label className="mb-2 flex items-center gap-2.5 text-[13px] text-[var(--color-text)]">
-          <input
-            type="radio"
-            checked={placementMode === "origin"}
-            onChange={() => onPlacementModeChange("origin")}
-          />
-          <span>Левый нижний угол</span>
-        </label>
-
-        <label className="flex items-center gap-2.5 text-[13px] text-[var(--color-text)]">
-          <input
-            type="radio"
-            checked={placementMode === "center"}
-            onChange={() => onPlacementModeChange("center")}
-          />
-          <span>Центрировать по траектории</span>
-        </label>
       </div>
 
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        <label className="ui-label">
-          Ширина
-          <input
-            type="number"
-            min="1"
-            value={stock.width}
-            onChange={(e) =>
-              onStockChange({
-                ...stock,
-                width: Math.max(1, Number(e.target.value) || 1),
-              })
-            }
-            className="ui-input"
-          />
-        </label>
+      <div className="space-y-2.5">
+        <Label className="text-[11px] uppercase font-bold text-text-muted tracking-wider">Размеры заготовки (мм)</Label>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">X (Ширина)</Label>
+            <Input
+              type="number"
+              min="1"
+              value={stock.width}
+              onChange={(e) =>
+                onStockChange({
+                  ...stock,
+                  width: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+            />
+          </div>
 
-        <label className="ui-label">
-          Высота
-          <input
-            type="number"
-            min="1"
-            value={stock.height}
-            onChange={(e) =>
-              onStockChange({
-                ...stock,
-                height: Math.max(1, Number(e.target.value) || 1),
-              })
-            }
-            className="ui-input"
-          />
-        </label>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Y (Высота)</Label>
+            <Input
+              type="number"
+              min="1"
+              value={stock.height}
+              onChange={(e) =>
+                onStockChange({
+                  ...stock,
+                  height: Math.max(1, Number(e.target.value) || 1),
+                })
+              }
+            />
+          </div>
 
-        <label className="ui-label">
-          Толщина
-          <input
-            type="number"
-            min="0.1"
-            step="0.1"
-            value={stock.thickness}
-            onChange={(e) =>
-              onStockChange({
-                ...stock,
-                thickness: Math.max(0.1, Number(e.target.value) || 0.1),
-              })
-            }
-            className="ui-input"
-          />
-        </label>
+          <div className="space-y-1.5">
+            <Label className="text-[11px]">Z (Толщина)</Label>
+            <Input
+              type="number"
+              min="0.1"
+              step="0.1"
+              value={stock.thickness}
+              onChange={(e) =>
+                onStockChange({
+                  ...stock,
+                  thickness: Math.max(0.1, Number(e.target.value) || 0.1),
+                })
+              }
+            />
+          </div>
+        </div>
       </div>
 
-      <label className="ui-check-row mb-3 rounded-[14px]">
-        <input
-          type="checkbox"
+      <div className="flex items-center justify-between p-2 rounded-lg bg-panel-muted border border-border">
+        <Label className="font-bold">Снятие материала</Label>
+        <Switch
           checked={showMaterialRemoval}
-          onChange={(e) => onShowMaterialRemovalChange(e.target.checked)}
+          onCheckedChange={onShowMaterialRemovalChange}
         />
-        Показывать снятие материала
-      </label>
+      </div>
 
-      <RangeCard
-        label="Качество меша"
-        value={String(detailLevel)}
-        min={1}
-        max={10}
-        step={1}
-        current={detailLevel}
-        onChange={onDetailLevelChange}
-      />
-    </>
+      <div className="space-y-3 p-3 rounded-lg border border-border bg-panel-muted/30">
+        <div className="flex justify-between items-center">
+          <Label className="font-bold">Качество меша</Label>
+          <span className="text-[11px] font-mono text-primary bg-primary-soft px-1.5 rounded">{detailLevel}</span>
+        </div>
+        <Slider
+          min={1}
+          max={10}
+          step={1}
+          value={detailLevel}
+          onChange={onDetailLevelChange}
+        />
+        <p className="text-[10px] text-text-muted italic">Более высокое качество требует больше ресурсов GPU</p>
+      </div>
+    </div>
   );
 }

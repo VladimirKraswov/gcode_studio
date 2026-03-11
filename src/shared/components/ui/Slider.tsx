@@ -1,27 +1,24 @@
 import React from "react";
 
-interface SliderProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  value: string;
+export interface SliderProps {
+  min: number;
+  max: number;
+  step?: number;
+  value: number;
+  onChange: (value: number) => void;
+  className?: string;
 }
 
-export const Slider: React.FC<SliderProps> = ({ label, value, className = "", ...props }) => {
+export const Slider: React.FC<SliderProps> = ({ min, max, step = 1, value, onChange, className = "" }) => {
   return (
-    <div className="ui-panel-inset mb-2.5 p-3 bg-panel-muted border border-border rounded-lg">
-      <div className="mb-2 flex justify-between gap-3">
-        <span className="text-[13px] font-bold text-text">
-          {label}
-        </span>
-        <span className="text-[13px] font-extrabold text-primary-text">
-          {value}
-        </span>
-      </div>
-
-      <input
-        type="range"
-        className={`w-full ${className}`}
-        {...props}
-      />
-    </div>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className={`w-full h-1.5 bg-border rounded-lg appearance-none cursor-pointer accent-primary ${className}`}
+    />
   );
 };

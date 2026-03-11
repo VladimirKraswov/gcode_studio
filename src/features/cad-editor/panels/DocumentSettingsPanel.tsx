@@ -1,4 +1,4 @@
-// src/modules/cad/panels/DocumentSettingsPanel.tsx
+// src/features/cad-editor/panels/DocumentSettingsPanel.tsx
 import type { SketchDocument } from "../model/types";
 import {
   GridSheetSection,
@@ -9,7 +9,8 @@ import {
   CamDefaultsSection,
   SpindleLaserSection,
 } from "./settings";
-import { SettingsTabs } from "./settings/SettingsTabs";
+import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
+import { FiGrid, FiTool, FiZap, FiMove, FiTarget, FiArrowDown } from "react-icons/fi";
 
 type DocumentSettingsPanelProps = {
   document: SketchDocument;
@@ -20,35 +21,49 @@ export function DocumentSettingsPanel({
   document,
   setDocument,
 }: DocumentSettingsPanelProps) {
-  const tabs = [
-    {
-      id: "scene",
-      label: "Документ",
-      content: (
-        <div className="grid gap-3">
+  return (
+    <div className="flex flex-col gap-2 p-1">
+      <CollapsibleSection title="Сетка и Лист" icon={<FiGrid size={16} />} defaultCollapsed={false}>
+        <div className="pt-2">
           <GridSheetSection document={document} setDocument={setDocument} />
         </div>
-      ),
-    },
-    {
-      id: "tool",
-      label: "CAM",
-      content: (
-        <div className="grid gap-3">
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Параметры инструмента" icon={<FiTool size={16} />}>
+        <div className="pt-2">
           <ToolSection document={document} setDocument={setDocument} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Подачи и Скорости" icon={<FiZap size={16} />}>
+        <div className="pt-2">
           <FeedsSection document={document} setDocument={setDocument} />
-          <CamDefaultsSection document={document} setDocument={setDocument} />
-          <SpindleLaserSection document={document} setDocument={setDocument} />
-          <GenerationBasicsSection document={document} setDocument={setDocument} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Настройки Z" icon={<FiArrowDown size={16} />}>
+        <div className="pt-2">
           <ZAxisSection document={document} setDocument={setDocument} />
         </div>
-      ),
-    },
-  ];
+      </CollapsibleSection>
 
-  return (
-    <div className="grid gap-3">
-      <SettingsTabs tabs={tabs} />
+      <CollapsibleSection title="Параметры CAM" icon={<FiTarget size={16} />}>
+        <div className="pt-2">
+          <CamDefaultsSection document={document} setDocument={setDocument} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Управление шпинделем" icon={<FiMove size={16} />}>
+        <div className="pt-2">
+          <SpindleLaserSection document={document} setDocument={setDocument} />
+        </div>
+      </CollapsibleSection>
+
+      <CollapsibleSection title="Генерация G-code" icon={<FiMove size={16} />}>
+        <div className="pt-2">
+          <GenerationBasicsSection document={document} setDocument={setDocument} />
+        </div>
+      </CollapsibleSection>
     </div>
   );
 }

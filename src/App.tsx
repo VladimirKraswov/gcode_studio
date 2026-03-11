@@ -1,4 +1,3 @@
-// src/App.tsx
 import { FiCode, FiEye, FiLoader, FiTool } from "react-icons/fi";
 import { AppProvider, useApp } from "@/contexts/AppContext";
 import { MainLayout } from "@/layouts/MainLayout";
@@ -9,6 +8,7 @@ import { RightPanelContainer } from "@/containers/RightPanelContainer";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { NotificationToast } from "@/components/NotificationToast";
 import { ThemeProvider } from "@/shared/hooks/useTheme";
+import { PlaybackFooter } from "@/features/preview/components/PlaybackFooter";
 
 const TAB_META = {
   view: {
@@ -29,7 +29,22 @@ const TAB_META = {
 };
 
 function AppContent() {
-  const { parsed, isParsing, fileName, activeTab, setActiveTab, handleFileChange } = useApp();
+  const {
+    parsed,
+    isParsing,
+    fileName,
+    activeTab,
+    setActiveTab,
+    handleFileChange,
+    playing,
+    setPlaying,
+    resetPlayback,
+    progress,
+    setProgress,
+    speed,
+    setSpeed
+  } = useApp();
+
   const tabMeta = TAB_META[activeTab as keyof typeof TAB_META];
 
   if (!parsed || isParsing) {
@@ -76,6 +91,17 @@ function AppContent() {
       leftPanel={<LeftPanelContainer />}
       centerPanel={<CenterPanelContainer />}
       rightPanel={<RightPanelContainer />}
+      bottomBar={activeTab === "view" ? (
+        <PlaybackFooter
+          playing={playing}
+          onPlayPause={() => setPlaying(!playing)}
+          onResetPlayback={resetPlayback}
+          progress={progress}
+          onProgressChange={setProgress}
+          speed={speed}
+          onSpeedChange={setSpeed}
+        />
+      ) : undefined}
     />
   );
 }

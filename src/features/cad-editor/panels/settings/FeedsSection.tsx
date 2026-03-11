@@ -1,6 +1,7 @@
-// src/modules/cad/panels/settings/FeedsSection.tsx
+// src/features/cad-editor/panels/settings/FeedsSection.tsx
 import type { SketchDocument } from "@/features/cad-editor/model/types";
-import { CollapsibleCardBlock } from "./CollapsibleCardBlock";
+import { Label } from "@/shared/components/ui/Label";
+import { Input } from "@/shared/components/ui/Input";
 
 type FeedsSectionProps = {
   document: SketchDocument;
@@ -9,12 +10,11 @@ type FeedsSectionProps = {
 
 export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
   return (
-    <CollapsibleCardBlock title="Подачи">
-      <div className="grid min-w-0 grid-cols-3 gap-2.5">
-        <label className="ui-label">
-          Feed cut
-          <input
-            className="ui-input"
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3">
+        <div className="space-y-1.5">
+          <Label>Рабочая подача (F cut)</Label>
+          <Input
             type="number"
             min="1"
             value={document.feedCut}
@@ -25,12 +25,11 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Feed plunge
-          <input
-            className="ui-input"
+        <div className="space-y-1.5">
+          <Label>Подача врезания (F plunge)</Label>
+          <Input
             type="number"
             min="1"
             value={document.feedPlunge}
@@ -41,12 +40,11 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
 
-        <label className="ui-label">
-          Feed rapid
-          <input
-            className="ui-input"
+        <div className="space-y-1.5">
+          <Label>Холостой ход (F rapid)</Label>
+          <Input
             type="number"
             min="1"
             value={document.feedRapid}
@@ -57,8 +55,8 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
               }))
             }
           />
-        </label>
+        </div>
       </div>
-    </CollapsibleCardBlock>
+    </div>
   );
 }

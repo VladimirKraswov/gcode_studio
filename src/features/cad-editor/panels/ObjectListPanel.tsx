@@ -17,6 +17,7 @@ import {
   FiMove,
   FiTrash2,
   FiType,
+  FiSearch,
 } from "react-icons/fi";
 import type { SelectionState } from "../model/selection";
 import { selectOnly } from "../model/selection";
@@ -26,6 +27,9 @@ import type {
   SketchShape,
 } from "../model/types";
 import { getGroupById } from "../model/grouping";
+import { Badge } from "@/shared/components/ui/Badge";
+import { IconButton } from "@/shared/components/ui/IconButton";
+import { Input } from "@/shared/components/ui/Input";
 
 type ObjectListPanelProps = {
   document: SketchDocument;
@@ -52,7 +56,7 @@ type TreeNode =
       collapsed: boolean;
       selected: boolean;
       visible: boolean;
-      arrayBadge: ReturnType<typeof getArrayBadgeMeta>;
+      arrayBadge: { label: string; variant: "info" | "purple" } | null;
       shapes: SketchShape[];
     }
   | {
@@ -85,43 +89,23 @@ const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
 
 function getShapeIcon(shape: SketchShape) {
   switch (shape.type) {
-    case "rectangle":
-      return <FiBox size={13} />;
-    case "circle":
-      return <FiCircle size={13} />;
-    case "line":
-      return <FiMinus size={13} />;
-    case "arc":
-      return <FiCircle size={13} />;
-    case "polyline":
-      return <FiMove size={13} />;
-    case "text":
-      return <FiType size={13} />;
-    case "svg":
-      return <FiImage size={13} />;
-    default:
-      return <FiBox size={13} />;
+    case "rectangle": return <FiBox size={13} />;
+    case "circle": return <FiCircle size={13} />;
+    case "line": return <FiMinus size={13} />;
+    case "arc": return <FiCircle size={13} />;
+    case "polyline": return <FiMove size={13} />;
+    case "text": return <FiType size={13} />;
+    case "svg": return <FiImage size={13} />;
+    default: return <FiBox size={13} />;
   }
 }
 
-function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined) {
+function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined): { label: string; variant: "info" | "purple" } | null {
   if (!array) return null;
-
   if (array.type === "linear") {
-    return {
-      label: "LIN",
-      background: "#ecfeff",
-      border: "#a5f3fc",
-      color: "#155e75",
-    };
+    return { label: "LIN", variant: "info" };
   }
-
-  return {
-    label: "CIR",
-    background: "#f5f3ff",
-    border: "#c4b5fd",
-    color: "#5b21b6",
-  };
+  return { label: "CIR", variant: "purple" };
 }
 
 function openArrayEditor(groupId: string) {
@@ -177,7 +161,6 @@ export function ObjectListPanel({
     }
 
     const result: ListItem[] = [];
-
     for (const group of document.groups) {
       const shapes = groupMap.get(group.id) ?? [];
       if (shapes.length > 0) {
@@ -211,9 +194,7 @@ export function ObjectListPanel({
           ? item.shapes.filter((shape) => shape.name.toLowerCase().includes(q))
           : item.shapes;
 
-        if (!groupMatches && matchedShapes.length === 0) {
-          continue;
-        }
+        if (!groupMatches && matchedShapes.length === 0) continue;
 
         nodes.push({
           kind: "group",
@@ -242,13 +223,10 @@ export function ObjectListPanel({
             });
           }
         }
-
         continue;
       }
 
-      if (q && !item.shape.name.toLowerCase().includes(q)) {
-        continue;
-      }
+      if (q && !item.shape.name.toLowerCase().includes(q)) continue;
 
       nodes.push({
         kind: "shape",
@@ -261,18 +239,15 @@ export function ObjectListPanel({
         parentGroupId: null,
       });
     }
-
     return nodes;
   }, [document, filter, items, selection.ids]);
 
   function moveShapeBefore(targetShapeId: string) {
     if (!draggedShapeId || draggedShapeId === targetShapeId) return;
-
     const ids = document.shapes.map((shape) => shape.id);
     const from = ids.indexOf(draggedShapeId);
     const to = ids.indexOf(targetShapeId);
     if (from < 0 || to < 0) return;
-
     const next = [...ids];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
@@ -281,83 +256,53 @@ export function ObjectListPanel({
 
   function beginRenameGroup(groupId: string) {
     const group = getGroupById(document, groupId);
-    setRenaming({
-      kind: "group",
-      id: groupId,
-      value: group?.name ?? "",
-    });
+    setRenaming({ kind: "group", id: groupId, value: group?.name ?? "" });
     setContextMenu(null);
   }
 
   function beginRenameShape(shapeId: string) {
     const shape = document.shapes.find((item) => item.id === shapeId);
-    setRenaming({
-      kind: "shape",
-      id: shapeId,
-      value: shape?.name ?? "",
-    });
+    setRenaming({ kind: "shape", id: shapeId, value: shape?.name ?? "" });
     setContextMenu(null);
   }
 
   function commitRename() {
     if (!renaming) return;
-
     const value = renaming.value.trim();
     if (!value) {
       setRenaming(null);
       return;
     }
-
     if (renaming.kind === "group") {
       onRenameGroup(renaming.id, value);
     } else {
       onRenameShape(renaming.id, value);
     }
-
     setRenaming(null);
   }
 
   function handleContextMenu(event: React.MouseEvent, target: MenuTarget) {
     event.preventDefault();
     event.stopPropagation();
-
-    setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      target,
-    });
+    setContextMenu({ x: event.clientX, y: event.clientY, target });
   }
 
   useEffect(() => {
-    function closeMenu() {
-      setContextMenu(null);
-    }
-
+    function closeMenu() { setContextMenu(null); }
     function handlePointerDown(event: MouseEvent) {
       const target = event.target as Node | null;
-
       if (target && menuRef.current?.contains(target)) return;
       if (target && rootRef.current?.contains(target)) return;
-
       closeMenu();
     }
-
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        closeMenu();
-        setRenaming(null);
-      }
-
-      if (event.key === "F2" && selection.primaryId) {
-        beginRenameShape(selection.primaryId);
-      }
+      if (event.key === "Escape") { closeMenu(); setRenaming(null); }
+      if (event.key === "F2" && selection.primaryId) { beginRenameShape(selection.primaryId); }
     }
-
     window.addEventListener("mousedown", handlePointerDown);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("resize", closeMenu);
     window.addEventListener("scroll", closeMenu, true);
-
     return () => {
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", onKeyDown);
@@ -367,136 +312,57 @@ export function ObjectListPanel({
   }, [selection.primaryId, document.shapes]);
 
   let contextMenuNode: React.ReactNode = null;
-
   if (contextMenu && portalHost) {
-    const menuShell = "fixed z-[99999] min-w-[180px] rounded-xl border bg-[var(--color-panel)] p-1.5 shadow-[var(--shadow)] backdrop-blur-[16px]";
-    const menuItem = "flex h-[30px] w-full items-center gap-2 rounded-lg bg-transparent px-2.5 text-left text-xs font-semibold text-[var(--color-text)]";
-    const menuDanger = "text-[var(--color-danger)]";
+    const menuShell = "fixed z-[99999] min-w-[180px] rounded-lg border border-border bg-panel-solid p-1 shadow-lg backdrop-blur-md";
+    const menuItem = "flex h-8 w-full items-center gap-2 rounded px-2 text-left text-xs font-medium text-text hover:bg-panel-muted transition-colors";
+    const menuDanger = "text-danger hover:bg-danger-soft";
 
     if (contextMenu.target.kind === "shape") {
       const target: ShapeMenuTarget = contextMenu.target;
-
       contextMenuNode = createPortal(
         <div
           ref={menuRef}
           className={menuShell}
-          style={{
-            left: contextMenu.x,
-            top: contextMenu.y,
-            borderColor: "var(--color-border)",
-          }}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              onSelectionChange(selectOnly(target.shapeId));
-              setContextMenu(null);
-            }}
-          >
-            <FiLayers size={14} />
-            Выбрать
+          <button type="button" className={menuItem} onClick={() => { onSelectionChange(selectOnly(target.shapeId)); setContextMenu(null); }}>
+            <FiLayers size={14} /> Выбрать
           </button>
-
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => beginRenameShape(target.shapeId)}
-          >
-            <FiEdit3 size={14} />
-            Переименовать
+          <button type="button" className={menuItem} onClick={() => beginRenameShape(target.shapeId)}>
+            <FiEdit3 size={14} /> Переименовать
           </button>
-
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              onToggleVisibility(target.shapeId);
-              setContextMenu(null);
-            }}
-          >
-            <FiEye size={14} />
-            Скрыть / показать
+          <button type="button" className={menuItem} onClick={() => { onToggleVisibility(target.shapeId); setContextMenu(null); }}>
+            <FiEye size={14} /> Скрыть / Показать
           </button>
-
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              navigator.clipboard?.writeText(target.shapeId).catch(() => {});
-              setContextMenu(null);
-            }}
-          >
-            <FiCopy size={14} />
-            Копировать ID
-          </button>
-
-          <div className="mx-1 my-1.5 h-px bg-[var(--color-border)]" />
-
-          <button
-            type="button"
-            className={`${menuItem} ${menuDanger}`}
-            onClick={() => {
-              onDeleteShape(target.shapeId);
-              setContextMenu(null);
-            }}
-          >
-            <FiTrash2 size={14} />
-            Удалить
+          <div className="my-1 h-px bg-border" />
+          <button type="button" className={`${menuItem} ${menuDanger}`} onClick={() => { onDeleteShape(target.shapeId); setContextMenu(null); }}>
+            <FiTrash2 size={14} /> Удалить
           </button>
         </div>,
         portalHost,
       );
     } else {
       const target: GroupMenuTarget = contextMenu.target;
-
       contextMenuNode = createPortal(
         <div
           ref={menuRef}
           className={menuShell}
-          style={{
-            left: contextMenu.x,
-            top: contextMenu.y,
-            borderColor: "var(--color-border)",
-          }}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => beginRenameGroup(target.groupId)}
-          >
-            <FiEdit3 size={14} />
-            Переименовать группу
+          <button type="button" className={menuItem} onClick={() => beginRenameGroup(target.groupId)}>
+            <FiEdit3 size={14} /> Переименовать группу
           </button>
-
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              onToggleGroupCollapsed(target.groupId);
-              setContextMenu(null);
-            }}
-          >
-            <FiChevronRight size={14} />
-            Свернуть / развернуть
+          <button type="button" className={menuItem} onClick={() => { onToggleGroupCollapsed(target.groupId); setContextMenu(null); }}>
+            <FiChevronRight size={14} /> Свернуть / Развернуть
           </button>
-
-          <button
-            type="button"
-            className={menuItem}
-            onClick={() => {
-              openArrayEditor(target.groupId);
-              setContextMenu(null);
-            }}
-          >
-            <FiLayers size={14} />
-            Редактировать массив
+          <button type="button" className={menuItem} onClick={() => { openArrayEditor(target.groupId); setContextMenu(null); }}>
+            <FiLayers size={14} /> Редактировать массив
           </button>
         </div>,
         portalHost,
@@ -505,246 +371,118 @@ export function ObjectListPanel({
   }
 
   return (
-    <>
-      <div
-        ref={rootRef}
-        className="scrollbar-thin relative flex h-full min-h-0 w-full flex-col overflow-hidden p-2"
-        onContextMenu={(e) => {
-          if (e.target === e.currentTarget) {
-            e.preventDefault();
-            setContextMenu(null);
-          }
-        }}
-      >
-        <div className="mb-2 flex shrink-0 items-center gap-2 border-b border-[var(--color-border)] px-1 py-1 pb-2">
-          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]">
-            <FiLayers size={14} />
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] leading-none font-extrabold text-[var(--color-text)]">
-              Проводник проекта
-            </div>
-            <div className="mt-0.5 text-[11px] leading-none text-[var(--color-text-muted)]">
-              {document.shapes.length} объектов
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-md bg-transparent p-0 text-[var(--color-text-muted)]"
-            title="Дополнительно"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-
-              const rect = e.currentTarget.getBoundingClientRect();
-
-              let menuTarget: MenuTarget | null = null;
-
-              if (selection.primaryId) {
-                menuTarget = { kind: "shape", shapeId: selection.primaryId };
-              } else if (document.groups[0]?.id) {
-                menuTarget = { kind: "group", groupId: document.groups[0].id };
-              }
-
-              if (!menuTarget) return;
-
-              setContextMenu({
-                x: rect.right - 8,
-                y: rect.bottom + 4,
-                target: menuTarget,
-              });
-            }}
-          >
-            <FiMoreHorizontal size={14} />
-          </button>
+    <div ref={rootRef} className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 border-b border-border bg-panel-muted/30">
+        <div className="flex items-center gap-2">
+          <FiLayers size={16} className="text-primary" />
+          <span className="text-[13px] font-bold text-text">Объекты</span>
+          <Badge variant="ghost" className="px-1.5 py-0 h-4 min-w-4">{document.shapes.length}</Badge>
         </div>
+        <IconButton
+          icon={<FiMoreHorizontal size={14} />}
+          onClick={(e) => {
+             const rect = e.currentTarget.getBoundingClientRect();
+             if (selection.primaryId) setContextMenu({ x: rect.right - 100, y: rect.bottom + 4, target: { kind: "shape", shapeId: selection.primaryId } });
+          }}
+          className="w-7 h-7"
+        />
+      </div>
 
-        <div className="shrink-0 px-1 pb-2">
-          <input
-            type="text"
+      {/* Filter */}
+      <div className="p-2 border-b border-border">
+        <div className="relative">
+          <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" size={12} />
+          <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Фильтр объектов..."
-            className="ui-input h-8 rounded-[10px] text-xs"
+            placeholder="Поиск объектов..."
+            className="h-8 pl-8 text-[12px] bg-panel-muted border-transparent"
           />
-        </div>
-
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-0.5 pb-1">
-          {tree.length === 0 ? (
-            <div className="ui-panel-inset rounded-[10px] p-2.5 text-xs text-[var(--color-text-muted)]">
-              Ничего не найдено.
-            </div>
-          ) : (
-            <div className="grid gap-px">
-              {tree.map((node) => {
-                const isRenaming =
-                  renaming &&
-                  renaming.kind === node.kind &&
-                  renaming.id === node.id;
-
-                if (node.kind === "group") {
-                  return (
-                    <div
-                      key={`group-${node.id}`}
-                      onContextMenu={(e) =>
-                        handleContextMenu(e, { kind: "group", groupId: node.id })
-                      }
-                      className={node.selected ? "rounded-lg bg-[var(--color-primary-soft)]" : "rounded-lg bg-transparent"}
-                    >
-                      <div className="flex h-7 items-center gap-1 px-1.5 text-[var(--color-text)] select-none">
-                        <button
-                          type="button"
-                          onClick={() => onToggleGroupCollapsed(node.id)}
-                          className="grid h-[18px] w-[18px] place-items-center rounded-md p-0 text-[var(--color-text-muted)]"
-                        >
-                          {node.collapsed ? (
-                            <FiChevronRight size={12} />
-                          ) : (
-                            <FiChevronDown size={12} />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onSelectionChange({
-                              ids: node.shapes.map((shape) => shape.id),
-                              primaryId: node.shapes[0]?.id ?? null,
-                            })
-                          }
-                          onDoubleClick={() => beginRenameGroup(node.id)}
-                          className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent p-0 text-left text-[var(--color-text)]"
-                        >
-                          <FiFolder size={13} />
-                          {isRenaming ? (
-                            <input
-                              autoFocus
-                              value={renaming.value}
-                              onChange={(e) =>
-                                setRenaming((prev) =>
-                                  prev ? { ...prev, value: e.target.value } : prev,
-                                )
-                              }
-                              onBlur={commitRename}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") commitRename();
-                                if (e.key === "Escape") setRenaming(null);
-                              }}
-                              className="ui-input h-6 rounded-md px-2 text-xs"
-                            />
-                          ) : (
-                            <span className="min-w-0 truncate whitespace-nowrap text-xs font-bold">
-                              {node.name}
-                            </span>
-                          )}
-                        </button>
-
-                        {node.arrayBadge && (
-                          <span
-                            className="shrink-0 rounded-full px-1.5 py-[1px] text-[10px] font-extrabold"
-                            style={{
-                              color: node.arrayBadge.color,
-                              background: node.arrayBadge.background,
-                              border: `1px solid ${node.arrayBadge.border}`,
-                            }}
-                          >
-                            {node.arrayBadge.label}
-                          </span>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            node.shapes.forEach((shape) => onToggleVisibility(shape.id))
-                          }
-                          className="grid h-[22px] w-[22px] place-items-center rounded-md bg-transparent p-0 text-[var(--color-text-muted)]"
-                          title={node.visible ? "Скрыть группу" : "Показать группу"}
-                        >
-                          {node.visible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={`shape-${node.id}`}
-                    draggable
-                    onDragStart={() => setDraggedShapeId(node.id)}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      moveShapeBefore(node.id);
-                    }}
-                    onDragEnd={() => setDraggedShapeId(null)}
-                    onContextMenu={(e) =>
-                      handleContextMenu(e, { kind: "shape", shapeId: node.id })
-                    }
-                    className={node.selected ? "rounded-lg bg-[var(--color-primary-soft)]" : "rounded-lg bg-transparent"}
-                    style={{ marginLeft: node.depth * 14 }}
-                  >
-                    <div className="flex h-[26px] items-center gap-1.5 px-1.5 text-[var(--color-text)] select-none">
-                      <button
-                        type="button"
-                        onClick={() => onSelectionChange(selectOnly(node.id))}
-                        onDoubleClick={() => beginRenameShape(node.id)}
-                        className="flex min-w-0 flex-1 items-center gap-1.5 bg-transparent p-0 text-left text-[var(--color-text)]"
-                      >
-                        <span
-                          className="grid h-[14px] w-[14px] shrink-0 place-items-center text-[var(--color-text-muted)]"
-                          style={{ opacity: node.visible ? 1 : 0.6 }}
-                        >
-                          {getShapeIcon(node.shape)}
-                        </span>
-
-                        {isRenaming ? (
-                          <input
-                            autoFocus
-                            value={renaming.value}
-                            onChange={(e) =>
-                              setRenaming((prev) =>
-                                prev ? { ...prev, value: e.target.value } : prev,
-                              )
-                            }
-                            onBlur={commitRename}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitRename();
-                              if (e.key === "Escape") setRenaming(null);
-                            }}
-                            className="ui-input h-[22px] rounded-md px-2 text-xs"
-                          />
-                        ) : (
-                          <span
-                            className={`min-w-0 truncate whitespace-nowrap text-xs ${
-                              node.selected ? "font-bold" : "font-medium"
-                            }`}
-                            style={{ opacity: node.visible ? 1 : 0.65 }}
-                          >
-                            {node.name}
-                          </span>
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => onToggleVisibility(node.id)}
-                        className="grid h-[22px] w-[22px] place-items-center rounded-md bg-transparent p-0 text-[var(--color-text-muted)]"
-                        title={node.visible ? "Скрыть" : "Показать"}
-                      >
-                        {node.visible ? <FiEye size={12} /> : <FiEyeOff size={12} />}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
 
+      {/* Tree */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin p-1">
+        {tree.length === 0 ? (
+          <div className="p-8 text-center text-xs text-text-muted">Ничего не найдено</div>
+        ) : (
+          <div className="space-y-px">
+            {tree.map((node) => {
+              const isRenaming = renaming && renaming.kind === node.kind && renaming.id === node.id;
+              const isGroup = node.kind === "group";
+
+              return (
+                <div
+                  key={`${node.kind}-${node.id}`}
+                  draggable={!isGroup}
+                  onDragStart={() => !isGroup && setDraggedShapeId(node.id)}
+                  onDragOver={(e) => { e.preventDefault(); !isGroup && moveShapeBefore(node.id); }}
+                  onDragEnd={() => setDraggedShapeId(null)}
+                  onContextMenu={(e) => handleContextMenu(e, node.kind === "group" ? { kind: "group", groupId: node.id } : { kind: "shape", shapeId: node.id })}
+                  className={`group flex items-center gap-1 h-7 px-2 rounded-md transition-colors select-none ${
+                    node.selected ? "bg-primary-soft text-primary-text" : "hover:bg-panel-muted text-text"
+                  }`}
+                  style={{ marginLeft: node.depth * 12 }}
+                >
+                  {isGroup ? (
+                    <button
+                      onClick={() => onToggleGroupCollapsed(node.id)}
+                      className="w-4 h-4 flex items-center justify-center text-text-muted hover:text-text"
+                    >
+                      {node.collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
+                    </button>
+                  ) : (
+                    <div className="w-4 flex items-center justify-center text-text-muted">
+                      {getShapeIcon(node.shape)}
+                    </div>
+                  )}
+
+                  <div
+                    className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer h-full"
+                    onClick={() => {
+                      if (isGroup) {
+                        onSelectionChange({ ids: node.shapes.map(s => s.id), primaryId: node.shapes[0]?.id || null });
+                      } else {
+                        onSelectionChange(selectOnly(node.id));
+                      }
+                    }}
+                    onDoubleClick={() => isGroup ? beginRenameGroup(node.id) : beginRenameShape(node.id)}
+                  >
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        value={renaming.value}
+                        onChange={(e) => setRenaming({ ...renaming, value: e.target.value })}
+                        onBlur={commitRename}
+                        onKeyDown={(e) => e.key === "Enter" && commitRename()}
+                        className="w-full h-5 bg-panel-solid border border-primary rounded px-1 text-xs outline-none"
+                      />
+                    ) : (
+                      <span className={`text-[12px] truncate ${node.selected ? "font-bold" : "font-medium"} ${!node.visible ? "opacity-40" : ""}`}>
+                        {node.name}
+                      </span>
+                    )}
+                  </div>
+
+                  {isGroup && node.arrayBadge && (
+                    <Badge variant={node.arrayBadge.variant} className="h-3.5 px-1 py-0">{node.arrayBadge.label}</Badge>
+                  )}
+
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if (isGroup) node.shapes.forEach(s => onToggleVisibility(s.id)); else onToggleVisibility(node.id); }}
+                    className={`w-6 h-6 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-opacity ${node.visible ? "text-text-muted opacity-0 group-hover:opacity-100" : "text-primary opacity-100"}`}
+                  >
+                    {node.visible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {contextMenuNode}
-    </>
+    </div>
   );
 }

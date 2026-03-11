@@ -1,6 +1,6 @@
 import React from "react";
 
-type BadgeVariant = "primary" | "success" | "warning" | "danger" | "ghost";
+type BadgeVariant = "primary" | "success" | "warning" | "danger" | "ghost" | "info" | "purple";
 
 interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: BadgeVariant;
@@ -9,19 +9,24 @@ interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export const Badge: React.FC<BadgeProps> = ({ variant = "primary", icon, children, className = "", ...props }) => {
   const variantStyles = {
-    primary: "bg-primary-soft text-primary-text",
-    success: "bg-success-soft text-success",
-    warning: "bg-warning-soft text-warning",
-    danger: "bg-danger-soft text-danger",
+    primary: "bg-primary-soft text-primary-text border-transparent",
+    success: "bg-success-soft text-success border-transparent",
+    warning: "bg-warning-soft text-warning border-transparent",
+    danger: "bg-danger-soft text-danger border-transparent",
     ghost: "bg-panel-muted text-text-muted border border-border",
+    info: "bg-cyan-100 text-cyan-800 border-cyan-200",
+    purple: "bg-purple-100 text-purple-800 border-purple-200",
   };
+
+  const isIconOnly = !children && icon;
 
   return (
     <div
-      className={`ui-icon-badge h-10 w-10 shrink-0 grid place-items-center rounded-[14px] ${variantStyles[variant]} ${className}`}
+      className={`inline-flex items-center justify-center rounded-md border text-[10px] font-bold px-1.5 py-0.5 ${variantStyles[variant]} ${isIconOnly ? 'p-1' : ''} ${className}`}
       {...props}
     >
-      {icon ? icon : children}
+      {icon && <span className={children ? "mr-1" : ""}>{icon}</span>}
+      {children}
     </div>
   );
 };

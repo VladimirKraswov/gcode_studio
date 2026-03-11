@@ -2,9 +2,8 @@ import { useApp } from "@/contexts/AppContext";
 import { LeftPanel } from "@/components/LeftPanel";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
 import { FileProjectSection } from "@/features/preview/components/panels/FileProjectSection";
-import { PlaybackSection } from "@/features/preview/components/panels/PlaybackSection";
 import { StockSceneSection } from "@/features/preview/components/panels/StockSceneSection";
-import { FiFolder, FiPlay, FiSliders } from "react-icons/fi";
+import { FiFolder, FiSliders } from "react-icons/fi";
 import { ObjectListPanel } from "@/features/cad-editor";
 
 export function LeftPanelContainer() {
@@ -94,18 +93,6 @@ export function LeftPanelContainer() {
           onSaveProject={() => {}}
           onLoadDemo={() => {}}
           onResetCamera={resetCamera}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection title="Воспроизведение" icon={<FiPlay size={18} />}>
-        <PlaybackSection
-          playing={playing}
-          onPlayPause={() => setPlaying(!playing)}
-          onResetPlayback={resetPlayback}
-          progress={progress}
-          onProgressChange={setProgress}
-          speed={speed}
-          onSpeedChange={setSpeed}
         />
       </CollapsibleSection>
 
