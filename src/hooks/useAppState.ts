@@ -12,7 +12,7 @@ import type { GCodeStudioProject } from "@/types/project";
 import { createEmptySketchDocument } from "@/features/cad-editor/model/document";
 import { createSelection } from "@/features/cad-editor/model/selection";
 import { createDefaultView } from "@/features/cad-editor/model/view";
-import { applyDistanceConstraints } from "@/features/cad-editor/model/constraints";
+import { updateGeometry } from "@/features/cad-editor/model/solver/manager";
 import { useGCodeFile } from "@/features/gcode-editor/hooks/useGCodeFile";
 import { useSceneState } from "@/features/preview/hooks/useSceneState";
 
@@ -76,7 +76,7 @@ export function useAppState() {
     setCadHistoryState(prev => {
       const nextValue = typeof update === "function" ? (update as (value: any) => any)(prev[key]) : update;
       if (key === "editDocument") {
-        return { ...prev, [key]: applyDistanceConstraints(nextValue as any).document };
+        return { ...prev, [key]: updateGeometry(nextValue as any) };
       }
       return { ...prev, [key]: nextValue };
     }, options);
