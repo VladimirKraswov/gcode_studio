@@ -1,17 +1,15 @@
-import { useState } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { RightPanel } from "@/components/RightPanel";
 import { InfoPanelSection } from "@/features/preview/components/panels/InfoPanelSection";
 import { GCodeStatsSection } from "@/features/preview/components/panels/GCodeStatsSection";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
 import { Tabs } from "@/shared/components/ui/Tabs";
-import { FiInfo, FiBarChart2, FiLayers, FiSettings, FiEdit, FiDatabase, FiTool } from "react-icons/fi";
+import { FiInfo, FiBarChart2, FiSettings, FiEdit, FiTool } from "react-icons/fi";
 import {
   ShapePropertiesPanel,
-  ArrayToolPanel,
-  TextToolPanel,
   DocumentSettingsPanel
 } from "@/features/cad-editor";
+import { useState } from "react";
 
 type CadTab = "cad" | "cam";
 
@@ -25,7 +23,6 @@ export function RightPanelContainer() {
     editDocument,
     setEditDocument,
     selection,
-    setSelection,
   } = useApp();
 
   const [cadTab, setCadTab] = useState<CadTab>("cad");
@@ -43,46 +40,30 @@ export function RightPanelContainer() {
           className="mb-2"
         />
 
-        {cadTab === "cad" && (
-          <div className="flex flex-col gap-4">
-            <CollapsibleSection title="Свойства объекта" icon={<FiEdit size={18} />}>
-              <ShapePropertiesPanel
-                document={editDocument}
-                setDocument={setEditDocument}
-                selection={selection}
-              />
-            </CollapsibleSection>
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          {cadTab === "cad" && (
+            <div className="flex flex-col gap-4">
+              <CollapsibleSection title="Свойства объекта" icon={<FiEdit size={18} />}>
+                <ShapePropertiesPanel
+                  document={editDocument}
+                  setDocument={setEditDocument}
+                  selection={selection}
+                />
+              </CollapsibleSection>
+            </div>
+          )}
 
-            <CollapsibleSection title="Массив" icon={<FiLayers size={18} />} defaultCollapsed>
-              <ArrayToolPanel
-                document={editDocument}
-                selection={selection}
-                onSelectionChange={setSelection}
-                setDocument={setEditDocument}
-              />
-            </CollapsibleSection>
-
-            <CollapsibleSection title="Текст" icon={<FiDatabase size={18} />} defaultCollapsed>
-              <TextToolPanel
-                document={editDocument}
-                selection={selection}
-                onSelectionChange={setSelection}
-                setDocument={setEditDocument}
-              />
-            </CollapsibleSection>
-          </div>
-        )}
-
-        {cadTab === "cam" && (
-          <div className="flex flex-col gap-4">
-            <CollapsibleSection title="Настройки документа" icon={<FiSettings size={18} />}>
-              <DocumentSettingsPanel
-                document={editDocument}
-                setDocument={setEditDocument}
-              />
-            </CollapsibleSection>
-          </div>
-        )}
+          {cadTab === "cam" && (
+            <div className="flex flex-col gap-4">
+              <CollapsibleSection title="Настройки документа" icon={<FiSettings size={18} />}>
+                <DocumentSettingsPanel
+                  document={editDocument}
+                  setDocument={setEditDocument}
+                />
+              </CollapsibleSection>
+            </div>
+          )}
+        </div>
       </RightPanel>
     );
   }

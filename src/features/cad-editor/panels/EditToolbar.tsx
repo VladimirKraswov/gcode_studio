@@ -1,5 +1,4 @@
 import { useRef } from "react";
-import type { CSSProperties, ReactNode } from "react";
 import {
   FiCheck,
   FiCopy,
@@ -8,13 +7,14 @@ import {
   FiImage,
   FiLayers,
   FiMaximize,
-  FiPlay,
-  FiRefreshCw,
   FiTrash2,
   FiX,
+  FiRepeat,
+  FiRefreshCw,
 } from "react-icons/fi";
 import type { MirrorAxis, SketchTool } from "../model/types";
 import { useToolPlugins } from "../plugins/registry";
+import { IconButton } from "@/shared/components/ui/IconButton";
 
 type EditToolbarProps = {
   tool: SketchTool;
@@ -25,8 +25,6 @@ type EditToolbarProps = {
   onCancelDraft: () => void;
   onDeleteSelected: () => void;
   onResetView: () => void;
-  onGenerate: () => void;
-  isGenerating: boolean;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -42,69 +40,6 @@ type EditToolbarProps = {
   hasDraft: boolean;
 };
 
-type ToolbarButtonProps = {
-  title: string;
-  ariaLabel?: string;
-  active?: boolean;
-  success?: boolean;
-  disabled?: boolean;
-  danger?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  style?: CSSProperties;
-};
-
-function ToolbarButton({
-  title,
-  ariaLabel,
-  active = false,
-  success = false,
-  disabled = false,
-  danger = false,
-  onClick,
-  children,
-  style,
-}: ToolbarButtonProps) {
-  const variantClass = active
-    ? "border-[var(--color-primary)] bg-[var(--color-primary-soft)] text-[var(--color-primary-text)]"
-    : success
-      ? "border-[var(--color-success)] bg-[var(--color-success-soft)] text-[var(--color-success)]"
-      : danger
-        ? "border-[var(--color-danger)] bg-transparent text-[var(--color-danger)]"
-        : "border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-text)]";
-
-  return (
-    <button
-      type="button"
-      title={title}
-      aria-label={ariaLabel ?? title}
-      aria-pressed={active || undefined}
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "inline-flex h-[30px] w-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-lg border p-0 text-xs shadow-none",
-        "disabled:cursor-not-allowed disabled:opacity-40",
-        variantClass,
-      ].join(" ")}
-      style={style}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ToolbarGroup({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-1 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-panel)] p-[3px]">
-      {children}
-    </div>
-  );
-}
-
-function ToolbarDivider() {
-  return <div aria-hidden="true" className="mx-[2px] h-[18px] w-px shrink-0 bg-[var(--color-border)]" />;
-}
-
 export function EditToolbar({
   tool,
   onToolChange,
@@ -114,8 +49,6 @@ export function EditToolbar({
   onCancelDraft,
   onDeleteSelected,
   onResetView,
-  onGenerate,
-  isGenerating,
   onUndo,
   onRedo,
   canUndo,
@@ -134,189 +67,126 @@ export function EditToolbar({
   const tools = useToolPlugins();
 
   return (
-    <div className="ui-panel-inset mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-[14px] p-1.5">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-        <ToolbarGroup>
-          {tools.map((item) => (
-            <ToolbarButton
-              key={item.id}
-              title={`${item.label} — ${item.hint}`}
-              ariaLabel={item.label}
-              active={tool === item.id}
-              onClick={() => onToolChange(item.id)}
-            >
-              {item.icon}
-            </ToolbarButton>
-          ))}
-        </ToolbarGroup>
-
-        <ToolbarGroup>
-          <ToolbarButton
-            title="Импортировать SVG"
-            ariaLabel="Импортировать SVG"
-            onClick={() => svgInputRef.current?.click()}
-          >
-            <FiImage size={14} />
-          </ToolbarButton>
-
-          <input
-            ref={svgInputRef}
-            type="file"
-            accept=".svg,image/svg+xml"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onImportSvg(file);
-              e.target.value = "";
-            }}
+    <div className="flex flex-col gap-2 p-1 bg-panel border border-border rounded-xl shadow-lg pointer-events-auto">
+      <div className="flex flex-col gap-1">
+        {tools.map((item) => (
+          <IconButton
+            key={item.id}
+            icon={item.icon}
+            active={tool === item.id}
+            onClick={() => onToolChange(item.id)}
+            title={`${item.label} (${item.hint})`}
           />
-        </ToolbarGroup>
-
-        <ToolbarGroup>
-          <ToolbarButton
-            title="Отменить"
-            ariaLabel="Отменить"
-            disabled={!canUndo}
-            onClick={onUndo}
-          >
-            <FiCornerUpLeft size={14} />
-          </ToolbarButton>
-
-          <ToolbarButton
-            title="Повторить"
-            ariaLabel="Повторить"
-            disabled={!canRedo}
-            onClick={onRedo}
-          >
-            <FiCornerUpRight size={14} />
-          </ToolbarButton>
-
-          <ToolbarDivider />
-
-          <ToolbarButton
-            title="Сбросить вид"
-            ariaLabel="Сбросить вид"
-            onClick={onResetView}
-          >
-            <FiMaximize size={14} />
-          </ToolbarButton>
-        </ToolbarGroup>
-
-        <ToolbarGroup>
-          <ToolbarButton
-            title="Клонировать"
-            ariaLabel="Клонировать"
-            disabled={!hasSelection}
-            onClick={onCloneSelected}
-          >
-            <FiCopy size={14} />
-          </ToolbarButton>
-
-          <ToolbarButton
-            title="Сгруппировать"
-            ariaLabel="Сгруппировать"
-            disabled={!canGroupSelected}
-            onClick={onGroupSelected}
-          >
-            <FiLayers size={14} />
-          </ToolbarButton>
-
-          <ToolbarButton
-            title="Разгруппировать"
-            ariaLabel="Разгруппировать"
-            disabled={!canUngroupSelected}
-            onClick={onUngroupSelected}
-          >
-            <FiX size={14} />
-          </ToolbarButton>
-
-          <ToolbarDivider />
-
-          <ToolbarButton
-            title="Линейный массив"
-            ariaLabel="Линейный массив"
-            disabled={!hasSelection}
-            onClick={onStartLinearArray}
-          >
-            <FiCopy size={14} />
-          </ToolbarButton>
-
-          <ToolbarButton
-            title="Круговой массив"
-            ariaLabel="Круговой массив"
-            disabled={!hasSelection}
-            onClick={onStartCircularArray}
-          >
-            <FiRefreshCw size={14} />
-          </ToolbarButton>
-
-          <ToolbarDivider />
-
-          <ToolbarButton
-            title="Отразить по оси X"
-            ariaLabel="Отразить по оси X"
-            disabled={!hasSelection}
-            onClick={() => onMirrorSelected("x")}
-          >
-            <FiRefreshCw size={14} style={{ transform: "scaleX(-1)" }} />
-          </ToolbarButton>
-
-          <ToolbarButton
-            title="Отразить по оси Y"
-            ariaLabel="Отразить по оси Y"
-            disabled={!hasSelection}
-            onClick={() => onMirrorSelected("y")}
-          >
-            <FiRefreshCw size={14} style={{ transform: "scaleY(-1)" }} />
-          </ToolbarButton>
-
-          <ToolbarDivider />
-
-          <ToolbarButton
-            title="Удалить выбранные объекты"
-            ariaLabel="Удалить"
-            danger
-            disabled={!hasSelection}
-            onClick={onDeleteSelected}
-          >
-            <FiTrash2 size={14} />
-          </ToolbarButton>
-        </ToolbarGroup>
-
-        {hasDraft && (
-          <ToolbarGroup>
-            <ToolbarButton
-              title="Завершить построение"
-              ariaLabel="Завершить построение"
-              disabled={tool !== "polyline"}
-              onClick={onCommitPolyline}
-              success
-            >
-              <FiCheck size={14} />
-            </ToolbarButton>
-
-            <ToolbarButton
-              title="Отменить текущий черновик"
-              ariaLabel="Отменить черновик"
-              danger
-              onClick={onCancelDraft}
-            >
-              <FiX size={14} />
-            </ToolbarButton>
-          </ToolbarGroup>
-        )}
+        ))}
       </div>
 
-      <button
-        type="button"
-        onClick={onGenerate}
-        disabled={isGenerating}
-        title={isGenerating ? "Генерация..." : "Сгенерировать"}
-        aria-label={isGenerating ? "Генерация..." : "Сгенерировать"}
-        className="ui-btn-primary grid h-8 w-8 min-w-8 shrink-0 place-items-center rounded-[10px] p-0 disabled:cursor-wait disabled:opacity-80"
-      >
-        <FiPlay size={14} />
-      </button>
+      <div className="h-px bg-border mx-1" />
+
+      <div className="flex flex-col gap-1">
+        <IconButton
+          icon={<FiCornerUpLeft size={16} />}
+          disabled={!canUndo}
+          onClick={onUndo}
+          title="Отменить (Ctrl+Z)"
+        />
+        <IconButton
+          icon={<FiCornerUpRight size={16} />}
+          disabled={!canRedo}
+          onClick={onRedo}
+          title="Повторить (Ctrl+Y)"
+        />
+      </div>
+
+      <div className="h-px bg-border mx-1" />
+
+      <div className="flex flex-col gap-1">
+        <IconButton
+          icon={<FiImage size={16} />}
+          onClick={() => svgInputRef.current?.click()}
+          title="Импорт SVG"
+        />
+        <input
+          ref={svgInputRef}
+          type="file"
+          accept=".svg"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onImportSvg(file);
+            e.target.value = "";
+          }}
+        />
+        <IconButton
+          icon={<FiMaximize size={16} />}
+          onClick={onResetView}
+          title="Сбросить вид"
+        />
+      </div>
+
+      {hasSelection && (
+        <>
+          <div className="h-px bg-border mx-1" />
+          <div className="flex flex-col gap-1">
+            <IconButton
+              icon={<FiCopy size={16} />}
+              onClick={onCloneSelected}
+              title="Клонировать"
+            />
+             <IconButton
+              icon={<FiRepeat size={16} />}
+              onClick={onStartLinearArray}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                onStartCircularArray();
+              }}
+              title="Массив (ЛКМ - лин, ПКМ - круг)"
+            />
+             <IconButton
+              icon={<FiRefreshCw size={16} />}
+              onClick={() => onMirrorSelected("x")}
+              title="Отразить"
+            />
+            <IconButton
+              icon={<FiLayers size={16} />}
+              disabled={!canGroupSelected}
+              onClick={onGroupSelected}
+              title="Группировать"
+            />
+            <IconButton
+              icon={<FiX size={16} />}
+              disabled={!canUngroupSelected}
+              onClick={onUngroupSelected}
+              title="Разгруппировать"
+            />
+            <IconButton
+              icon={<FiTrash2 size={16} />}
+              variant="danger"
+              onClick={onDeleteSelected}
+              title="Удалить"
+            />
+          </div>
+        </>
+      )}
+
+      {hasDraft && (
+        <>
+          <div className="h-px bg-border mx-1" />
+          <div className="flex flex-col gap-1">
+            <IconButton
+              icon={<FiCheck size={16} />}
+              variant="success"
+              onClick={onCommitPolyline}
+              title="Применить"
+            />
+            <IconButton
+              icon={<FiX size={16} />}
+              variant="danger"
+              onClick={onCancelDraft}
+              title="Отмена"
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }

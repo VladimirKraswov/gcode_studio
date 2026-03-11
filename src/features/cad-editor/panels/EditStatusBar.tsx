@@ -18,43 +18,27 @@ export function EditStatusBar({
   hasDraft,
 }: EditStatusBarProps) {
   const interactionLabel = isTransforming
-    ? "Трансформация / ограничение"
+    ? "Трансформация"
     : isDragging
-      ? "Перетаскивание объекта"
+      ? "Перемещение"
       : isPanning
-        ? "Панорамирование"
+        ? "Навигация"
         : tool === "select"
-          ? "Выделение"
-          : tool === "text"
-            ? "Вставка текста"
-            : tool === "polyline"
-              ? "Рисование полилинии"
-              : tool === "rectangle"
-                ? "Рисование прямоугольника"
-                : tool === "circle"
-                  ? "Рисование окружности"
-                  : tool === "line"
-                    ? "Рисование линии"
-                    : tool === "arc"
-                      ? "Рисование дуги"
-                      : "Редактирование";
-
-  const hint = hasDraft
-    ? "ПКМ — отменить текущее рисование."
-    : tool === "arc"
-      ? "Дуга: 1-й клик — центр, 2-й — старт/радиус, 3-й — конец дуги."
-      : tool === "polyline"
-        ? "Полилиния: кликай по точкам, Enter или двойной клик — завершить, Escape — отменить."
-        : tool === "select"
-          ? "Выделение доступно только в режиме выбора. Во время рисования клик проходит сквозь существующие объекты."
-          : "Потяни за маркер ребра, чтобы создать ограничение. Потяни за плашку размера, чтобы менять расстояние мышкой.";
+          ? "Выбор"
+          : "Рисование";
 
   return (
-    <div className="mt-3 flex shrink-0 flex-wrap justify-between gap-3 text-xs text-[var(--color-text-muted)]">
-      <span>{hint}</span>
-      <span>
-        {interactionLabel} · Объектов: {objectCount}
-      </span>
+    <div className="flex items-center justify-between px-3 py-1 bg-panel border-t border-border text-[11px] text-text-muted select-none">
+      <div className="flex items-center gap-4">
+        <span className="font-medium text-text-soft uppercase tracking-wider">{interactionLabel}</span>
+        <span className="h-3 w-px bg-border" />
+        <span>Объектов: {objectCount}</span>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {hasDraft && <span className="text-primary font-bold animate-pulse">Рисование активно...</span>}
+        <span>Tool: <span className="text-text-soft font-semibold capitalize">{tool}</span></span>
+      </div>
     </div>
   );
 }
