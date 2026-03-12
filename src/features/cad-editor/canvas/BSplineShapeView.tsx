@@ -3,6 +3,7 @@ import { useTheme } from "@/shared/hooks/useTheme";
 import { sampleBSpline, getBSplineControlPoints } from "../geometry/bspline";
 import type { ViewTransform } from "../model/view";
 import type { SketchBSpline, SketchPoint } from "../model/types";
+import type { SketchSolveState } from "../model/solver/diagnostics";
 
 export type BSplineShapeViewProps = {
   shape: SketchBSpline;
@@ -10,6 +11,7 @@ export type BSplineShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
 };
 

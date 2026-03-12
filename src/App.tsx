@@ -1,5 +1,7 @@
 import { FiCode, FiEye, FiLoader, FiTool } from "react-icons/fi";
-import { AppProvider, useApp } from "@/contexts/AppContext";
+import { AppProvider } from "@/contexts/AppContext";
+import { useGCode } from "@/contexts/GCodeContext";
+import { useUI } from "@/contexts/UIContext";
 import { MainLayout } from "@/layouts/MainLayout";
 import { AppHeader } from "@/components/AppHeader";
 import { LeftPanelContainer } from "@/containers/LeftPanelContainer";
@@ -33,8 +35,6 @@ function AppContent() {
     parsed,
     isParsing,
     fileName,
-    activeTab,
-    setActiveTab,
     handleFileChange,
     playing,
     setPlaying,
@@ -43,7 +43,9 @@ function AppContent() {
     setProgress,
     speed,
     setSpeed
-  } = useApp();
+  } = useGCode();
+
+  const { activeTab, setActiveTab } = useUI();
 
   const tabMeta = TAB_META[activeTab as keyof typeof TAB_META];
 

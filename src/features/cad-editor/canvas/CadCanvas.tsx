@@ -14,7 +14,7 @@ import type {
   SketchTool,
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
-import type { SelectionState } from "../model/selection";
+import { type SelectionState } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
 import { shapeBounds } from "../model/shapeBounds";
 import type { CadPoint } from "../geometry/textGeometry";

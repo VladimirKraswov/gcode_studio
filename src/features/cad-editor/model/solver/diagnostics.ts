@@ -1,6 +1,5 @@
 import type {
   SketchConstraint,
-  SketchConstraintType,
   SketchDocument,
   SketchPoint,
 } from "../types";

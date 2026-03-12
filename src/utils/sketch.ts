@@ -5,12 +5,13 @@ import type {
   SketchRectangle,
   SketchShape,
 } from "@/features/cad-editor/model/types";
+import { generateSketchGCode } from "@/features/cad-editor/cam/generateSketchGCode";
 
 export { createId } from "@/features/cad-editor/model/ids";
 export { createEmptySketchDocument } from "@/features/cad-editor/model/document";
 export { shapeBounds } from "@/features/cad-editor/model/shapeBounds";
 export { moveShape } from "@/features/cad-editor/model/shapeTransforms";
-export { generateSketchGCode } from "../modules/cam/gcode/generator";
+export { generateSketchGCode };
 
 export function updateRectangle(
   shape: SketchRectangle,

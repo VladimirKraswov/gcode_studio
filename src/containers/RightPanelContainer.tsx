@@ -1,31 +1,22 @@
 import { useState } from "react";
-import { FiBarChart2, FiEdit, FiInfo, FiSettings, FiTool } from "react-icons/fi";
+import { FiBarChart2, FiEdit, FiInfo, FiTool } from "react-icons/fi";
 
-import { useApp } from "@/contexts/AppContext";
+import { useGCode } from "@/contexts/GCodeContext";
+import { useUI } from "@/contexts/UIContext";
+import { useCad } from "@/contexts/CadContext";
 import { RightPanel } from "@/components/RightPanel";
 import { InfoPanelSection } from "@/features/preview/components/panels/InfoPanelSection";
 import { GCodeStatsSection } from "@/features/preview/components/panels/GCodeStatsSection";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
 import { Tabs } from "@/shared/components/ui/Tabs";
-import {
-  ShapePropertiesPanel,
-  DocumentSettingsPanel,
-} from "@/features/cad-editor";
+import { CadPropertiesSection, CamPropertiesSection } from "./RightPanelSections";
 
 type CadTab = "cad" | "cam";
 
 export function RightPanelContainer() {
-  const {
-    activeTab,
-    parsed,
-    currentState,
-    cameraInfo,
-    stock,
-    editDocument,
-    setEditDocument,
-    selection,
-    cadEditor,
-  } = useApp();
+  const { activeTab } = useUI();
+  const { parsed, currentState, stock } = useGCode();
+  const { cameraInfo, editDocument, setEditDocument, selection, cadEditor } = useCad();
 
   const [cadTab, setCadTab] = useState<CadTab>("cad");
 
@@ -43,65 +34,18 @@ export function RightPanelContainer() {
         />
 
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          {cadTab === "cad" && (
-            <div className="flex flex-col gap-4">
-              <CollapsibleSection
-                title="Свойства объекта"
-                icon={<FiEdit size={18} />}
-              >
-                <ShapePropertiesPanel
-                  document={editDocument}
-                  setDocument={setEditDocument}
-                  selection={selection}
-                  onInsertBSplineControlPoint={() => {
-                    const primaryShape = editDocument.shapes.find(
-                      (s) => s.id === selection.primaryId,
-                    );
-                    if (primaryShape?.type !== "bspline") return;
-
-                    const pointMap = new Map(
-                      editDocument.points.map((p) => [p.id, p]),
-                    );
-
-                    const controlPoints = primaryShape.controlPointIds
-                      .map((id) => pointMap.get(id))
-                      .filter((p): p is { id: string; x: number; y: number } => Boolean(p));
-
-                    if (controlPoints.length < 2) return;
-
-                    let cx = 0;
-                    let cy = 0;
-
-                    controlPoints.forEach((p) => {
-                      cx += p.x;
-                      cy += p.y;
-                    });
-
-                    cx /= controlPoints.length;
-                    cy /= controlPoints.length;
-
-                    cadEditor?.insertControlPointToSelectedBSpline(cx, cy);
-                  }}
-                  onRemoveBSplineControlPoint={() => {
-                    cadEditor?.removeSelectedPointFromBSpline();
-                  }}
-                />
-              </CollapsibleSection>
-            </div>
-          )}
-
-          {cadTab === "cam" && (
-            <div className="flex flex-col gap-4">
-              <CollapsibleSection
-                title="Настройки документа"
-                icon={<FiSettings size={18} />}
-              >
-                <DocumentSettingsPanel
-                  document={editDocument}
-                  setDocument={setEditDocument}
-                />
-              </CollapsibleSection>
-            </div>
+          {cadTab === "cad" ? (
+            <CadPropertiesSection
+              editDocument={editDocument}
+              setEditDocument={setEditDocument}
+              selection={selection}
+              cadEditor={cadEditor}
+            />
+          ) : (
+            <CamPropertiesSection
+              editDocument={editDocument}
+              setEditDocument={setEditDocument}
+            />
           )}
         </div>
       </RightPanel>
@@ -113,28 +57,9 @@ export function RightPanelContainer() {
       <div className="flex flex-col gap-4">
         <CollapsibleSection title="Состояние" icon={<FiInfo size={18} />}>
           <InfoPanelSection
-            bounds={
-              parsed?.bounds ?? {
-                minX: 0,
-                minY: 0,
-                minZ: 0,
-                maxX: 0,
-                maxY: 0,
-                maxZ: 0,
-              }
-            }
+            bounds={parsed?.bounds ?? { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 }}
             stock={stock}
-            parsedStats={
-              parsed?.stats ?? {
-                totalLines: 0,
-                totalMoves: 0,
-                rapidMoves: 0,
-                workMoves: 0,
-                cuttingMoves: 0,
-                renderMoves: 0,
-                renderStep: 0,
-              }
-            }
+            parsedStats={parsed?.stats ?? { totalLines: 0, totalMoves: 0, rapidMoves: 0, workMoves: 0, cuttingMoves: 0, renderMoves: 0, renderStep: 0 }}
             currentState={currentState}
             cameraInfo={cameraInfo}
             totalLength={parsed?.totalLength ?? 0}

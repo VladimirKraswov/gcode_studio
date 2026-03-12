@@ -2,18 +2,14 @@
 import { useCallback } from "react";
 import { downloadTextFile } from "@/shared/utils/common";
 import { createProjectFile, parseProjectFile } from "@/shared/utils/projectFile";
-import { useApp } from "@/contexts/AppContext";
+import { useGCode } from "@/contexts/GCodeContext";
+import { useCad } from "@/contexts/CadContext";
+import { useUI } from "@/contexts/UIContext";
 import type { GCodeStudioProject } from "@/types/project";
 import { useNotifications } from "@/contexts/NotificationContext";
 
 export function useProject() {
   const {
-    editDocument,
-    setEditDocument,
-    selection,
-    setSelection,
-    cadView,
-    setCadView,
     fileName,
     setFileName,
     source,
@@ -26,9 +22,21 @@ export function useProject() {
     setPlacementMode,
     detailLevel,
     setDetailLevel,
+  } = useGCode();
+
+  const {
+    editDocument,
+    setEditDocument,
+    selection,
+    setSelection,
+    cadView,
+    setCadView,
+  } = useCad();
+
+  const {
     activeTab,
     setActiveTab,
-  } = useApp();
+  } = useUI();
 
   const { addNotification } = useNotifications();
 
