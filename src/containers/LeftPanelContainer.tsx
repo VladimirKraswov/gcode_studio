@@ -24,9 +24,13 @@ export function LeftPanelContainer() {
     setDetailLevel,
   } = useGCode();
 <<<<<<< HEAD
+<<<<<<< HEAD
   
 =======
 >>>>>>> 1e38d77 (Refactor CAD editor for type safety, performance, and modularity)
+=======
+  
+>>>>>>> 602697f (Refactoring)
   const {
     resetCamera,
     editDocument,
@@ -34,9 +38,13 @@ export function LeftPanelContainer() {
     selection,
     setSelection,
 <<<<<<< HEAD
+<<<<<<< HEAD
     deleteConstraintById,
 =======
 >>>>>>> 1e38d77 (Refactor CAD editor for type safety, performance, and modularity)
+=======
+    deleteConstraintById,
+>>>>>>> 602697f (Refactoring)
   } = useCad();
 
   if (activeTab === "edit") {
