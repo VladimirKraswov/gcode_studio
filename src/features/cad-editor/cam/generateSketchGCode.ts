@@ -7,7 +7,11 @@ import {
   optimizeTravel,
   planPocket,
   planProfile,
+<<<<<<< HEAD
 } from "@/shared/libs/cam-v2/src";
+=======
+} from "@/shared/libs/cam-v2/src"
+>>>>>>> 602697f (Refactoring)
 
 import type {
   Contour,

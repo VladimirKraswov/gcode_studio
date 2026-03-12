@@ -23,12 +23,14 @@ export function LeftPanelContainer() {
     detailLevel,
     setDetailLevel,
   } = useGCode();
+  
   const {
     resetCamera,
     editDocument,
     setEditDocument,
     selection,
     setSelection,
+    deleteConstraintById,
   } = useCad();
 
   if (activeTab === "edit") {
