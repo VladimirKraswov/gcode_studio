@@ -52,7 +52,6 @@ function AppContent() {
   const tabMeta = TAB_META[activeTab as keyof typeof TAB_META];
 
   const showToolpath = settings.preview.showToolpath;
-  const showRapids = settings.preview.showRapids;
 
   if (!parsed || isParsing) {
     return (

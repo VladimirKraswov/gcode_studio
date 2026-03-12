@@ -2,6 +2,7 @@ import { useTheme } from "@/shared/hooks/useTheme";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
 import { CadSheet } from "./CadSheet";
+import { SelectionBoxOverlay } from "./SelectionBoxOverlay";
 import { DraftOverlay } from "./DraftOverlay";
 import { ShapeRenderer } from "./ShapeRenderer";
 import { SelectionOverlay } from "./SelectionOverlay";
@@ -35,6 +36,7 @@ type CadCanvasProps = {
   isSelectionHover: boolean;
   isTransforming: boolean;
   arrayPreview: { shapes: SketchShape[]; points: any[] } | null;
+  selectionBox: { startX: number; startY: number; endX: number; endY: number; moved: boolean } | null;
   solveState?: SketchSolveState;
   conflictingConstraintIds?: string[];
   onSelectionHoverChange: (value: boolean) => void;
@@ -104,6 +106,7 @@ export function CadCanvas({
   isSelectionHover,
   isTransforming,
   arrayPreview,
+  selectionBox,
   solveState,
   conflictingConstraintIds = [],
   onSelectionHoverChange,
@@ -214,6 +217,8 @@ export function CadCanvas({
           onHoverChange={onSelectionHoverChange}
         />
       )}
+
+      <SelectionBoxOverlay box={selectionBox} />
 
       <DraftOverlay
         draft={draft}

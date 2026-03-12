@@ -11,7 +11,7 @@ function refKey(ref: SketchSelectionRef): string {
   return `${ref.kind}:${ref.id}`;
 }
 
-function toState(
+export function toState(
   refs: SketchSelectionRef[],
   primaryRef: SketchSelectionRef | null,
 ): SelectionState {

@@ -70,7 +70,9 @@ import {
   resolveDragSelectionIds,
   resolveSelectionOnPointerDown,
   buildGroupShapeSelection,
+  getEntitiesInBox,
 } from "../model/selectionFacade";
+import { toState } from "../model/selection";
 
 import { useCadDrawing } from "./useCadDrawing";
 import { useCadView } from "./useCadView";
@@ -121,6 +123,15 @@ export function useCadEditor({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSelectionHover, setIsSelectionHover] = useState(false);
+  const [selectionBox, setSelectionBox] = useState<{
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    startClientX: number;
+    startClientY: number;
+    moved: boolean;
+  } | null>(null);
 
   const {
     tool, setTool: setToolDrawing, draft, setDraft, polylineDraft, setPolylineDraft,
@@ -239,11 +250,16 @@ export function useCadEditor({
         if (tool === "polyline") commitPolyline();
         else commitBSpline();
       }
-      if (event.key === "Escape" && polylineDraft.length > 0) {
-        event.preventDefault();
-        setPolylineDraft([]);
-        setPolylineHoverPoint(null);
-        setIsSelectionHover(false);
+      if (event.key === "Escape") {
+        if (polylineDraft.length > 0) {
+          event.preventDefault();
+          setPolylineDraft([]);
+          setPolylineHoverPoint(null);
+          setIsSelectionHover(false);
+        } else if (selection.ids.length > 0) {
+          event.preventDefault();
+          onSelectionChangeSilently(clearSelection());
+        }
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -381,7 +397,17 @@ export function useCadEditor({
       if (hit) { checkpointHistory(); setDocument((prev) => deleteShapeCascade(prev, hit.id)); }
       return;
     }
-    if (tool === "select") onSelectionChangeSilently(clearSelection());
+    if (tool === "select") {
+      setSelectionBox({
+        startX: cad.x,
+        startY: cad.y,
+        endX: cad.x,
+        endY: cad.y,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        moved: false,
+      });
+    }
   }, [tool, draft, polylineDraft, isPanMouseButton, startPan, getCadPoint, document, addText, addArc, cancelCurrentDraft, checkpointHistory, setDocument, onSelectionChangeSilently, selection.ids.length, setDraft, setPolylineDraft, setPolylineHoverPoint]);
 
   const handleCanvasPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
@@ -396,8 +422,16 @@ export function useCadEditor({
     const cad = document.snapEnabled ? resolveSnap(rawCad, { gridStep: Math.max(1, document.snapStep), points: document.points, shapes: document.shapes, tolerance: 6 }).point : rawCad;
     if (tool === "polyline" || tool === "bspline") setPolylineHoverPoint(cad);
     if (draft) { setDraft((prev) => updateDraft(prev as any, cad.x, cad.y)); return; }
+    if (selectionBox) {
+      const dist = Math.sqrt(
+        Math.pow(event.clientX - selectionBox.startClientX, 2) +
+        Math.pow(event.clientY - selectionBox.startClientY, 2)
+      );
+      setSelectionBox((prev) => prev ? { ...prev, endX: cad.x, endY: cad.y, moved: prev.moved || dist > 5 } : null);
+      return;
+    }
     handleDrag(cad);
-  }, [panState, tool, draft, getCadPoint, document, onViewChangeSilently, handleDrag, setPanState, setPolylineHoverPoint, setDraft]);
+  }, [panState, tool, draft, getCadPoint, document, onViewChangeSilently, handleDrag, setPanState, setPolylineHoverPoint, setDraft, selectionBox]);
 
   const handleCanvasPointerUp = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (draft?.type === "rectangle") addRectangle(draft.startX, draft.startY, draft.endX, draft.endY);
@@ -407,12 +441,40 @@ export function useCadEditor({
       else { const line = getLineFromDraft(draft); addLine(line.x1, line.y1, line.x2, line.y2); }
     }
     if (draft) setDraft(null);
+
+    if (selectionBox) {
+      if (selectionBox.moved) {
+        const minX = Math.min(selectionBox.startX, selectionBox.endX);
+        const maxX = Math.max(selectionBox.startX, selectionBox.endX);
+        const minY = Math.min(selectionBox.startY, selectionBox.endY);
+        const maxY = Math.max(selectionBox.startY, selectionBox.endY);
+
+        const refs = getEntitiesInBox(document, minX, minY, maxX, maxY);
+        if (event.shiftKey) {
+            let nextRefs = [...selection.refs];
+            for (const ref of refs) {
+                if (!nextRefs.some(r => r.kind === ref.kind && r.id === ref.id)) {
+                    nextRefs.push(ref);
+                }
+            }
+            onSelectionChangeSilently(toState(nextRefs, nextRefs[nextRefs.length - 1] || null));
+        } else {
+            onSelectionChangeSilently(toState(refs, refs.length > 0 ? refs[refs.length - 1] : null));
+        }
+      } else {
+        if (!event.shiftKey) {
+          onSelectionChangeSilently(clearSelection());
+        }
+      }
+      setSelectionBox(null);
+    }
+
     if (panState && panState.pointerId === event.pointerId) {
       if (panState.clearSelectionOnPointerUp && !panState.moved && tool === "select") onSelectionChangeSilently(clearSelection());
       setPanState(null);
     }
     endDrag();
-  }, [draft, tool, panState, addRectangle, addCircle, addEllipse, addLine, onSelectionChangeSilently, setDraft, setPanState, endDrag]);
+  }, [draft, tool, panState, addRectangle, addCircle, addEllipse, addLine, onSelectionChangeSilently, setDraft, setPanState, endDrag, selectionBox, document, selection.refs]);
 
   const bindSelectionDragStart = useCallback((event: React.PointerEvent<SVGRectElement>) => {
     if (isPanMouseButton(event.button)) { startPan(event); return; }
@@ -477,6 +539,7 @@ export function useCadEditor({
 
   return {
     svgRef, tool, setTool, draft, polylineDraft, polylineHoverPoint, textTool, setTextTool, textPreviewMap, isGenerating, view,
+    selectionBox,
     isDragging: !!dragState, isPanning: !!panState, isSelectionHover, setIsSelectionHover, isTransforming: false,
     setSelectedBSplineDegree, setSelectedBSplinePeriodic,
     insertControlPointToSelectedBSpline: insertControlPointToSelectedBSpline(selection),
