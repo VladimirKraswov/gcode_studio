@@ -111,15 +111,7 @@ export function materializeSnappedPoint(
   };
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-export function buildQuickConstraintFromSelection(params: {
-=======
 export function createQuickConstraintFromSelection(params: {
->>>>>>> 602697f (Refactoring)
-=======
-export function createQuickConstraintFromSelection(params: {
->>>>>>> 602697f (Refactoring)
   type: SketchConstraintType;
   document: SketchDocument;
   selection: SelectionState;
@@ -261,15 +253,7 @@ export function addQuickConstraintFromSelection(params: {
   selection: SelectionState;
 }): SketchDocument | null {
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-  const constraint = buildQuickConstraintFromSelection(params);
-=======
   const constraint = createQuickConstraintFromSelection(params);
->>>>>>> 602697f (Refactoring)
-=======
-  const constraint = createQuickConstraintFromSelection(params);
->>>>>>> 602697f (Refactoring)
 
   if (!constraint) return null;
 
