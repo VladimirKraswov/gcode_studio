@@ -17,26 +17,38 @@ export function MainLayout({
   bottomBar,
 }: MainLayoutProps) {
   const [leftWidth, setLeftWidth] = useState(280);
-  const [isResizing, setIsResizing] = useState(false);
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
 
-  const startResizing = useCallback((e: React.MouseEvent) => {
+  const [rightWidth, setRightWidth] = useState(300);
+  const [isResizingRight, setIsResizingRight] = useState(false);
+
+  const startResizingLeft = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setIsResizing(true);
+    setIsResizingLeft(true);
+  }, []);
+
+  const startResizingRight = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingRight(true);
   }, []);
 
   const stopResizing = useCallback(() => {
-    setIsResizing(false);
+    setIsResizingLeft(false);
+    setIsResizingRight(false);
   }, []);
 
   const resize = useCallback((e: MouseEvent) => {
-    if (isResizing) {
+    if (isResizingLeft) {
       const nextWidth = Math.max(200, Math.min(600, e.clientX));
       setLeftWidth(nextWidth);
+    } else if (isResizingRight) {
+      const nextWidth = Math.max(200, Math.min(600, window.innerWidth - e.clientX));
+      setRightWidth(nextWidth);
     }
-  }, [isResizing]);
+  }, [isResizingLeft, isResizingRight]);
 
   useEffect(() => {
-    if (isResizing) {
+    if (isResizingLeft || isResizingRight) {
       window.addEventListener("mousemove", resize);
       window.addEventListener("mouseup", stopResizing);
     }
@@ -44,7 +56,9 @@ export function MainLayout({
       window.removeEventListener("mousemove", resize);
       window.removeEventListener("mouseup", stopResizing);
     };
-  }, [isResizing, resize, stopResizing]);
+  }, [isResizingLeft, isResizingRight, resize, stopResizing]);
+
+  const isResizing = isResizingLeft || isResizingRight;
 
   return (
     <div className={`ui-app-shell flex flex-col h-screen overflow-hidden bg-bg text-text ${isResizing ? "cursor-col-resize select-none" : ""}`}>
@@ -62,7 +76,7 @@ export function MainLayout({
           {leftPanel}
           <div
             className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-r border-transparent hover:border-primary/20"
-            onMouseDown={startResizing}
+            onMouseDown={startResizingLeft}
           />
         </aside>
 
@@ -81,7 +95,14 @@ export function MainLayout({
         </main>
 
         {/* Right Sidebar (Properties) */}
-        <aside className="w-[300px] shrink-0 border-l border-border bg-panel-solid flex flex-col overflow-hidden">
+        <aside
+            className="shrink-0 border-l border-border bg-panel-solid flex flex-col overflow-hidden relative"
+            style={{ width: rightWidth }}
+        >
+          <div
+            className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-l border-transparent hover:border-primary/20"
+            onMouseDown={startResizingRight}
+          />
           {rightPanel}
         </aside>
       </div>
