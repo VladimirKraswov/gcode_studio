@@ -38,7 +38,6 @@ import type {
   SketchPolylinePoint,
   SketchTool,
   MirrorAxis,
-  SketchShape,
   SketchBSpline,
   SketchArrayDefinition,
   SketchConstraintType,
@@ -1305,7 +1304,11 @@ export function useCadEditor({
   }, [arrayToolMode, selection.ids, document, linearArrayParams, circularArrayParams]);
 
   const addQuickConstraint = useCallback((type: SketchConstraintType) => {
-    const constraint = createQuickConstraintFromSelection(document, selection, type);
+    const constraint = createQuickConstraintFromSelection({
+        document,
+        selection,
+        type
+    });
     if (!constraint) return;
 
     checkpointHistory();
@@ -1342,7 +1345,7 @@ export function useCadEditor({
 
   const deleteConstraintById = useCallback((constraintId: string) => {
     checkpointHistory();
-    setDocument((prev) => removeConstraint(prev, constraintId));
+    setDocument((prev) => updateGeometry(removeConstraint(prev, constraintId)));
     onSelectionChangeSilently(clearSelection());
   }, [checkpointHistory, setDocument, onSelectionChangeSilently]);
 

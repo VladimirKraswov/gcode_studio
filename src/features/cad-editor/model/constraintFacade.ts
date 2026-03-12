@@ -94,7 +94,7 @@ export function materializeSnappedPoint(
   if (snap.kind === "point-on-object" && snap.shapeId) {
     const targetShape = nextDoc.shapes.find((shape) => shape.id === snap.shapeId);
 
-    if (isShapeUsableForPointOnObject(targetShape)) {
+    if (targetShape && isShapeUsableForPointOnObject(targetShape)) {
       nextDoc = addConstraint(
         nextDoc,
         createConstraint("point-on-object", [

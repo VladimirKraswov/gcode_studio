@@ -156,6 +156,12 @@ export function useAppState() {
     resetCamera,
     cadEditor,
     setCadEditor,
+    deleteConstraintById: (id: string) => {
+        setEditDocument((prev) => updateGeometry({
+            ...prev,
+            constraints: prev.constraints.filter((c) => c.id !== id),
+        }));
+    },
   }), [
     editDocument, setEditDocument, setEditDocumentSilently,
     selection, setSelection, setSelectionSilently,

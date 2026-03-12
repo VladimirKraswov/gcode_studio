@@ -1,7 +1,6 @@
 import type {
   SketchPoint,
   SketchConstraint,
-  SketchParameter,
   SketchShape,
 } from "../types";
 import { getConstraintPointIds, getConstraintShapeIds } from "../constraints";

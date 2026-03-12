@@ -44,10 +44,6 @@ function roundPoint(point: SketchPolylinePoint): SketchPolylinePoint {
   };
 }
 
-function sqr(value: number): number {
-  return value * value;
-}
-
 function pointToSegmentProjection(
   point: SketchPolylinePoint,
   a: SketchPolylinePoint,
@@ -127,20 +123,6 @@ function lineLineIntersection(
 
 function getPointMap(points: SketchPoint[]) {
   return new Map(points.map((point) => [point.id, point]));
-}
-
-function getShapePointIds(shape: SketchShape): string[] {
-  const anyShape = shape as any;
-  const ids: string[] = [];
-
-  if (anyShape.p1) ids.push(anyShape.p1);
-  if (anyShape.p2) ids.push(anyShape.p2);
-  if (anyShape.center) ids.push(anyShape.center);
-  if (anyShape.majorAxisPoint) ids.push(anyShape.majorAxisPoint);
-  if (Array.isArray(anyShape.pointIds)) ids.push(...anyShape.pointIds);
-  if (Array.isArray(anyShape.controlPointIds)) ids.push(...anyShape.controlPointIds);
-
-  return ids;
 }
 
 function getLineSegments(
