@@ -34,7 +34,10 @@ export interface CadContextValue {
     insertControlPointToSelectedBSpline: (x: number, y: number) => void;
     removeSelectedPointFromBSpline: () => void;
   } | null) => void;
+<<<<<<< HEAD
   deleteConstraintById: (id: string) => void;
+=======
+>>>>>>> 1e38d77 (Refactor CAD editor for type safety, performance, and modularity)
 }
 
 export const CadContext = createContext<CadContextValue | undefined>(undefined);

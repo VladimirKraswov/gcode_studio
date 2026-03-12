@@ -8,10 +8,13 @@ import type {
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
 import type { SketchSolveState } from "../model/solver/diagnostics";
+<<<<<<< HEAD
 import {
   getConstraintPointIds,
   isDimensionalConstraint,
 } from "../model/constraints";
+=======
+>>>>>>> 1e38d77 (Refactor CAD editor for type safety, performance, and modularity)
 
 type CadConstraintOverlayProps = {
   document: SketchDocument;
