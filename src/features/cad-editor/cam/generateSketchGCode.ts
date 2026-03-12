@@ -7,7 +7,7 @@ import {
   optimizeTravel,
   planPocket,
   planProfile,
-} from "@/modules/cam-v2/src";
+} from "@/shared/libs/cam-v2/src";
 
 import type {
   Contour,
@@ -15,7 +15,7 @@ import type {
   PocketPlanInput,
   ProfilePlanInput,
   Toolpath,
-} from "@/modules/cam-v2/src/types";
+} from "@/shared/libs/cam-v2/src/types";
 
 function clampStepover(value: number | null | undefined, fallback: number): number {
   const next = value ?? fallback;
