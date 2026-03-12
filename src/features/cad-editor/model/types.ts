@@ -7,20 +7,72 @@ export type SketchPolylinePoint = {
   y: number;
 };
 
+export type SketchPoint = {
+  id: string;
+  x: number;
+  y: number;
+  isFixed?: boolean;
+};
+
+export type SketchParameter = {
+  id: string;
+  name: string;
+  value: number;
+  expression?: string;
+};
+
+export type ConstraintEdge = "left" | "right" | "top" | "bottom";
+
+export type SketchConstraintType =
+  | "coincident"
+  | "horizontal"
+  | "vertical"
+  | "parallel"
+  | "perpendicular"
+  | "tangent"
+  | "equal"
+  | "symmetric"
+  | "distance"
+  | "distance-x"
+  | "distance-y"
+  | "angle"
+  | "radius"
+  | "diameter"
+  | "lock";
+
+export type SketchConstraint = {
+  id: string;
+  type: SketchConstraintType;
+  pointIds: string[];
+  shapeIds: string[];
+  value?: number;
+  parameterId?: string;
+  enabled: boolean;
+};
+
 export type SketchLinearArrayParams = {
   count: number;
   spacing: number;
-  axis: "x" | "y";
-  direction: "positive" | "negative";
+  axis: "x" | "y" | string; // ID of a line for axis
+  direction: "positive" | "negative" | "both";
+  gridSecondAxis?: {
+    count: number;
+    spacing: number;
+    axis: "x" | "y" | string;
+  };
 };
 
 export type SketchCircularArrayParams = {
   count: number;
-  centerX: number;
-  centerY: number;
+  centerX: number | string; // coordinate or point ID
+  centerY: number | string;
+  centerPointId?: string;
   radius: number;
+  startAngle: number;
+  endAngle: number;
   totalAngle: number;
   rotateItems: boolean;
+  direction: "cw" | "ccw";
 };
 
 export type SketchArrayDefinition =
@@ -78,48 +130,67 @@ export type SketchBase = {
   cutZ?: number | null;
   strokeWidth?: number;
   visible: boolean;
+  isConstruction?: boolean;
   groupId: string | null;
   camSettings?: Partial<SketchCamSettings>;
 };
 
 export type SketchRectangle = SketchBase & {
   type: "rectangle";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  p1: string; // Point ID (top-left)
+  p2: string; // Point ID (bottom-right)
   rotation?: number;
 };
 
 export type SketchCircle = SketchBase & {
   type: "circle";
-  cx: number;
-  cy: number;
+  center: string; // Point ID
   radius: number;
+  radiusPoint?: string; // Optional Point ID on circumference
 };
 
 export type SketchLine = SketchBase & {
   type: "line";
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+  p1: string; // Point ID
+  p2: string; // Point ID
 };
 
 export type SketchArc = SketchBase & {
   type: "arc";
-  cx: number;
-  cy: number;
+  center: string; // Point ID
+  p1: string; // Point ID (start)
+  p2: string; // Point ID (end)
+  clockwise: boolean;
   radius: number;
+};
+
+export type SketchEllipse = SketchBase & {
+  type: "ellipse";
+  center: string; // Point ID
+  majorAxisPoint: string; // Point ID
+  minorAxisRadius: number;
+};
+
+export type SketchEllipseArc = SketchBase & {
+  type: "ellipse-arc";
+  center: string;
+  majorAxisPoint: string;
+  minorAxisRadius: number;
   startAngle: number;
   endAngle: number;
-  clockwise: boolean;
 };
 
 export type SketchPolyline = SketchBase & {
   type: "polyline";
-  points: SketchPolylinePoint[];
+  pointIds: string[];
   closed: boolean;
+};
+
+export type SketchBSpline = SketchBase & {
+  type: "bspline";
+  controlPointIds: string[];
+  degree: number;
+  periodic: boolean;
 };
 
 export type SketchText = SketchBase & {
@@ -131,6 +202,7 @@ export type SketchText = SketchBase & {
   letterSpacing: number;
   fontFile: string;
   rotation?: number;
+  scale?: number;
   align?: "left" | "center" | "right";
   cutMode?: "outline" | "pocket";
 };
@@ -144,8 +216,9 @@ export type SketchSvg = SketchBase & {
   sourceWidth: number;
   sourceHeight: number;
   preserveAspectRatio: boolean;
-  contours: SketchPolylinePoint[][];
+  contours: string[][]; // Array of polylines, each a string of "x,y" coordinates
   rotation?: number;
+  scale?: number;
 };
 
 export interface CadShapeRegistry {
@@ -153,7 +226,10 @@ export interface CadShapeRegistry {
   circle: SketchCircle;
   line: SketchLine;
   arc: SketchArc;
+  ellipse: SketchEllipse;
+  "ellipse-arc": SketchEllipseArc;
   polyline: SketchPolyline;
+  bspline: SketchBSpline;
   text: SketchText;
   svg: SketchSvg;
 }
@@ -165,28 +241,7 @@ export type MachineToolType = "router" | "spindle" | "laser" | "drag-knife";
 export type UnitsMode = "mm" | "inch";
 export type SpindleDirection = "cw" | "ccw";
 
-export type ConstraintEdge = "left" | "right" | "top" | "bottom";
 export type MirrorAxis = "x" | "y";
-
-export type SketchDistanceConstraintTarget =
-  | {
-      kind: "sheet";
-    }
-  | {
-      kind: "shape";
-      shapeId: string;
-    };
-
-export type SketchDistanceConstraint = {
-  id: string;
-  name?: string;
-  enabled: boolean;
-  shapeId: string;
-  edge: ConstraintEdge;
-  target: SketchDistanceConstraintTarget;
-  targetEdge: ConstraintEdge;
-  distance: number;
-};
 
 export type SketchDocument = {
   width: number;
@@ -221,9 +276,12 @@ export type SketchDocument = {
 
   snapEnabled: boolean;
   snapStep: number;
+
+  points: SketchPoint[];
   shapes: SketchShape[];
   groups: SketchGroup[];
-  constraints: SketchDistanceConstraint[];
+  constraints: SketchConstraint[];
+  parameters: SketchParameter[];
 };
 
 export interface CadToolRegistry {
@@ -233,8 +291,16 @@ export interface CadToolRegistry {
   line: { id: "line" };
   arc: { id: "arc" };
   polyline: { id: "polyline" };
+  ellipse: { id: "ellipse" };
+  bspline: { id: "bspline" };
   text: { id: "text" };
   pan: { id: "pan" };
+  trim: { id: "trim" };
+  extend: { id: "extend" };
+  mirror: { id: "mirror" };
+  offset: { id: "offset" };
+  fillet: { id: "fillet" };
+  chamfer: { id: "chamfer" };
 }
 
 export type SketchTool = keyof CadToolRegistry;

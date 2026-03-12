@@ -1,10 +1,11 @@
-import type { SketchPolylinePoint, SketchShape } from "../model/types";
+import type { SketchPolylinePoint, SketchShape, SketchPoint } from "../model/types";
 import { distance } from "./distance";
 
 export type SnapOptions = {
   gridStep?: number;
   tolerance?: number;
   shapes?: SketchShape[];
+  points?: SketchPoint[];
 };
 
 export function snapToGrid(point: SketchPolylinePoint, gridStep = 10): SketchPolylinePoint {
@@ -14,19 +15,13 @@ export function snapToGrid(point: SketchPolylinePoint, gridStep = 10): SketchPol
   };
 }
 
-export function snapToEndpoints(point: SketchPolylinePoint, shapes: SketchShape[], tolerance = 4): SketchPolylinePoint {
-  const candidates: SketchPolylinePoint[] = [];
-  for (const shape of shapes) {
-    if (shape.type === "polyline") {
-      candidates.push(...shape.points);
-    }
-  }
+export function snapToEndpoints(point: SketchPolylinePoint, allPoints: SketchPoint[], tolerance = 4): SketchPolylinePoint {
   let best = point;
   let bestDistance = Infinity;
-  for (const candidate of candidates) {
+  for (const candidate of allPoints) {
     const d = distance(point, candidate);
     if (d <= tolerance && d < bestDistance) {
-      best = candidate;
+      best = { x: candidate.x, y: candidate.y };
       bestDistance = d;
     }
   }
@@ -42,8 +37,8 @@ export function snapToIntersections(point: SketchPolylinePoint) {
 }
 
 export function applyDefaultSnap(point: SketchPolylinePoint, options: SnapOptions = {}) {
-  const { gridStep = 1, tolerance = 4, shapes = [] } = options;
-  const endpointSnapped = snapToEndpoints(point, shapes, tolerance);
+  const { gridStep = 1, tolerance = 4, points = [] } = options;
+  const endpointSnapped = snapToEndpoints(point, points, tolerance);
   if (endpointSnapped !== point) {
     return endpointSnapped;
   }

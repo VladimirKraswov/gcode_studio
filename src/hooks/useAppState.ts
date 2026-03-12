@@ -12,7 +12,7 @@ import type { GCodeStudioProject } from "@/types/project";
 import { createEmptySketchDocument } from "@/features/cad-editor/model/document";
 import { createSelection } from "@/features/cad-editor/model/selection";
 import { createDefaultView } from "@/features/cad-editor/model/view";
-import { applyDistanceConstraints } from "@/features/cad-editor/model/constraints";
+import { updateGeometry } from "@/features/cad-editor/model/solver/manager";
 import { useGCodeFile } from "@/features/gcode-editor/hooks/useGCodeFile";
 import { useSceneState } from "@/features/preview/hooks/useSceneState";
 
@@ -31,6 +31,10 @@ export function useAppState() {
   const [detailLevel, setDetailLevel] = useState(5);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [settings, setSettings] = useState(() => loadSettings());
+  const [cadEditor, setCadEditor] = useState<{
+    insertControlPointToSelectedBSpline: (x: number, y: number) => void;
+    removeSelectedPointFromBSpline: () => void;
+  } | null>(null);
 
   const updateSettings = (update: typeof settings | ((prev: typeof settings) => typeof settings)) => {
     setSettings(prev => {
@@ -39,6 +43,7 @@ export function useAppState() {
       return next;
     });
   };
+  
 
   const {
     cameraResetKey,
@@ -76,7 +81,7 @@ export function useAppState() {
     setCadHistoryState(prev => {
       const nextValue = typeof update === "function" ? (update as (value: any) => any)(prev[key]) : update;
       if (key === "editDocument") {
-        return { ...prev, [key]: applyDistanceConstraints(nextValue as any).document };
+        return { ...prev, [key]: updateGeometry(nextValue as any) };
       }
       return { ...prev, [key]: nextValue };
     }, options);
@@ -129,5 +134,8 @@ export function useAppState() {
 
     applyGeneratedGCode,
     handleFileChange,
+
+    cadEditor,
+    setCadEditor,
   };
 }

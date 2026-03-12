@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { SvgImportModal } from "./SvgImportModal";
 import {
   CadCanvas,
@@ -12,9 +12,11 @@ import {
   type ViewTransform,
   createDefaultCadRegistry,
   CadRegistryProvider,
+  QuickConstraintBar,
 } from "@/features/cad-editor";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 import { FiPlay } from "react-icons/fi";
+import { useApp } from "@/contexts/AppContext";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -36,6 +38,7 @@ type EditTabProps = {
 };
 
 export default function EditTab(props: EditTabProps) {
+  const { setCadEditor } = useApp();
   const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
 
   const editor = useCadEditor({
@@ -59,14 +62,30 @@ export default function EditTab(props: EditTabProps) {
   const canUngroupSelected = Boolean(primaryShape?.groupId);
   const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
 
+  // Синхронизируем методы редактора с контекстом
+  useEffect(() => {
+    setCadEditor({
+      insertControlPointToSelectedBSpline: editor.insertControlPointToSelectedBSpline,
+      removeSelectedPointFromBSpline: editor.removeSelectedPointFromBSpline,
+    });
+
+    return () => {
+      setCadEditor(null); // очищаем при размонтировании
+    };
+  }, [
+    editor.insertControlPointToSelectedBSpline,
+    editor.removeSelectedPointFromBSpline,
+    setCadEditor
+  ]);
+
   return (
     <CadRegistryProvider registry={cadRegistry}>
       <div className="flex flex-1 flex-col overflow-hidden bg-bg relative">
         {/* Workspace Area */}
         <div className="flex-1 relative flex overflow-hidden">
 
-          {/* Vertical Tools */}
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10">
+          {/* Left Vertical Tools */}
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 z-30">
             <EditToolbar
               tool={editor.tool}
               onToolChange={editor.setTool}
@@ -92,8 +111,8 @@ export default function EditTab(props: EditTabProps) {
             />
           </div>
 
-          {/* Floating Action Panels (Array, Text) */}
-          <div className="absolute right-4 top-4 z-10 flex flex-col gap-2 max-w-[280px]">
+          {/* Floating Tool Parameters (Array, Text) - positioned to avoid sidebars if possible */}
+          <div className="absolute left-16 top-4 z-30 flex flex-col gap-2 max-w-[280px]">
             {editor.arrayTool.mode && (
               <ArrayToolPanel
                 mode={editor.arrayTool.mode}
@@ -132,7 +151,6 @@ export default function EditTab(props: EditTabProps) {
               isDragging={editor.isDragging}
               isPanning={editor.isPanning}
               isSelectionHover={editor.isSelectionHover}
-              constraintDraft={editor.constraintDraft}
               arrayPreviewShapes={editor.arrayPreviewShapes}
               onSelectionHoverChange={editor.setIsSelectionHover}
               onPointerDown={editor.handleCanvasPointerDown}
@@ -146,11 +164,17 @@ export default function EditTab(props: EditTabProps) {
               onSelectionPointerDown={editor.bindSelectionDragStart}
               onScaleHandlePointerDown={editor.bindScaleHandleStart}
               onRotateHandlePointerDown={editor.bindRotateHandleStart}
-              onConstraintEdgeHandlePointerDown={editor.bindConstraintEdgeHandleStart}
-              onConstraintLabelPointerDown={editor.bindConstraintLabelDragStart}
+              onConstraintPointerDown={editor.onConstraintPointerDown}
               isTransforming={editor.isTransforming}
             />
           </div>
+
+          {/* Quick Constraints Bar */}
+          {props.selection.ids.length > 0 && (
+            <div className="absolute left-1/2 -translate-x-1/2 bottom-12 z-20">
+              <QuickConstraintBar onAdd={editor.addQuickConstraint} />
+            </div>
+          )}
 
           {/* Quick Generate Button */}
           <button
@@ -172,6 +196,7 @@ export default function EditTab(props: EditTabProps) {
             isPanning={editor.isPanning}
             isTransforming={editor.isTransforming}
             hasDraft={hasDraft}
+            dof={editor.dof}
           />
         </div>
 

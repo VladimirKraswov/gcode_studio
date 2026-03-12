@@ -1,3 +1,5 @@
+// src/gcode/format.ts
+
 function round(value: number): number {
   return Number(value.toFixed(3));
 }

@@ -1,5 +1,5 @@
 import opentype from "opentype.js";
-import type { SketchText } from "@/features/cad-editor/model/types";
+import type { SketchText, SketchPoint } from "@/features/cad-editor/model/types";
 import { rotateCadPoint } from "@/features/cad-editor/geometry/geometryEngine";
 
 export type CadPoint = {
@@ -157,7 +157,7 @@ function getTextWidthApprox(polylines: CadPoint[][]): number {
   return Math.max(...xs) - Math.min(...xs);
 }
 
-export async function getTextPolylines(shape: SketchText): Promise<CadPoint[][]> {
+export async function getTextPolylines(shape: SketchText, _points: SketchPoint[]): Promise<CadPoint[][]> {
   const font = await loadFont(shape.fontFile);
   const path = font.getPath(shape.text, 0, 0, shape.height, {
     kerning: true,

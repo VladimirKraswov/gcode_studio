@@ -1,6 +1,8 @@
-import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+// src/toolpath/ramping.ts
 
-export type ToolpathPoint3D = CadPoint & { z: number };
+import type { Point } from "../types";
+
+export type ToolpathPoint3D = Point & { z: number };
 
 const EPS = 1e-6;
 
@@ -8,20 +10,20 @@ function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function distance(a: CadPoint, b: CadPoint): number {
+function distance(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
-function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
-  if (contour.length < 2) return contour.map(p => ({ ...p }));
+function normalizeClosedContour(contour: Point[]): Point[] {
+  if (contour.length < 2) return contour.map((p) => ({ ...p }));
   const first = contour[0];
   const last = contour[contour.length - 1];
-  if (distance(first, last) <= EPS) return contour.slice(0, -1).map(p => ({ ...p }));
-  return contour.map(p => ({ ...p }));
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map((p) => ({ ...p }));
+  return contour.map((p) => ({ ...p }));
 }
 
 export function generateRampingPass(
-  contour: CadPoint[],
+  contour: Point[],
   startZ: number,
   endZ: number,
   turns = 1
@@ -45,13 +47,10 @@ export function generateRampingPass(
   if (result.length > 0) {
     const last = result[result.length - 1];
     const first = closedContour[0];
-    if (
-      Math.abs(last.x - first.x) > EPS ||
-      Math.abs(last.y - first.y) > EPS ||
-      Math.abs(last.z - endZ) > EPS
-    ) {
+    if (Math.abs(last.x - first.x) > EPS || Math.abs(last.y - first.y) > EPS || Math.abs(last.z - endZ) > EPS) {
       result.push({ x: round(first.x), y: round(first.y), z: round(endZ) });
     }
   }
+
   return result;
 }

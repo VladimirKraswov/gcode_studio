@@ -1,6 +1,6 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
-import { groupBounds, selectionBounds } from "../model/shapeBounds";
+import { selectionBounds } from "../model/shapeBounds";
 import type { SketchDocument } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
@@ -23,27 +23,38 @@ type SelectionOverlayProps = {
   onHoverChange?: (value: boolean) => void;
 };
 
+function isPointSelectionId(id: string): boolean {
+  return id.startsWith("pt_");
+}
+
 export function SelectionOverlay({
   document,
   selection,
   documentHeight,
   view,
-  onPointerDown,
   onScaleHandlePointerDown,
   onRotateHandlePointerDown,
   isDragging = false,
   isHover = false,
-  onHoverChange,
 }: SelectionOverlayProps) {
   const { theme } = useTheme();
 
   if (selection.ids.length === 0) return null;
 
-  const primary = document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+  const selectedShapeIds = selection.ids.filter((id) => !isPointSelectionId(id));
+  const selectedShapes = document.shapes.filter((shape) => selectedShapeIds.includes(shape.id));
 
-  const bounds = primary?.groupId
-    ? groupBounds(document, primary.groupId)
-    : selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)));
+  if (selectedShapes.length === 0) {
+    return null;
+  }
+
+  const isParametricOnly = selectedShapes.every(
+    (shape) => shape.type !== "text" && shape.type !== "svg",
+  );
+
+  if (isParametricOnly) return null;
+
+  const bounds = selectionBounds(selectedShapes, document.points);
 
   const topLeft = cadToScreenPoint(
     { x: bounds.minX, y: bounds.maxY },
@@ -66,7 +77,6 @@ export function SelectionOverlay({
         fill: theme.cad.selectionDragFill,
         dash: "10 6",
         width: 2,
-        handleCursor: "grabbing" as const,
       }
     : isHover
       ? {
@@ -74,14 +84,12 @@ export function SelectionOverlay({
           fill: theme.cad.selectionHoverFill,
           dash: "8 4",
           width: 1.75,
-          handleCursor: "grab" as const,
         }
       : {
           stroke: theme.cad.selectionStroke,
           fill: theme.cad.selectionFill,
           dash: "6 4",
           width: 1.5,
-          handleCursor: "grab" as const,
         };
 
   const corners: Array<{
@@ -97,24 +105,7 @@ export function SelectionOverlay({
   ];
 
   return (
-    <g>
-      {onPointerDown && (
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          fill="transparent"
-          stroke="transparent"
-          strokeWidth={18}
-          rx={10}
-          style={{ cursor: palette.handleCursor }}
-          onPointerDown={onPointerDown}
-          onPointerEnter={() => onHoverChange?.(true)}
-          onPointerLeave={() => onHoverChange?.(false)}
-        />
-      )}
-
+    <g style={{ pointerEvents: "none" }}>
       <rect
         x={x}
         y={y}
@@ -125,7 +116,6 @@ export function SelectionOverlay({
         strokeWidth={palette.width}
         strokeDasharray={palette.dash}
         rx={10}
-        pointerEvents="none"
       />
 
       <line
@@ -145,7 +135,7 @@ export function SelectionOverlay({
         fill="transparent"
         stroke="transparent"
         onPointerDown={onRotateHandlePointerDown}
-        style={{ cursor: "alias" }}
+        style={{ cursor: "alias", pointerEvents: "all" }}
       />
 
       <circle
@@ -155,8 +145,7 @@ export function SelectionOverlay({
         fill={theme.cad.constraintLabelFill}
         stroke={palette.stroke}
         strokeWidth={1.5}
-        onPointerDown={onRotateHandlePointerDown}
-        style={{ cursor: "alias" }}
+        pointerEvents="none"
       />
 
       {!isDragging &&
@@ -169,7 +158,7 @@ export function SelectionOverlay({
               fill="transparent"
               stroke="transparent"
               onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
-              style={{ cursor: corner.cursor }}
+              style={{ cursor: corner.cursor, pointerEvents: "all" }}
             />
             <circle
               cx={corner.cx}
@@ -178,8 +167,7 @@ export function SelectionOverlay({
               fill={theme.cad.constraintLabelFill}
               stroke={palette.stroke}
               strokeWidth={1.5}
-              onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
-              style={{ cursor: corner.cursor }}
+              pointerEvents="none"
             />
           </g>
         ))}

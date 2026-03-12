@@ -1,6 +1,8 @@
-import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
-import { buildPocketOffsets } from "./offsetBuilder";
-import { classifyContours, pointInPolygon } from "./contourClassifier";
+// src/geometry/pocket.ts
+
+import type { Point } from "../types";
+import { classifyContours, pointInPolygon } from "./classifier";
+import { buildOffset } from "./offset";
 
 const EPS = 1e-6;
 
@@ -8,11 +10,11 @@ function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function distance(a: CadPoint, b: CadPoint): number {
+function distance(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
-function normalizeClosed(points: CadPoint[]): CadPoint[] {
+function normalizeClosed(points: Point[]): Point[] {
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
@@ -22,7 +24,7 @@ function normalizeClosed(points: CadPoint[]): CadPoint[] {
   return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
 }
 
-function boundsOf(polygon: CadPoint[]) {
+function boundsOf(polygon: Point[]) {
   return {
     minX: Math.min(...polygon.map((p) => p.x)),
     maxX: Math.max(...polygon.map((p) => p.x)),
@@ -31,29 +33,18 @@ function boundsOf(polygon: CadPoint[]) {
   };
 }
 
-function segmentInsidePocketArea(
-  a: CadPoint,
-  b: CadPoint,
-  outer: CadPoint[],
-  holes: CadPoint[][]
-): boolean {
-  const mid = {
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2,
-  };
-
+function segmentInsidePocketArea(a: Point, b: Point, outer: Point[], holes: Point[][]): boolean {
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   if (!pointInPolygon(mid, outer)) return false;
-  for (const hole of holes) {
-    if (pointInPolygon(mid, hole)) return false;
-  }
+  for (const hole of holes) if (pointInPolygon(mid, hole)) return false;
   return true;
 }
 
-function connectZigzagSegments(segments: CadPoint[][]): CadPoint[][] {
+function connectZigzagSegments(segments: Point[][]): Point[][] {
   if (segments.length === 0) return [];
 
-  const result: CadPoint[][] = [];
-  let current: CadPoint[] = [];
+  const result: Point[][] = [];
+  let current: Point[] = [];
 
   for (let i = 0; i < segments.length; i++) {
     const segment = i % 2 === 0 ? segments[i] : [...segments[i]].reverse();
@@ -66,92 +57,137 @@ function connectZigzagSegments(segments: CadPoint[][]): CadPoint[][] {
     const last = current[current.length - 1];
     const first = segment[0];
 
-    if (distance(last, first) <= EPS * 10) {
-      current.push(...segment.slice(1));
-    } else {
+    if (distance(last, first) <= EPS * 10) current.push(...segment.slice(1));
+    else {
       result.push(current);
       current = [...segment];
     }
   }
 
-  if (current.length >= 2) {
-    result.push(current);
-  }
-
+  if (current.length >= 2) result.push(current);
   return result;
 }
 
 function generateParallelPocketForRegion(
-  outer: CadPoint[],
-  holes: CadPoint[][],
+  outer: Point[],
+  holes: Point[][],
   step: number,
   angle = 0
-): CadPoint[][] {
+): Point[][] {
   if (outer.length < 3 || step <= EPS) return [];
-
   void angle;
 
   const bounds = boundsOf(outer);
-  const segments: CadPoint[][] = [];
+  const segments: Point[][] = [];
 
   for (let y = bounds.minY; y <= bounds.maxY + EPS; y += step) {
     const intersections: number[] = [];
 
-    const accumulateIntersections = (polygon: CadPoint[]) => {
+    const accumulateIntersections = (polygon: Point[]) => {
       for (let i = 0; i < polygon.length; i++) {
         const a = polygon[i];
         const b = polygon[(i + 1) % polygon.length];
-
         if (Math.abs(a.y - b.y) <= EPS) continue;
 
         const ymin = Math.min(a.y, b.y);
         const ymax = Math.max(a.y, b.y);
-
         if (y < ymin || y > ymax) continue;
 
         const t = (y - a.y) / (b.y - a.y);
         if (t < -EPS || t > 1 + EPS) continue;
-
         intersections.push(a.x + t * (b.x - a.x));
       }
     };
 
     accumulateIntersections(outer);
-
     intersections.sort((a, b) => a - b);
 
     for (let i = 0; i + 1 < intersections.length; i += 2) {
       const x1 = intersections[i];
       const x2 = intersections[i + 1];
-
       if (Math.abs(x2 - x1) <= EPS) continue;
 
       const a = { x: round(x1), y: round(y) };
       const b = { x: round(x2), y: round(y) };
-
-      if (segmentInsidePocketArea(a, b, outer, holes)) {
-        segments.push([a, b]);
-      }
+      if (segmentInsidePocketArea(a, b, outer, holes)) segments.push([a, b]);
     }
   }
 
   return connectZigzagSegments(segments);
 }
 
-export function generateOffsetPocketWithHoles(
-  contours: CadPoint[][],
-  step: number
-): CadPoint[][] {
+export function buildPocketOffsets(
+  polyline: Point[],
+  toolRadius: number,
+  stepover: number,
+  keepCenterCleanup = true
+): Point[][] {
+  const base = normalizeClosed(polyline);
+  if (base.length < 3 || toolRadius <= EPS || stepover <= EPS) return [];
+
+  const paths: Point[][] = [];
+  let currentLoops = buildOffset(base, -toolRadius, "round", 4);
+
+  while (currentLoops.length > 0) {
+    const sorted = currentLoops
+      .filter((l) => l.length >= 4)
+      .sort((a, b) => {
+        const aa = Math.abs(area(a));
+        const bb = Math.abs(area(b));
+        return bb - aa;
+      });
+
+    if (sorted.length === 0) break;
+    for (const loop of sorted) paths.push(loop);
+
+    const nextSeed = sorted[0];
+    const next = buildOffset(nextSeed.slice(0, -1), -stepover, "round", 4);
+    if (next.length === 0) break;
+    currentLoops = next;
+  }
+
+  if (keepCenterCleanup && paths.length === 0) {
+    const c = centroid(base);
+    if (pointInPolygon(c, base)) {
+      paths.push([
+        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+        { x: c.x + toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+        { x: c.x + toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
+        { x: c.x - toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
+        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+      ]);
+    }
+  }
+
+  return paths;
+}
+
+function centroid(points: Point[]): Point {
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / Math.max(points.length, 1), y: sum.y / Math.max(points.length, 1) };
+}
+
+function area(points: Point[]): number {
+  let a = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const q = points[(i + 1) % points.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return a / 2;
+}
+
+export function generateOffsetPocketWithHoles(contours: Point[][], step: number): Point[][] {
   const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
   if (normalized.length === 0 || step <= EPS) return [];
 
   const classified = classifyContours(normalized);
   const toolRadius = step / 2;
-  const result: CadPoint[][] = [];
+  const result: Point[][] = [];
 
   for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
     const outer = classified.external[extIndex];
-    const loops = buildPocketOffsets(outer, toolRadius, step, "round", 4, true);
+    const loops = buildPocketOffsets(outer, toolRadius, step, true);
     result.push(...loops);
   }
 
@@ -159,32 +195,27 @@ export function generateOffsetPocketWithHoles(
 }
 
 export function generateParallelPocketWithHoles(
-  contours: CadPoint[][],
+  contours: Point[][],
   step: number,
   angle = 0
-): CadPoint[][] {
+): Point[][] {
   const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
   if (normalized.length === 0 || step <= EPS) return [];
 
   const classified = classifyContours(normalized);
-  const result: CadPoint[][] = [];
+  const result: Point[][] = [];
 
   for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
     const outer = classified.external[extIndex];
     const holeIndices = classified.holes.get(extIndex) ?? [];
     const holes = holeIndices.map((idx) => normalized[idx]);
-
     result.push(...generateParallelPocketForRegion(outer, holes, step, angle));
   }
 
   return result;
 }
 
-export function generateBestPocket(
-  contours: CadPoint[][],
-  step: number,
-  angle = 0
-): CadPoint[][] {
+export function generateBestPocket(contours: Point[][], step: number, angle = 0): Point[][] {
   const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
   if (normalized.length === 0 || step <= EPS) return [];
 

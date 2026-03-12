@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { getTextPolylines, type CadPoint } from "../geometry/textGeometry";
-import type { SketchShape } from "../model/types";
+import type { SketchShape, SketchPoint } from "../model/types";
 
 export type TextPreviewMap = Record<string, CadPoint[][]>;
 
-export function useTextPreviewMap(shapes: SketchShape[]) {
+export function useTextPreviewMap(shapes: SketchShape[], points: SketchPoint[]) {
   const [textPreviewMap, setTextPreviewMap] = useState<TextPreviewMap>({});
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function useTextPreviewMap(shapes: SketchShape[]) {
         if (shape.type !== "text") continue;
 
         try {
-          nextMap[shape.id] = await getTextPolylines(shape);
+          nextMap[shape.id] = await getTextPolylines(shape, points);
         } catch {
           nextMap[shape.id] = [];
         }
@@ -33,7 +33,7 @@ export function useTextPreviewMap(shapes: SketchShape[]) {
     return () => {
       cancelled = true;
     };
-  }, [shapes]);
+  }, [shapes, points]);
 
   return textPreviewMap;
 }

@@ -1,13 +1,15 @@
-import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+// src/planning/travelOptimizer.ts
+
+import type { Point } from "../types";
 
 export type TravelCandidate = {
-  points: CadPoint[];
+  points: Point[];
   closed: boolean;
 };
 
 export type OrientedTravelPath = {
   index: number;
-  points: CadPoint[];
+  points: Point[];
   closed: boolean;
 };
 
@@ -17,11 +19,11 @@ function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function distance(a: CadPoint, b: CadPoint): number {
+function distance(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
-function normalizeClosed(points: CadPoint[]): CadPoint[] {
+function normalizeClosed(points: Point[]): Point[] {
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
@@ -31,7 +33,7 @@ function normalizeClosed(points: CadPoint[]): CadPoint[] {
   return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
 }
 
-function closeIfNeeded(points: CadPoint[]): CadPoint[] {
+function closeIfNeeded(points: Point[]): Point[] {
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
@@ -39,7 +41,7 @@ function closeIfNeeded(points: CadPoint[]): CadPoint[] {
   return [...points, { ...first }];
 }
 
-function rotateClosedPath(points: CadPoint[], startIndex: number): CadPoint[] {
+function rotateClosedPath(points: Point[], startIndex: number): Point[] {
   const open = normalizeClosed(points);
   if (open.length === 0) return [];
   const idx = ((startIndex % open.length) + open.length) % open.length;
@@ -47,7 +49,7 @@ function rotateClosedPath(points: CadPoint[], startIndex: number): CadPoint[] {
   return closeIfNeeded(rotated);
 }
 
-function findNearestVertexIndex(points: CadPoint[], target: CadPoint): number {
+function findNearestVertexIndex(points: Point[], target: Point): number {
   let bestIndex = 0;
   let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -62,38 +64,27 @@ function findNearestVertexIndex(points: CadPoint[], target: CadPoint): number {
   return bestIndex;
 }
 
-export function orientOpenPathFromNearest(points: CadPoint[], current: CadPoint): CadPoint[] {
+export function orientOpenPathFromNearest(points: Point[], current: Point): Point[] {
   if (points.length <= 1) return [...points];
-
   const start = points[0];
   const end = points[points.length - 1];
-
-  return distance(current, end) < distance(current, start)
-    ? [...points].reverse()
-    : [...points];
+  return distance(current, end) < distance(current, start) ? [...points].reverse() : [...points];
 }
 
-export function orientClosedPathFromNearest(points: CadPoint[], current: CadPoint): CadPoint[] {
+export function orientClosedPathFromNearest(points: Point[], current: Point): Point[] {
   const open = normalizeClosed(points);
   if (open.length <= 1) return closeIfNeeded(open);
-
   const nearestIndex = findNearestVertexIndex(open, current);
   return rotateClosedPath(open, nearestIndex);
 }
 
-export function orientPathFromNearest(
-  points: CadPoint[],
-  current: CadPoint,
-  closed: boolean
-): CadPoint[] {
-  return closed
-    ? orientClosedPathFromNearest(points, current)
-    : orientOpenPathFromNearest(points, current);
+export function orientPathFromNearest(points: Point[], current: Point, closed: boolean): Point[] {
+  return closed ? orientClosedPathFromNearest(points, current) : orientOpenPathFromNearest(points, current);
 }
 
 export function optimizeTravel(
   contours: TravelCandidate[],
-  startPoint: CadPoint = { x: 0, y: 0 }
+  startPoint: Point = { x: 0, y: 0 }
 ): OrientedTravelPath[] {
   const pending = contours.map((item, index) => ({ ...item, index }));
   const result: OrientedTravelPath[] = [];
@@ -102,7 +93,7 @@ export function optimizeTravel(
   while (pending.length > 0) {
     let bestIndex = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
-    let bestOriented: CadPoint[] = [];
+    let bestOriented: Point[] = [];
 
     for (let i = 0; i < pending.length; i++) {
       const candidate = pending[i];
@@ -118,33 +109,11 @@ export function optimizeTravel(
     }
 
     const picked = pending.splice(bestIndex, 1)[0];
-    const oriented = bestOriented.length > 0
-      ? bestOriented
-      : orientPathFromNearest(picked.points, current, picked.closed);
+    const oriented = bestOriented.length > 0 ? bestOriented : orientPathFromNearest(picked.points, current, picked.closed);
 
-    result.push({
-      index: picked.index,
-      points: oriented,
-      closed: picked.closed,
-    });
-
-    if (oriented.length > 0) {
-      current = oriented[oriented.length - 1];
-    }
+    result.push({ index: picked.index, points: oriented, closed: picked.closed });
+    if (oriented.length > 0) current = oriented[oriented.length - 1];
   }
 
   return result;
-}
-
-/**
- * Оставляю совместимость со старым API.
- */
-export function optimizeTravelOrder(
-  contours: CadPoint[][],
-  startPoint: CadPoint = { x: 0, y: 0 }
-): number[] {
-  return optimizeTravel(
-    contours.map((points) => ({ points, closed: false })),
-    startPoint
-  ).map((item) => item.index);
 }

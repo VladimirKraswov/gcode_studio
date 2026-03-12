@@ -25,20 +25,17 @@ export function getGroupById(document: SketchDocument, groupId: string | null): 
 }
 
 export function getDragShapeIds(
-  document: SketchDocument,
+  _document: SketchDocument,
   shapeId: string,
   selection: SelectionState,
 ): string[] {
-  const shape = document.shapes.find((item) => item.id === shapeId);
-  if (!shape) return selection.ids.length > 0 ? selection.ids : [shapeId];
-
-  if (shape.groupId) {
-    return document.shapes
-      .filter((item) => item.groupId === shape.groupId)
-      .map((item) => item.id);
+  // If shapeId is already selected, drag the whole selection.
+  // Otherwise, drag just the shapeId.
+  // We no longer automatically drag the whole group.
+  if (selection.ids.includes(shapeId)) {
+    return selection.ids;
   }
-
-  return selection.ids.length > 0 ? selection.ids : [shapeId];
+  return [shapeId];
 }
 
 export function getGroupSelectionIds(document: SketchDocument, groupId: string): string[] {
@@ -125,7 +122,10 @@ export function normalizeSelectionAfterDelete(
   document: SketchDocument,
   selection: SelectionState,
 ): SelectionState {
-  const existing = new Set(document.shapes.map((shape) => shape.id));
+  const existing = new Set([
+    ...document.shapes.map((shape) => shape.id),
+    ...document.points.map((p) => p.id)
+  ]);
   const ids = uniqueIds(selection.ids.filter((id) => existing.has(id)));
   return {
     ids,

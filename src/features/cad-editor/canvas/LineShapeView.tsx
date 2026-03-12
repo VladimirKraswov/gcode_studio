@@ -1,30 +1,50 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
-import type { SketchLine } from "../model/types";
+import type { SketchLine, SketchPoint } from "../model/types";
 
-type LineShapeViewProps = {
+export type LineShapeViewProps = {
   shape: SketchLine;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGLineElement>) => void;
 };
 
 export function LineShapeView({
   shape,
+  points,
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
 }: LineShapeViewProps) {
   const { theme } = useTheme();
 
-  const p1 = cadToScreenPoint({ x: shape.x1, y: shape.y1 }, documentHeight, view);
-  const p2 = cadToScreenPoint({ x: shape.x2, y: shape.y2 }, documentHeight, view);
+  const pointMap = new Map(points.map((p) => [p.id, p]));
+  const p1_cad = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2_cad = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  const p1 = cadToScreenPoint(p1_cad, documentHeight, view);
+  const p2 = cadToScreenPoint(p2_cad, documentHeight, view);
 
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
+
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
 
   return (
     <>
@@ -33,8 +53,9 @@ export function LineShapeView({
         y1={p1.y}
         x2={p2.x}
         y2={p2.y}
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
+        strokeDasharray={shape.isConstruction ? "4 4" : undefined}
         strokeLinecap="round"
         pointerEvents="none"
       />

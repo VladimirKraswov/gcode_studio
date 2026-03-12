@@ -2,7 +2,7 @@
 // FILE: src/modules/cad/model/document.ts
 // =============================
 
-import type { SketchCamSettings, SketchDocument, SketchShape } from "./types";
+import type { SketchCamSettings, SketchDocument, SketchShape, SketchPoint } from "./types";
 
 export function createDefaultCamSettings(): SketchCamSettings {
   return {
@@ -88,9 +88,11 @@ export function createEmptySketchDocument(): SketchDocument {
 
     snapEnabled: true,
     snapStep: 5,
+    points: [],
     shapes: [],
     groups: [],
     constraints: [],
+    parameters: [],
   };
 }
 
@@ -98,14 +100,16 @@ export function addShape(document: SketchDocument, shape: SketchShape): SketchDo
   return { ...document, shapes: [...document.shapes, normalizeShape(shape)] };
 }
 
+export function addPoint(document: SketchDocument, point: SketchPoint): SketchDocument {
+  return { ...document, points: [...document.points, point] };
+}
+
 export function removeShape(document: SketchDocument, shapeId: string): SketchDocument {
   return {
     ...document,
     shapes: document.shapes.filter((shape) => shape.id !== shapeId),
     constraints: document.constraints.filter(
-      (constraint) =>
-        constraint.shapeId !== shapeId &&
-        !(constraint.target.kind === "shape" && constraint.target.shapeId === shapeId),
+      (constraint) => !constraint.shapeIds.includes(shapeId),
     ),
   };
 }
@@ -133,5 +137,16 @@ export function replaceShape(
     shapes: document.shapes.map((shape) =>
       shape.id === shapeId ? normalizeShape(nextShape) : shape,
     ),
+  };
+}
+
+export function updatePoint(
+  document: SketchDocument,
+  pointId: string,
+  patch: Partial<SketchPoint>,
+): SketchDocument {
+  return {
+    ...document,
+    points: document.points.map((p) => (p.id === pointId ? { ...p, ...patch } : p)),
   };
 }

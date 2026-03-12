@@ -1,0 +1,4855 @@
+=== CODE BUNDLE ===
+root: /Volumes/Extend/work/gcode_studio/src/modules
+ignore: .codebundleignore
+generated: 2026-03-12T06:34:07.124Z
+
+
+
+path: /bundle-code.js
+----------------------------------------
+#!/usr/bin/env node
+/**
+ * bundle-code.js
+ * Собирает весь текстовый код проекта в один файл, помечая секции путями.
+ * - Рекурсивный обход
+ * - Пропуск бинарных файлов (по содержимому)
+ * - Игнор по .codebundleignore (gitignore-like)
+ */
+
+import  fs from "fs";
+import fsp from "fs/promises";
+import path from "path";
+
+const PROJECT_ROOT = process.cwd();
+const IGNORE_FILE_NAME = ".codebundleignore";
+const OUTPUT_FILE = path.join(PROJECT_ROOT, "codebundle.txt");
+
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_TOTAL_BYTES = 200 * 1024 * 1024;   // 200MB
+
+// Если заполнить — соберёт только эти расширения. Если пусто — любые текстовые.
+const ONLY_EXTENSIONS = new Set([
+  // ".js", ".jsx", ".ts", ".tsx", ".json", ".css", ".scss", ".md", ".html", ".yml", ".yaml"
+]);
+
+function normalizeToPosix(p) {
+  return p.split(path.sep).join("/");
+}
+
+function stripBom(s) {
+  return s.charCodeAt(0) === 0xfeff ? s.slice(1) : s;
+}
+
+async function readIgnoreFile(ignorePath) {
+  try {
+    const raw = await fsp.readFile(ignorePath, "utf8");
+    return stripBom(raw)
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith("#"));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Компилируем игнор-правила.
+ * Поддержка:
+ * - "node_modules/" (игнор любой сегмент /node_modules/ в любом месте)
+ * - "dist/" и т.п.
+ * - "*.ext"
+ * - "path/to/file" (точный относительный путь)
+ * - "!pattern" (снять игнор)
+ */
+function buildIgnoreMatcher(patterns) {
+  // дефолтные, чтобы не протекало даже если забыли
+  const defaultPatterns = [
+    "node_modules/",
+    ".git/",
+    "dist/",
+    "build/",
+    ".next/",
+    "coverage/",
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+  ];
+
+  const all = [...defaultPatterns, ...patterns];
+
+  const rules = all.map(p => ({
+    neg: p.startsWith("!"),
+    pat: (p.startsWith("!") ? p.slice(1) : p).trim(),
+  })).filter(r => r.pat);
+
+  function matchRule(relPosix, pat) {
+    // relPosix: "admin/node_modules/express/index.js"
+
+    // directory pattern: "node_modules/"
+    if (pat.endsWith("/")) {
+      const seg = pat.slice(0, -1);
+      if (!seg) return false;
+
+      // матч:
+      // - если путь начинается с seg/
+      // - или содержит /seg/ как сегмент
+      return (
+        relPosix === seg ||
+        relPosix.startsWith(seg + "/") ||
+        relPosix.includes("/" + seg + "/") ||
+        relPosix.endsWith("/" + seg)
+      );
+    }
+
+    // glob extension: "*.png"
+    if (pat.startsWith("*.") && !pat.includes("/")) {
+      const ext = pat.slice(1); // ".png"
+      return relPosix.toLowerCase().endsWith(ext.toLowerCase());
+    }
+
+    // exact file path
+    return relPosix === pat;
+  }
+
+  return function isIgnored(relPosix) {
+    let ignored = false;
+    for (const r of rules) {
+      if (matchRule(relPosix, r.pat)) {
+        ignored = !r.neg; // если negation — снимаем игнор
+      }
+    }
+    return ignored;
+  };
+}
+
+async function isProbablyBinary(filePath) {
+  const fd = await fsp.open(filePath, "r");
+  try {
+    const { size } = await fd.stat();
+    const toRead = Math.min(size, 8192);
+    const buf = Buffer.allocUnsafe(toRead);
+    const { bytesRead } = await fd.read(buf, 0, toRead, 0);
+    if (bytesRead === 0) return false;
+
+    let nulCount = 0;
+    let weirdCount = 0;
+    for (let i = 0; i < bytesRead; i++) {
+      const b = buf[i];
+      if (b === 0) nulCount++;
+      const ok =
+        b === 9 || b === 10 || b === 13 || (b >= 32 && b <= 126) || b >= 128;
+      if (!ok) weirdCount++;
+    }
+    if (nulCount > 0) return true;
+    return (weirdCount / bytesRead) > 0.25;
+  } finally {
+    await fd.close();
+  }
+}
+
+async function* walk(dirAbs, isIgnored) {
+  let entries;
+  try {
+    entries = await fsp.readdir(dirAbs, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const ent of entries) {
+    const abs = path.join(dirAbs, ent.name);
+    const rel = path.relative(PROJECT_ROOT, abs);
+    const relPosix = normalizeToPosix(rel);
+
+    // не включаем output и ignore файл
+    if (path.resolve(abs) === path.resolve(OUTPUT_FILE)) continue;
+    if (relPosix === IGNORE_FILE_NAME) continue;
+
+    if (isIgnored(relPosix)) continue;
+
+    if (ent.isDirectory()) {
+      yield* walk(abs, isIgnored);
+    } else if (ent.isFile()) {
+      yield { abs, relPosix };
+    }
+  }
+}
+
+async function bundle() {
+  const ignorePath = path.join(PROJECT_ROOT, IGNORE_FILE_NAME);
+  const patterns = await readIgnoreFile(ignorePath);
+  const isIgnored = buildIgnoreMatcher(patterns);
+
+  const out = fs.createWriteStream(OUTPUT_FILE, { encoding: "utf8" });
+
+  let totalBytes = 0;
+  let included = 0;
+  let skippedBinary = 0;
+  let skippedSize = 0;
+  let skippedExt = 0;
+
+  out.write(`=== CODE BUNDLE ===\n`);
+  out.write(`root: ${normalizeToPosix(PROJECT_ROOT)}\n`);
+  out.write(`ignore: ${IGNORE_FILE_NAME}\n`);
+  out.write(`generated: ${new Date().toISOString()}\n\n`);
+
+  for await (const file of walk(PROJECT_ROOT, isIgnored)) {
+    const ext = path.extname(file.relPosix).toLowerCase();
+    if (ONLY_EXTENSIONS.size && !ONLY_EXTENSIONS.has(ext)) {
+      skippedExt++;
+      continue;
+    }
+
+    let stat;
+    try {
+      stat = await fsp.stat(file.abs);
+    } catch {
+      continue;
+    }
+
+    if (stat.size > MAX_FILE_SIZE_BYTES) {
+      skippedSize++;
+      continue;
+    }
+    if (totalBytes + stat.size > MAX_TOTAL_BYTES) {
+      out.write(`\n\n=== STOP: total size limit reached (${MAX_TOTAL_BYTES} bytes) ===\n`);
+      break;
+    }
+
+    let binary;
+    try {
+      binary = await isProbablyBinary(file.abs);
+    } catch {
+      continue;
+    }
+    if (binary) {
+      skippedBinary++;
+      continue;
+    }
+
+    let content;
+    try {
+      content = await fsp.readFile(file.abs, "utf8");
+    } catch {
+      continue;
+    }
+
+    out.write(`\n\npath: /${file.relPosix}\n`);
+    out.write(`----------------------------------------\n`);
+    out.write(content);
+    if (!content.endsWith("\n")) out.write("\n");
+
+    totalBytes += stat.size;
+    included++;
+  }
+
+  out.write(`\n\n=== SUMMARY ===\n`);
+  out.write(`included: ${included}\n`);
+  out.write(`skipped(binary): ${skippedBinary}\n`);
+  out.write(`skipped(size): ${skippedSize}\n`);
+  out.write(`skipped(ext): ${skippedExt}\n`);
+  out.write(`totalBytes(approx): ${totalBytes}\n`);
+
+  await new Promise((res, rej) => {
+    out.end(res);
+    out.on("error", rej);
+  });
+
+  console.log(`Done. Output: ${OUTPUT_FILE}`);
+}
+
+bundle().catch(err => {
+  console.error("Error:", err);
+  process.exitCode = 1;
+});
+
+
+path: /cam/algorithms/bridges.ts
+----------------------------------------
+import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+
+export type BridgeSpan = {
+  start: number;
+  end: number;
+};
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
+  if (contour.length < 2) return contour.map((p) => ({ ...p }));
+  const first = contour[0];
+  const last = contour[contour.length - 1];
+  if (distance(first, last) <= EPS) {
+    return contour.slice(0, -1).map((p) => ({ ...p }));
+  }
+  return contour.map((p) => ({ ...p }));
+}
+
+export function contourLength(contour: CadPoint[]): number {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 2) return 0;
+
+  let total = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    total += distance(normalized[i], normalized[(i + 1) % normalized.length]);
+  }
+  return total;
+}
+
+export function buildBridgeSpans(
+  contour: CadPoint[],
+  bridgeCount: number,
+  bridgeWidth: number
+): BridgeSpan[] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 3) return [];
+  if (bridgeCount <= 0 || bridgeWidth <= 0) return [];
+
+  const total = contourLength(normalized);
+  if (total <= EPS) return [];
+
+  const width = Math.min(Math.max(bridgeWidth, 0), total * 0.8);
+  const spacing = total / bridgeCount;
+
+  const raw: BridgeSpan[] = [];
+  for (let i = 0; i < bridgeCount; i++) {
+    const center = (i + 0.5) * spacing;
+    raw.push({
+      start: center - width / 2,
+      end: center + width / 2,
+    });
+  }
+
+  const normalizedSpans: BridgeSpan[] = [];
+  for (const span of raw) {
+    let start = span.start;
+    let end = span.end;
+
+    while (start < 0) {
+      start += total;
+      end += total;
+    }
+
+    start %= total;
+    end %= total;
+
+    if (end < start) {
+      normalizedSpans.push({ start, end: total });
+      normalizedSpans.push({ start: 0, end });
+    } else {
+      normalizedSpans.push({ start, end });
+    }
+  }
+
+  normalizedSpans.sort((a, b) => a.start - b.start);
+
+  const merged: BridgeSpan[] = [];
+  for (const span of normalizedSpans) {
+    const last = merged[merged.length - 1];
+    if (!last || span.start > last.end + EPS) {
+      merged.push({ ...span });
+    } else {
+      last.end = Math.max(last.end, span.end);
+    }
+  }
+
+  return merged.map((span) => ({
+    start: round(span.start),
+    end: round(span.end),
+  }));
+}
+
+export function pointAtLength(
+  contour: CadPoint[],
+  at: number
+): CadPoint {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length === 0) return { x: 0, y: 0 };
+  if (normalized.length === 1) return { ...normalized[0] };
+
+  const total = contourLength(normalized);
+  if (total <= EPS) return { ...normalized[0] };
+
+  let target = at % total;
+  if (target < 0) target += total;
+
+  let accumulated = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const a = normalized[i];
+    const b = normalized[(i + 1) % normalized.length];
+    const len = distance(a, b);
+    if (len <= EPS) continue;
+
+    const nextAccumulated = accumulated + len;
+    if (target <= nextAccumulated + EPS) {
+      const t = Math.max(0, Math.min(1, (target - accumulated) / len));
+      return {
+        x: round(a.x + (b.x - a.x) * t),
+        y: round(a.y + (b.y - a.y) * t),
+      };
+    }
+
+    accumulated = nextAccumulated;
+  }
+
+  return { ...normalized[0] };
+}
+
+export function sampleContourByStep(
+  contour: CadPoint[],
+  step = 1
+): CadPoint[] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 2) return normalized;
+
+  const total = contourLength(normalized);
+  if (total <= EPS) return normalized;
+
+  const count = Math.max(normalized.length, Math.ceil(total / Math.max(step, 0.25)));
+  const points: CadPoint[] = [];
+
+  for (let i = 0; i < count; i++) {
+    points.push(pointAtLength(normalized, (total * i) / count));
+  }
+
+  return points;
+}
+
+export function isInsideAnyBridge(
+  lengthPos: number,
+  spans: BridgeSpan[]
+): boolean {
+  return spans.some(
+    (span) => lengthPos >= span.start - EPS && lengthPos <= span.end + EPS
+  );
+}
+
+
+path: /cam/algorithms/contourClassifier.ts
+----------------------------------------
+import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+
+export type ClassifiedContours = {
+  external: CadPoint[][];
+  holes: Map<number, number[]>;
+  parent: number[];
+  depth: number[];
+};
+
+const EPS = 1e-9;
+
+function signedArea(polygon: CadPoint[]): number {
+  let sum = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return sum / 2;
+}
+
+function areaAbs(polygon: CadPoint[]): number {
+  return Math.abs(signedArea(polygon));
+}
+
+function boundsOf(polygon: CadPoint[]) {
+  const xs = polygon.map(p => p.x);
+  const ys = polygon.map(p => p.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+function boundsContains(outer: ReturnType<typeof boundsOf>, inner: ReturnType<typeof boundsOf>): boolean {
+  return (
+    inner.minX >= outer.minX - EPS &&
+    inner.maxX <= outer.maxX + EPS &&
+    inner.minY >= outer.minY - EPS &&
+    inner.maxY <= outer.maxY + EPS
+  );
+}
+
+function contourSamplePoint(contour: CadPoint[]): CadPoint {
+  return contour[0] ?? { x: 0, y: 0 };
+}
+
+export function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+
+    const onSegment =
+      Math.abs((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x)) < EPS &&
+      point.x >= Math.min(a.x, b.x) - EPS &&
+      point.x <= Math.max(a.x, b.x) + EPS &&
+      point.y >= Math.min(a.y, b.y) - EPS &&
+      point.y <= Math.max(a.y, b.y) + EPS;
+    if (onSegment) return true;
+
+    const intersects =
+      (a.y > point.y) !== (b.y > point.y) &&
+      point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y + EPS) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+export function classifyContours(polylines: CadPoint[][]): ClassifiedContours {
+  const n = polylines.length;
+  const bounds = polylines.map(boundsOf);
+  const areas = polylines.map(areaAbs);
+  const parent = new Array<number>(n).fill(-1);
+  const depth = new Array<number>(n).fill(0);
+
+  for (let child = 0; child < n; child++) {
+    let bestParent = -1;
+    let bestParentArea = Infinity;
+    const probe = contourSamplePoint(polylines[child]);
+
+    for (let candidate = 0; candidate < n; candidate++) {
+      if (candidate === child) continue;
+      if (areas[candidate] <= areas[child] + EPS) continue;
+      if (!boundsContains(bounds[candidate], bounds[child])) continue;
+      if (!pointInPolygon(probe, polylines[candidate])) continue;
+      if (areas[candidate] < bestParentArea) {
+        bestParentArea = areas[candidate];
+        bestParent = candidate;
+      }
+    }
+    parent[child] = bestParent;
+  }
+
+  function computeDepth(index: number): number {
+    if (parent[index] === -1) return 0;
+    if (depth[index] > 0) return depth[index];
+    depth[index] = computeDepth(parent[index]) + 1;
+    return depth[index];
+  }
+
+  for (let i = 0; i < n; i++) depth[i] = computeDepth(i);
+
+  const externalIndices = polylines.map((_, i) => i).filter(i => depth[i] % 2 === 0);
+  const external = externalIndices.map(i => polylines[i]);
+  const holes = new Map<number, number[]>();
+  externalIndices.forEach((_, extIndex) => holes.set(extIndex, []));
+
+  for (let i = 0; i < n; i++) {
+    if (depth[i] % 2 === 1) {
+      let owner = parent[i];
+      while (owner !== -1 && depth[owner] % 2 === 1) owner = parent[owner];
+      if (owner !== -1) {
+        const extIndex = externalIndices.indexOf(owner);
+        if (extIndex >= 0) holes.get(extIndex)?.push(i);
+      }
+    }
+  }
+
+  return { external, holes, parent, depth };
+}
+
+
+path: /cam/algorithms/offsetBuilder.ts
+----------------------------------------
+export type ToolpathPoint = {
+  x: number;
+  y: number;
+  z?: number;
+};
+
+export type Toolpath = {
+  name: string;
+  points: ToolpathPoint[];
+  closed: boolean;
+  cutZ: number;
+  kind?: "contour" | "pocket";
+  useRamping?: boolean;
+  useBridges?: boolean;
+  bridgeCount?: number;
+  bridgeWidth?: number;
+};
+
+export type PlannedPath = {
+  name: string;
+  points: ToolpathPoint[];
+  closed: boolean;
+  depth: number;
+};
+
+export type PlannedOperation = {
+  shapeId: string;
+  shapeName: string;
+  paths: PlannedPath[];
+};
+
+export type CadPoint = {
+  x: number;
+  y: number;
+};
+
+export type JoinType = "round" | "miter";
+
+export type CamMode = "contour" | "pocket";
+
+export type PlanContourInput = {
+  shapeId: string;
+  shapeName: string;
+  polyline: CadPoint[];
+  toolRadius: number;
+  isExternal: boolean;
+  stepover?: number;
+  maxOffset?: number;
+  depth: number;
+  joinType?: JoinType;
+  miterLimit?: number;
+};
+
+export type PlanPocketInput = {
+  shapeId: string;
+  shapeName: string;
+  polyline: CadPoint[];
+  toolRadius: number;
+  stepover: number;
+  depth: number;
+  joinType?: JoinType;
+  miterLimit?: number;
+  keepCenterCleanup?: boolean;
+};
+
+const EPS = 1e-6;
+const ROUND_ARC_STEPS_PER_90 = 6;
+const DEFAULT_MITER_LIMIT = 4;
+
+type Vec2 = { x: number; y: number };
+type Segment = { a: CadPoint; b: CadPoint };
+type DirectedEdge = {
+  from: number;
+  to: number;
+  angle: number;
+  used: boolean;
+};
+type Node = CadPoint;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function rp(p: CadPoint): CadPoint {
+  return { x: round(p.x), y: round(p.y) };
+}
+
+function dist(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function eq(a: CadPoint, b: CadPoint, eps = EPS): boolean {
+  return dist(a, b) <= eps;
+}
+
+function add(a: CadPoint, b: Vec2): CadPoint {
+  return { x: a.x + b.x, y: a.y + b.y };
+}
+
+function sub(a: CadPoint, b: CadPoint): Vec2 {
+  return { x: a.x - b.x, y: a.y - b.y };
+}
+
+function mul(v: Vec2, s: number): Vec2 {
+  return { x: v.x * s, y: v.y * s };
+}
+
+function cross(a: Vec2, b: Vec2): number {
+  return a.x * b.y - a.y * b.x;
+}
+
+function len(v: Vec2): number {
+  return Math.hypot(v.x, v.y);
+}
+
+function normalize(v: Vec2): Vec2 {
+  const l = len(v);
+  if (l <= EPS) return { x: 0, y: 0 };
+  return { x: v.x / l, y: v.y / l };
+}
+
+function angleOf(v: Vec2): number {
+  return Math.atan2(v.y, v.x);
+}
+
+function signedArea(points: CadPoint[]): number {
+  if (points.length < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return area / 2;
+}
+
+function isClockwise(points: CadPoint[]): boolean {
+  return signedArea(points) < 0;
+}
+
+function dedupeSequential(points: CadPoint[]): CadPoint[] {
+  const out: CadPoint[] = [];
+  for (const p of points) {
+    const q = rp(p);
+    const last = out[out.length - 1];
+    if (!last || !eq(last, q)) out.push(q);
+  }
+  if (out.length > 1 && eq(out[0], out[out.length - 1])) {
+    out.pop();
+  }
+  return out;
+}
+
+function normalizeClosedPolyline(points: CadPoint[]): CadPoint[] {
+  const clean = dedupeSequential(points);
+  if (clean.length < 3) return clean;
+  if (eq(clean[0], clean[clean.length - 1])) {
+    return clean.slice(0, -1);
+  }
+  return clean;
+}
+
+function closeLoop(points: CadPoint[]): CadPoint[] {
+  const clean = dedupeSequential(points);
+  if (clean.length < 3) return clean;
+  if (!eq(clean[0], clean[clean.length - 1])) {
+    return [...clean, rp(clean[0])];
+  }
+  return clean;
+}
+
+function inwardNormal(a: CadPoint, b: CadPoint, clockwise: boolean): Vec2 {
+  const d = normalize(sub(b, a));
+  return clockwise ? { x: d.y, y: -d.x } : { x: -d.y, y: d.x };
+}
+
+function lineIntersection(
+  p: CadPoint,
+  r: Vec2,
+  q: CadPoint,
+  s: Vec2
+): { point: CadPoint; t: number; u: number } | null {
+  const rxs = cross(r, s);
+  const qmp = sub(q, p);
+
+  if (Math.abs(rxs) <= EPS) return null;
+
+  const t = cross(qmp, s) / rxs;
+  const u = cross(qmp, r) / rxs;
+
+  return {
+    point: rp({ x: p.x + r.x * t, y: p.y + r.y * t }),
+    t,
+    u,
+  };
+}
+
+function segmentIntersection(
+  a1: CadPoint,
+  a2: CadPoint,
+  b1: CadPoint,
+  b2: CadPoint
+): { point: CadPoint; ta: number; tb: number } | null {
+  const r = sub(a2, a1);
+  const s = sub(b2, b1);
+  const hit = lineIntersection(a1, r, b1, s);
+  if (!hit) return null;
+
+  if (hit.t < -EPS || hit.t > 1 + EPS || hit.u < -EPS || hit.u > 1 + EPS) {
+    return null;
+  }
+
+  return { point: hit.point, ta: hit.t, tb: hit.u };
+}
+
+function pointLineDistance(p: CadPoint, a: CadPoint, b: CadPoint): number {
+  const ab = sub(b, a);
+  const ap = sub(p, a);
+  const L = len(ab);
+  if (L <= EPS) return dist(p, a);
+  return Math.abs(cross(ap, ab)) / L;
+}
+
+function appendPoint(out: CadPoint[], p: CadPoint): void {
+  const q = rp(p);
+  const last = out[out.length - 1];
+  if (!last || !eq(last, q)) out.push(q);
+}
+
+function appendArc(
+  out: CadPoint[],
+  center: CadPoint,
+  radius: number,
+  fromAngle: number,
+  toAngle: number,
+  ccw: boolean
+): void {
+  let a0 = fromAngle;
+  let a1 = toAngle;
+
+  if (ccw) {
+    while (a1 <= a0) a1 += Math.PI * 2;
+  } else {
+    while (a1 >= a0) a1 -= Math.PI * 2;
+  }
+
+  const sweep = a1 - a0;
+  const quarterTurns = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2)));
+  const segments = quarterTurns * ROUND_ARC_STEPS_PER_90;
+
+  for (let i = 1; i <= segments; i++) {
+    const t = a0 + (sweep * i) / segments;
+    appendPoint(out, {
+      x: center.x + radius * Math.cos(t),
+      y: center.y + radius * Math.sin(t),
+    });
+  }
+}
+
+function clipMiter(
+  corner: CadPoint,
+  intersection: CadPoint,
+  offsetAbs: number,
+  miterLimit: number,
+  fallback: CadPoint
+): CadPoint {
+  const miterLen = dist(corner, intersection);
+  if (offsetAbs <= EPS) return fallback;
+  if (miterLen / offsetAbs > miterLimit) return fallback;
+  return intersection;
+}
+
+function rawOffsetLoop(
+  polyline: CadPoint[],
+  offset: number,
+  joinType: JoinType,
+  miterLimit: number
+): CadPoint[] {
+  const base = normalizeClosedPolyline(polyline);
+  if (base.length < 3 || Math.abs(offset) <= EPS) return [];
+
+  const clockwise = isClockwise(base);
+  const signedOffset = clockwise ? offset : -offset;
+  const offsetAbs = Math.abs(signedOffset);
+
+  const n = base.length;
+  const out: CadPoint[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const prev = base[(i - 1 + n) % n];
+    const curr = base[i];
+    const next = base[(i + 1) % n];
+
+    const prevDir = normalize(sub(curr, prev));
+    const nextDir = normalize(sub(next, curr));
+    if (len(prevDir) <= EPS || len(nextDir) <= EPS) continue;
+
+    const n1 = inwardNormal(prev, curr, clockwise);
+    const n2 = inwardNormal(curr, next, clockwise);
+
+    const s1p = add(curr, mul(n1, signedOffset));
+    const s2p = add(curr, mul(n2, signedOffset));
+
+    const hit = lineIntersection(s1p, prevDir, s2p, nextDir);
+
+    const p1 = rp(s1p);
+    const p2 = rp(s2p);
+
+    const turn = cross(prevDir, nextDir);
+    const convex = clockwise ? turn < 0 : turn > 0;
+
+    if (Math.abs(turn) <= EPS) {
+      appendPoint(out, p2);
+      continue;
+    }
+
+    if (joinType === "miter" && hit && convex) {
+      const fallback = rp({
+        x: (p1.x + p2.x) / 2,
+        y: (p1.y + p2.y) / 2,
+      });
+      appendPoint(out, clipMiter(curr, hit.point, offsetAbs, miterLimit, fallback));
+      continue;
+    }
+
+    if (joinType === "round" && convex) {
+      appendPoint(out, p1);
+      const a0 = Math.atan2(p1.y - curr.y, p1.x - curr.x);
+      const a1 = Math.atan2(p2.y - curr.y, p2.x - curr.x);
+      const ccw = signedOffset < 0 ? !clockwise : clockwise;
+      appendArc(out, curr, offsetAbs, a0, a1, ccw);
+      continue;
+    }
+
+    if (hit) {
+      appendPoint(out, hit.point);
+    } else {
+      appendPoint(out, p2);
+    }
+  }
+
+  return closeLoop(out);
+}
+
+function splitSegmentsAtIntersections(loop: CadPoint[]): Segment[] {
+  const closed = closeLoop(loop);
+  if (closed.length < 4) return [];
+
+  const baseSegments: Segment[] = [];
+  for (let i = 0; i < closed.length - 1; i++) {
+    const a = closed[i];
+    const b = closed[i + 1];
+    if (!eq(a, b)) baseSegments.push({ a, b });
+  }
+
+  const cuts: number[][] = baseSegments.map(() => [0, 1]);
+
+  for (let i = 0; i < baseSegments.length; i++) {
+    for (let j = i + 1; j < baseSegments.length; j++) {
+      const si = baseSegments[i];
+      const sj = baseSegments[j];
+
+      const adjacent =
+        j === i + 1 ||
+        (i === 0 && j === baseSegments.length - 1);
+
+      if (adjacent) continue;
+
+      const hit = segmentIntersection(si.a, si.b, sj.a, sj.b);
+      if (!hit) continue;
+
+      if (hit.ta > EPS && hit.ta < 1 - EPS) cuts[i].push(hit.ta);
+      if (hit.tb > EPS && hit.tb < 1 - EPS) cuts[j].push(hit.tb);
+    }
+  }
+
+  const out: Segment[] = [];
+
+  for (let i = 0; i < baseSegments.length; i++) {
+    const seg = baseSegments[i];
+    const ts = Array.from(new Set(cuts[i].map((v) => round(v)))).sort((a, b) => a - b);
+
+    const d = sub(seg.b, seg.a);
+
+    for (let k = 0; k < ts.length - 1; k++) {
+      const t0 = ts[k];
+      const t1 = ts[k + 1];
+      if (t1 - t0 <= EPS) continue;
+
+      const a = rp({ x: seg.a.x + d.x * t0, y: seg.a.y + d.y * t0 });
+      const b = rp({ x: seg.a.x + d.x * t1, y: seg.a.y + d.y * t1 });
+
+      if (!eq(a, b)) out.push({ a, b });
+    }
+  }
+
+  return out;
+}
+
+function keyOfPoint(p: CadPoint): string {
+  return `${round(p.x)}:${round(p.y)}`;
+}
+
+function buildGraph(segments: Segment[]): { nodes: Node[]; edges: DirectedEdge[]; outgoing: number[][] } {
+  const nodeMap = new Map<string, number>();
+  const nodes: Node[] = [];
+
+  const getNodeId = (p: CadPoint): number => {
+    const key = keyOfPoint(p);
+    const found = nodeMap.get(key);
+    if (found != null) return found;
+    const id = nodes.length;
+    nodes.push(rp(p));
+    nodeMap.set(key, id);
+    return id;
+  };
+
+  const edges: DirectedEdge[] = [];
+
+  for (const s of segments) {
+    const a = getNodeId(s.a);
+    const b = getNodeId(s.b);
+    if (a === b) continue;
+
+    const ab = sub(nodes[b], nodes[a]);
+    const ba = sub(nodes[a], nodes[b]);
+
+    edges.push({ from: a, to: b, angle: angleOf(ab), used: false });
+    edges.push({ from: b, to: a, angle: angleOf(ba), used: false });
+  }
+
+  const outgoing: number[][] = Array.from({ length: nodes.length }, () => []);
+
+  for (let i = 0; i < edges.length; i++) {
+    outgoing[edges[i].from].push(i);
+  }
+
+  for (const arr of outgoing) {
+    arr.sort((ia, ib) => edges[ia].angle - edges[ib].angle);
+  }
+
+  return { nodes, edges, outgoing };
+}
+
+function angleDeltaCW(fromAngle: number, toAngle: number): number {
+  let d = fromAngle - toAngle;
+  while (d < 0) d += Math.PI * 2;
+  while (d >= Math.PI * 2) d -= Math.PI * 2;
+  return d;
+}
+
+function traceFace(
+  startEdgeIdx: number,
+  nodes: Node[],
+  edges: DirectedEdge[],
+  outgoing: number[][]
+): number[] {
+  const cycle: number[] = [];
+  let currentEdgeIdx = startEdgeIdx;
+
+  while (true) {
+    const e = edges[currentEdgeIdx];
+    if (e.used) break;
+
+    e.used = true;
+    cycle.push(e.from);
+
+    const arrivalAngle = angleOf(sub(nodes[e.from], nodes[e.to]));
+    const outs = outgoing[e.to];
+
+    if (outs.length === 0) break;
+
+    let bestIdx = -1;
+    let bestTurn = Infinity;
+
+    for (const candIdx of outs) {
+      const cand = edges[candIdx];
+      if (cand.used) continue;
+      const arrival = arrivalAngle; // Use arrivalAngle directly
+      const turn = angleDeltaCW(arrival, cand.angle);
+      if (turn < bestTurn) {
+        bestTurn = turn;
+        bestIdx = candIdx;
+      }
+    }
+
+    if (bestIdx === -1) break;
+    currentEdgeIdx = bestIdx;
+
+    if (currentEdgeIdx === startEdgeIdx) {
+      cycle.push(edges[currentEdgeIdx].from);
+      break;
+    }
+  }
+
+  return cycle;
+}
+
+function simplifyCollinear(points: CadPoint[]): CadPoint[] {
+  const closed = closeLoop(points);
+  if (closed.length < 4) return closed;
+
+  const open = closed.slice(0, -1);
+  const out: CadPoint[] = [];
+
+  for (let i = 0; i < open.length; i++) {
+    const prev = open[(i - 1 + open.length) % open.length];
+    const curr = open[i];
+    const next = open[(i + 1) % open.length];
+
+    if (pointLineDistance(curr, prev, next) <= EPS) continue;
+    out.push(curr);
+  }
+
+  return closeLoop(out);
+}
+
+function extractSimpleLoops(loop: CadPoint[]): CadPoint[][] {
+  const pieces = splitSegmentsAtIntersections(loop);
+  if (pieces.length === 0) return [];
+
+  const { nodes, edges, outgoing } = buildGraph(pieces);
+  const cycles: CadPoint[][] = [];
+
+  for (let i = 0; i < edges.length; i++) {
+    if (edges[i].used) continue;
+    const cycleNodeIds = traceFace(i, nodes, edges, outgoing);
+    if (cycleNodeIds.length < 4) continue;
+
+    const pts = cycleNodeIds.map((id) => nodes[id]);
+    const clean = simplifyCollinear(pts);
+
+    if (clean.length >= 4 && Math.abs(signedArea(clean.slice(0, -1))) > EPS) {
+      cycles.push(clean);
+    }
+  }
+
+  const unique = new Map<string, CadPoint[]>();
+
+  for (const c of cycles) {
+    const open = c.slice(0, -1);
+    const canon = open
+      .map((p) => `${round(p.x)},${round(p.y)}`)
+      .sort()
+      .join("|");
+    if (!unique.has(canon)) unique.set(canon, c);
+  }
+
+  return Array.from(unique.values()).sort(
+    (a, b) => Math.abs(signedArea(b.slice(0, -1))) - Math.abs(signedArea(a.slice(0, -1)))
+  );
+}
+
+function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
+  const poly = closeLoop(polygon);
+  let inside = false;
+
+  for (let i = 0, j = poly.length - 2; i < poly.length - 1; j = i++) {
+    const xi = poly[i].x;
+    const yi = poly[i].y;
+    const xj = poly[j].x;
+    const yj = poly[j].y;
+
+    const intersect =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || EPS) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function centroid(points: CadPoint[]): CadPoint {
+  const poly = closeLoop(points);
+  let cx = 0;
+  let cy = 0;
+  let a = 0;
+
+  for (let i = 0; i < poly.length - 1; i++) {
+    const p = poly[i];
+    const q = poly[i + 1];
+    const f = p.x * q.y - q.x * p.y;
+    a += f;
+    cx += (p.x + q.x) * f;
+    cy += (p.y + q.y) * f;
+  }
+
+  a *= 0.5;
+  if (Math.abs(a) <= EPS) {
+    const sum = poly.slice(0, -1).reduce(
+      (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
+      { x: 0, y: 0 }
+    );
+    const n = Math.max(1, poly.length - 1);
+    return { x: sum.x / n, y: sum.y / n };
+  }
+
+  return { x: cx / (6 * a), y: cy / (6 * a) };
+}
+
+export function buildOffset(
+  polyline: CadPoint[],
+  offset: number,
+  joinType: JoinType = "round",
+  miterLimit = DEFAULT_MITER_LIMIT
+): CadPoint[][] {
+  const raw = rawOffsetLoop(polyline, offset, joinType, miterLimit);
+  if (raw.length < 4) return [];
+
+  const loops = extractSimpleLoops(raw);
+  if (loops.length === 0) return [];
+
+  const src = closeLoop(normalizeClosedPolyline(polyline));
+
+  const filtered = loops.filter((loop) => {
+    const c = centroid(loop);
+    if (offset < 0) {
+      return pointInPolygon(c, src);
+    }
+    return true;
+  });
+
+  return filtered.length > 0 ? filtered : loops;
+}
+
+export function buildContourOffsets(
+  polyline: CadPoint[],
+  isExternal: boolean,
+  step: number,
+  maxOffset: number,
+  joinType: JoinType = "round",
+  miterLimit = DEFAULT_MITER_LIMIT
+): CadPoint[][] {
+  const base = normalizeClosedPolyline(polyline);
+  if (base.length < 3 || step <= EPS || maxOffset < 0) return [];
+
+  const result: CadPoint[][] = [closeLoop(base)];
+  const sign = isExternal ? 1 : -1;
+  const limit = Math.abs(maxOffset);
+
+  for (let current = step; current <= limit + EPS; current += step) {
+    const loops = buildOffset(base, sign * current, joinType, miterLimit);
+    if (loops.length === 0) break;
+
+    const main = loops.sort(
+      (a, b) => Math.abs(signedArea(b.slice(0, -1))) - Math.abs(signedArea(a.slice(0, -1)))
+    )[0];
+
+    if (!main || main.length < 4) break;
+    result.push(main);
+  }
+
+  return result;
+}
+
+export function buildPocketOffsets(
+  polyline: CadPoint[],
+  toolRadius: number,
+  stepover: number,
+  joinType: JoinType = "round",
+  miterLimit = DEFAULT_MITER_LIMIT,
+  keepCenterCleanup = true
+): CadPoint[][] {
+  const base = normalizeClosedPolyline(polyline);
+  if (base.length < 3 || toolRadius <= EPS || stepover <= EPS) return [];
+
+  const paths: CadPoint[][] = [];
+  let currentLoops = buildOffset(base, -toolRadius, joinType, miterLimit);
+
+  while (currentLoops.length > 0) {
+    const sorted = currentLoops
+      .filter((l) => l.length >= 4)
+      .sort((a, b) => Math.abs(signedArea(b.slice(0, -1))) - Math.abs(signedArea(a.slice(0, -1))));
+
+    if (sorted.length === 0) break;
+
+    for (const loop of sorted) {
+      paths.push(loop);
+    }
+
+    const nextSeed = sorted[0];
+    const next = buildOffset(nextSeed.slice(0, -1), -stepover, joinType, miterLimit);
+    if (next.length === 0) break;
+    currentLoops = next;
+  }
+
+  if (keepCenterCleanup && paths.length === 0) {
+    const c = centroid(base);
+    if (pointInPolygon(c, closeLoop(base))) {
+      paths.push(closeLoop([
+        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+        { x: c.x + toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+        { x: c.x + toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
+        { x: c.x - toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
+      ]));
+    }
+  }
+
+  return paths;
+}
+
+function toToolpathPoints(points: CadPoint[], z?: number): ToolpathPoint[] {
+  return points.map((p) => ({ x: round(p.x), y: round(p.y), ...(z != null ? { z } : {}) }));
+}
+
+export function planContourOperation(input: PlanContourInput): PlannedOperation {
+  const {
+    shapeId,
+    shapeName,
+    polyline,
+    toolRadius,
+    isExternal,
+    stepover = toolRadius,
+    maxOffset = toolRadius,
+    depth,
+    joinType = "round",
+    miterLimit = DEFAULT_MITER_LIMIT,
+  } = input;
+
+  const startOffset = isExternal ? toolRadius : -toolRadius;
+  const offsets = buildContourOffsets(
+    polyline,
+    isExternal,
+    Math.max(stepover, EPS),
+    Math.max(maxOffset, Math.abs(toolRadius)),
+    joinType,
+    miterLimit
+  );
+
+  const paths: PlannedPath[] = [];
+
+  if (offsets.length === 0) {
+    const single = buildOffset(polyline, startOffset, joinType, miterLimit);
+    for (let i = 0; i < single.length; i++) {
+      paths.push({
+        name: `${shapeName}-contour-${i + 1}`,
+        points: toToolpathPoints(single[i], depth),
+        closed: true,
+        depth,
+      });
+    }
+  } else {
+    for (let i = 0; i < offsets.length; i++) {
+      const off = i === 0
+        ? buildOffset(polyline, startOffset, joinType, miterLimit)[0] ?? offsets[0]
+        : offsets[i];
+
+      paths.push({
+        name: `${shapeName}-contour-${i + 1}`,
+        points: toToolpathPoints(off, depth),
+        closed: true,
+        depth,
+      });
+    }
+  }
+
+  return { shapeId, shapeName, paths };
+}
+
+export function planPocketOperation(input: PlanPocketInput): PlannedOperation {
+  const {
+    shapeId,
+    shapeName,
+    polyline,
+    toolRadius,
+    stepover,
+    depth,
+    joinType = "round",
+    miterLimit = DEFAULT_MITER_LIMIT,
+    keepCenterCleanup = true,
+  } = input;
+
+  const pocketLoops = buildPocketOffsets(
+    polyline,
+    toolRadius,
+    stepover,
+    joinType,
+    miterLimit,
+    keepCenterCleanup
+  );
+
+  const paths: PlannedPath[] = pocketLoops.map((loop, i) => ({
+    name: `${shapeName}-pocket-${i + 1}`,
+    points: toToolpathPoints(loop, depth),
+    closed: true,
+    depth,
+  }));
+
+  return { shapeId, shapeName, paths };
+}
+
+export function planCamOperation(
+  mode: CamMode,
+  input: PlanContourInput | PlanPocketInput
+): PlannedOperation {
+  if (mode === "contour") {
+    return planContourOperation(input as PlanContourInput);
+  }
+  return planPocketOperation(input as PlanPocketInput);
+}
+
+export function plannedOperationToToolpaths(
+  op: PlannedOperation,
+  kind: "contour" | "pocket"
+): Toolpath[] {
+  return op.paths.map((p) => ({
+    name: p.name,
+    points: p.points,
+    closed: p.closed,
+    cutZ: p.depth,
+    kind,
+  }));
+}
+
+
+path: /cam/algorithms/pocketing.ts
+----------------------------------------
+import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+import { buildPocketOffsets } from "./offsetBuilder";
+import { classifyContours, pointInPolygon } from "./contourClassifier";
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosed(points: CadPoint[]): CadPoint[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (distance(first, last) <= EPS) {
+    return points.slice(0, -1).map((p) => ({ x: round(p.x), y: round(p.y) }));
+  }
+  return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
+}
+
+function boundsOf(polygon: CadPoint[]) {
+  return {
+    minX: Math.min(...polygon.map((p) => p.x)),
+    maxX: Math.max(...polygon.map((p) => p.x)),
+    minY: Math.min(...polygon.map((p) => p.y)),
+    maxY: Math.max(...polygon.map((p) => p.y)),
+  };
+}
+
+function segmentInsidePocketArea(
+  a: CadPoint,
+  b: CadPoint,
+  outer: CadPoint[],
+  holes: CadPoint[][]
+): boolean {
+  const mid = {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  };
+
+  if (!pointInPolygon(mid, outer)) return false;
+  for (const hole of holes) {
+    if (pointInPolygon(mid, hole)) return false;
+  }
+  return true;
+}
+
+function connectZigzagSegments(segments: CadPoint[][]): CadPoint[][] {
+  if (segments.length === 0) return [];
+
+  const result: CadPoint[][] = [];
+  let current: CadPoint[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = i % 2 === 0 ? segments[i] : [...segments[i]].reverse();
+
+    if (current.length === 0) {
+      current.push(...segment);
+      continue;
+    }
+
+    const last = current[current.length - 1];
+    const first = segment[0];
+
+    if (distance(last, first) <= EPS * 10) {
+      current.push(...segment.slice(1));
+    } else {
+      result.push(current);
+      current = [...segment];
+    }
+  }
+
+  if (current.length >= 2) {
+    result.push(current);
+  }
+
+  return result;
+}
+
+function generateParallelPocketForRegion(
+  outer: CadPoint[],
+  holes: CadPoint[][],
+  step: number,
+  angle = 0
+): CadPoint[][] {
+  if (outer.length < 3 || step <= EPS) return [];
+
+  void angle;
+
+  const bounds = boundsOf(outer);
+  const segments: CadPoint[][] = [];
+
+  for (let y = bounds.minY; y <= bounds.maxY + EPS; y += step) {
+    const intersections: number[] = [];
+
+    const accumulateIntersections = (polygon: CadPoint[]) => {
+      for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % polygon.length];
+
+        if (Math.abs(a.y - b.y) <= EPS) continue;
+
+        const ymin = Math.min(a.y, b.y);
+        const ymax = Math.max(a.y, b.y);
+
+        if (y < ymin || y > ymax) continue;
+
+        const t = (y - a.y) / (b.y - a.y);
+        if (t < -EPS || t > 1 + EPS) continue;
+
+        intersections.push(a.x + t * (b.x - a.x));
+      }
+    };
+
+    accumulateIntersections(outer);
+
+    intersections.sort((a, b) => a - b);
+
+    for (let i = 0; i + 1 < intersections.length; i += 2) {
+      const x1 = intersections[i];
+      const x2 = intersections[i + 1];
+
+      if (Math.abs(x2 - x1) <= EPS) continue;
+
+      const a = { x: round(x1), y: round(y) };
+      const b = { x: round(x2), y: round(y) };
+
+      if (segmentInsidePocketArea(a, b, outer, holes)) {
+        segments.push([a, b]);
+      }
+    }
+  }
+
+  return connectZigzagSegments(segments);
+}
+
+export function generateOffsetPocketWithHoles(
+  contours: CadPoint[][],
+  step: number
+): CadPoint[][] {
+  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
+  if (normalized.length === 0 || step <= EPS) return [];
+
+  const classified = classifyContours(normalized);
+  const toolRadius = step / 2;
+  const result: CadPoint[][] = [];
+
+  for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
+    const outer = classified.external[extIndex];
+    const loops = buildPocketOffsets(outer, toolRadius, step, "round", 4, true);
+    result.push(...loops);
+  }
+
+  return result;
+}
+
+export function generateParallelPocketWithHoles(
+  contours: CadPoint[][],
+  step: number,
+  angle = 0
+): CadPoint[][] {
+  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
+  if (normalized.length === 0 || step <= EPS) return [];
+
+  const classified = classifyContours(normalized);
+  const result: CadPoint[][] = [];
+
+  for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
+    const outer = classified.external[extIndex];
+    const holeIndices = classified.holes.get(extIndex) ?? [];
+    const holes = holeIndices.map((idx) => normalized[idx]);
+
+    result.push(...generateParallelPocketForRegion(outer, holes, step, angle));
+  }
+
+  return result;
+}
+
+export function generateBestPocket(
+  contours: CadPoint[][],
+  step: number,
+  angle = 0
+): CadPoint[][] {
+  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
+  if (normalized.length === 0 || step <= EPS) return [];
+
+  const classified = classifyContours(normalized);
+  const hasHoles = Array.from(classified.holes.values()).some((items) => items.length > 0);
+
+  if (hasHoles) {
+    const parallel = generateParallelPocketWithHoles(normalized, step, angle);
+    if (parallel.length > 0) return parallel;
+  }
+
+  const offsetPocket = generateOffsetPocketWithHoles(normalized, step);
+  if (offsetPocket.length > 0) return offsetPocket;
+
+  return generateParallelPocketWithHoles(normalized, step, angle);
+}
+
+
+path: /cam/algorithms/ramping.ts
+----------------------------------------
+import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+
+export type ToolpathPoint3D = CadPoint & { z: number };
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
+  if (contour.length < 2) return contour.map(p => ({ ...p }));
+  const first = contour[0];
+  const last = contour[contour.length - 1];
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map(p => ({ ...p }));
+  return contour.map(p => ({ ...p }));
+}
+
+export function generateRampingPass(
+  contour: CadPoint[],
+  startZ: number,
+  endZ: number,
+  turns = 1
+): ToolpathPoint3D[] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 2 || turns <= 0) return [];
+
+  const closedContour = [...normalized, normalized[0]];
+  const segmentsPerTurn = closedContour.length - 1;
+  const totalSteps = segmentsPerTurn * Math.max(1, Math.floor(turns));
+  const result: ToolpathPoint3D[] = [];
+
+  for (let step = 0; step <= totalSteps; step++) {
+    const globalT = totalSteps === 0 ? 1 : step / totalSteps;
+    const z = round(startZ + (endZ - startZ) * globalT);
+    const localIndex = step % segmentsPerTurn;
+    const point = closedContour[localIndex];
+    result.push({ x: round(point.x), y: round(point.y), z });
+  }
+
+  if (result.length > 0) {
+    const last = result[result.length - 1];
+    const first = closedContour[0];
+    if (
+      Math.abs(last.x - first.x) > EPS ||
+      Math.abs(last.y - first.y) > EPS ||
+      Math.abs(last.z - endZ) > EPS
+    ) {
+      result.push({ x: round(first.x), y: round(first.y), z: round(endZ) });
+    }
+  }
+  return result;
+}
+
+
+path: /cam/algorithms/travelOptimizer.ts
+----------------------------------------
+import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+
+export type TravelCandidate = {
+  points: CadPoint[];
+  closed: boolean;
+};
+
+export type OrientedTravelPath = {
+  index: number;
+  points: CadPoint[];
+  closed: boolean;
+};
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: CadPoint, b: CadPoint): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosed(points: CadPoint[]): CadPoint[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (distance(first, last) <= EPS) {
+    return points.slice(0, -1).map((p) => ({ x: round(p.x), y: round(p.y) }));
+  }
+  return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
+}
+
+function closeIfNeeded(points: CadPoint[]): CadPoint[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (distance(first, last) <= EPS) return [...points];
+  return [...points, { ...first }];
+}
+
+function rotateClosedPath(points: CadPoint[], startIndex: number): CadPoint[] {
+  const open = normalizeClosed(points);
+  if (open.length === 0) return [];
+  const idx = ((startIndex % open.length) + open.length) % open.length;
+  const rotated = [...open.slice(idx), ...open.slice(0, idx)];
+  return closeIfNeeded(rotated);
+}
+
+function findNearestVertexIndex(points: CadPoint[], target: CadPoint): number {
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let i = 0; i < points.length; i++) {
+    const d = distance(points[i], target);
+    if (d < bestDistance) {
+      bestDistance = d;
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex;
+}
+
+export function orientOpenPathFromNearest(points: CadPoint[], current: CadPoint): CadPoint[] {
+  if (points.length <= 1) return [...points];
+
+  const start = points[0];
+  const end = points[points.length - 1];
+
+  return distance(current, end) < distance(current, start)
+    ? [...points].reverse()
+    : [...points];
+}
+
+export function orientClosedPathFromNearest(points: CadPoint[], current: CadPoint): CadPoint[] {
+  const open = normalizeClosed(points);
+  if (open.length <= 1) return closeIfNeeded(open);
+
+  const nearestIndex = findNearestVertexIndex(open, current);
+  return rotateClosedPath(open, nearestIndex);
+}
+
+export function orientPathFromNearest(
+  points: CadPoint[],
+  current: CadPoint,
+  closed: boolean
+): CadPoint[] {
+  return closed
+    ? orientClosedPathFromNearest(points, current)
+    : orientOpenPathFromNearest(points, current);
+}
+
+export function optimizeTravel(
+  contours: TravelCandidate[],
+  startPoint: CadPoint = { x: 0, y: 0 }
+): OrientedTravelPath[] {
+  const pending = contours.map((item, index) => ({ ...item, index }));
+  const result: OrientedTravelPath[] = [];
+  let current = { ...startPoint };
+
+  while (pending.length > 0) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestOriented: CadPoint[] = [];
+
+    for (let i = 0; i < pending.length; i++) {
+      const candidate = pending[i];
+      const oriented = orientPathFromNearest(candidate.points, current, candidate.closed);
+      if (oriented.length === 0) continue;
+
+      const d = distance(current, oriented[0]);
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestIndex = i;
+        bestOriented = oriented;
+      }
+    }
+
+    const picked = pending.splice(bestIndex, 1)[0];
+    const oriented = bestOriented.length > 0
+      ? bestOriented
+      : orientPathFromNearest(picked.points, current, picked.closed);
+
+    result.push({
+      index: picked.index,
+      points: oriented,
+      closed: picked.closed,
+    });
+
+    if (oriented.length > 0) {
+      current = oriented[oriented.length - 1];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Оставляю совместимость со старым API.
+ */
+export function optimizeTravelOrder(
+  contours: CadPoint[][],
+  startPoint: CadPoint = { x: 0, y: 0 }
+): number[] {
+  return optimizeTravel(
+    contours.map((points) => ({ points, closed: false })),
+    startPoint
+  ).map((item) => item.index);
+}
+
+
+path: /cam/gcode/emitters.ts
+----------------------------------------
+import type { SketchDocument } from "@/features/cad-editor/model/types";
+import { fmt } from "./format";
+
+function isLaserMode(doc: SketchDocument): boolean {
+  return doc.toolType === "laser";
+}
+
+function spindleMCode(doc: SketchDocument): "M3" | "M4" {
+  return doc.spindleDirection === "ccw" ? "M4" : "M3";
+}
+
+export function emitProgramPreamble(doc: SketchDocument): string[] {
+  const lines: string[] = [
+    "; Generated by GCode Studio / CAD module",
+    doc.units === "inch" ? "G20" : "G21",
+    "G90",
+    doc.workOffset,
+    `T${Math.max(1, Math.round(doc.toolNumber))} M6`,
+    `G0 Z${fmt(doc.startZ)}`,
+  ];
+  if (doc.coolant && !isLaserMode(doc)) lines.push("M8");
+  return lines;
+}
+
+export function emitProgramPostamble(doc: SketchDocument): string[] {
+  const lines: string[] = [];
+  if (doc.spindleOn) lines.push("M5");
+  if (doc.coolant && !isLaserMode(doc)) lines.push("M9");
+  lines.push(`G0 Z${fmt(doc.safeZ)}`);
+  if (doc.returnHome) lines.push("G0 X0 Y0");
+  return lines;
+}
+
+export function emitMoveTo(x: number, y: number): string[] {
+  return [`G0 X${fmt(x)} Y${fmt(y)}`];
+}
+
+export function emitToolStart(doc: SketchDocument): string[] {
+  if (!doc.spindleOn) return [];
+  const lines: string[] = [];
+  if (isLaserMode(doc)) lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.laserPower))}`);
+  else lines.push(`${spindleMCode(doc)} S${Math.max(0, Math.round(doc.spindleSpeed))}`);
+  if (doc.dwellMs > 0) lines.push(`G4 P${fmt(doc.dwellMs)}`);
+  return lines;
+}
+
+export function emitPlungeTo(doc: SketchDocument, cutZ: number): string[] {
+  if (isLaserMode(doc)) return [];
+  return [`G1 Z${fmt(cutZ)} F${fmt(doc.feedPlunge)}`];
+}
+
+export function emitToolEnd(doc: SketchDocument): string[] {
+  if (isLaserMode(doc)) return doc.spindleOn ? ["M5"] : [];
+  return [`G0 Z${fmt(doc.safeZ)} F${fmt(doc.feedRapid)}`];
+}
+
+export function emitCutStart(doc: SketchDocument, cutZ: number): string[] {
+  return [...emitToolStart(doc), ...emitPlungeTo(doc, cutZ)];
+}
+
+export function emitCutEnd(doc: SketchDocument): string[] {
+  return emitToolEnd(doc);
+}
+
+
+path: /cam/gcode/format.ts
+----------------------------------------
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+export function fmt(value: number): string {
+  return round(value).toFixed(3).replace(/\.?0+$/, "");
+}
+
+
+path: /cam/gcode/generator.ts
+----------------------------------------
+import type { SketchDocument } from "@/features/cad-editor/model/types";
+import {
+  emitCutEnd,
+  emitCutStart,
+  emitMoveTo,
+  emitProgramPostamble,
+  emitProgramPreamble,
+  emitToolEnd,
+  emitToolStart,
+} from "./emitters";
+import { fmt } from "./format";
+import { planDocumentToolpaths } from "../planning/documentPlanner";
+import { generateRampingPass } from "../algorithms/ramping";
+import {
+  buildBridgeSpans,
+  contourLength,
+  isInsideAnyBridge,
+  pointAtLength,
+} from "../algorithms/bridges";
+import type { Toolpath, ToolpathPoint } from "@/types/gcode";
+
+const EPS = 1e-6;
+
+function to2D(points: ToolpathPoint[]) {
+  return points.map((p) => ({ x: p.x, y: p.y }));
+}
+
+function is3DPath(points: ToolpathPoint[]): boolean {
+  return points.some((point) => typeof point.z === "number" && point.z !== 0);
+}
+
+function buildDepthPasses(targetCutZ: number, passDepth: number): number[] {
+  if (targetCutZ >= 0) return [targetCutZ];
+
+  const step = Math.max(0.001, Math.abs(passDepth));
+  const passes: number[] = [];
+
+  let current = -step;
+  while (current > targetCutZ) {
+    passes.push(Number(current.toFixed(3)));
+    current -= step;
+  }
+
+  passes.push(Number(targetCutZ.toFixed(3)));
+  return passes;
+}
+
+function emitLinearPath(points: ToolpathPoint[], feed: number): string[] {
+  const lines: string[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const point = points[i];
+    const xPart = `X${fmt(point.x)}`;
+    const yPart = `Y${fmt(point.y)}`;
+    const zPart = typeof point.z === "number" ? ` Z${fmt(point.z)}` : "";
+    lines.push(`G1 ${xPart} ${yPart}${zPart} F${fmt(feed)}`.replace(/\s+/g, " ").trim());
+  }
+  return lines;
+}
+
+function emitClosedPathWithTabs(
+  doc: SketchDocument,
+  contour: ToolpathPoint[],
+  passZ: number,
+  finalCutZ: number,
+  tabHeight: number,
+  bridgeCount: number,
+  bridgeWidth: number
+): string[] {
+  const lines: string[] = [];
+  const contour2D = to2D(contour);
+  const total = contourLength(contour2D);
+  if (contour2D.length < 3 || total <= EPS) return lines;
+
+  const spans = buildBridgeSpans(contour2D, bridgeCount, bridgeWidth);
+  const sampleStep = Math.max(0.5, Math.min(bridgeWidth / 4 || 1, 2));
+  const steps = Math.max(contour2D.length, Math.ceil(total / sampleStep));
+
+  let currentZ = passZ;
+
+  for (let i = 1; i <= steps; i++) {
+    const at = (total * i) / steps;
+    const point = pointAtLength(contour2D, at);
+
+    const inBridge = isInsideAnyBridge(at, spans) && passZ <= finalCutZ + tabHeight + EPS;
+    const targetZ = inBridge ? Math.min(finalCutZ + tabHeight, 0) : passZ;
+
+    if (Math.abs(targetZ - currentZ) > EPS) {
+      lines.push(`G1 Z${fmt(targetZ)} F${fmt(doc.feedPlunge)}`);
+      currentZ = targetZ;
+    }
+
+    lines.push(`G1 X${fmt(point.x)} Y${fmt(point.y)} F${fmt(doc.feedCut)}`);
+  }
+
+  if (Math.abs(currentZ - passZ) > EPS) {
+    lines.push(`G1 Z${fmt(passZ)} F${fmt(doc.feedPlunge)}`);
+  }
+
+  return lines;
+}
+
+function emitContourPass(
+  doc: SketchDocument,
+  toolpath: Toolpath,
+  passZ: number,
+  startZ: number
+): string[] {
+  const lines: string[] = [];
+  const path = toolpath.points;
+  const base2D = to2D(path);
+  if (base2D.length < 2) return lines;
+
+  lines.push(...emitMoveTo(base2D[0].x, base2D[0].y));
+
+  if (toolpath.useRamping && toolpath.closed && doc.toolType !== "laser") {
+    lines.push(...emitToolStart(doc));
+
+    const ramp = generateRampingPass(
+      base2D,
+      startZ,
+      passZ,
+      Math.max(1, Math.round(toolpath.rampTurns ?? 1))
+    );
+    lines.push(...emitLinearPath(ramp, doc.feedCut));
+  } else {
+    lines.push(...emitCutStart(doc, passZ));
+  }
+
+  if (
+    toolpath.useBridges &&
+    toolpath.closed &&
+    (toolpath.bridgeCount ?? 0) > 0 &&
+    (toolpath.bridgeWidth ?? 0) > 0 &&
+    (toolpath.bridgeHeight ?? 0) > 0 &&
+    doc.toolType !== "laser"
+  ) {
+    lines.push(
+      ...emitClosedPathWithTabs(
+        doc,
+        path,
+        passZ,
+        toolpath.cutZ ?? doc.cutZ,
+        toolpath.bridgeHeight ?? 1,
+        Math.max(1, toolpath.bridgeCount ?? 2),
+        Math.max(0.1, toolpath.bridgeWidth ?? Math.max(doc.toolDiameter * 2, 3))
+      )
+    );
+  } else {
+    lines.push(...emitLinearPath(path, doc.feedCut));
+
+    if (toolpath.closed && path.length >= 2) {
+      const first = path[0];
+      const last = path[path.length - 1];
+      const alreadyClosed =
+        Math.abs(first.x - last.x) <= EPS && Math.abs(first.y - last.y) <= EPS;
+
+      if (!alreadyClosed) {
+        lines.push(`G1 X${fmt(first.x)} Y${fmt(first.y)} F${fmt(doc.feedCut)}`);
+      }
+    }
+  }
+
+  lines.push(...emitCutEnd(doc));
+  return lines;
+}
+
+function emitPrebuilt3DPath(doc: SketchDocument, toolpath: Toolpath): string[] {
+  const lines: string[] = [];
+  const points = toolpath.points;
+  if (points.length < 2) return lines;
+
+  lines.push(...emitMoveTo(points[0].x, points[0].y));
+  lines.push(...emitToolStart(doc));
+  lines.push(...emitLinearPath(points, doc.feedCut));
+  lines.push(...emitToolEnd(doc));
+
+  return lines;
+}
+
+export async function generateSketchGCode(doc: SketchDocument): Promise<string> {
+  const lines: string[] = [...emitProgramPreamble(doc)];
+  const plannedToolpaths = await planDocumentToolpaths(doc);
+
+  for (const toolpath of plannedToolpaths) {
+    if (!toolpath || toolpath.points.length < 2) continue;
+
+    if (is3DPath(toolpath.points)) {
+      lines.push(...emitPrebuilt3DPath(doc, toolpath));
+      continue;
+    }
+
+    const cutZ = toolpath.cutZ ?? doc.cutZ;
+    const passDepth = Math.max(0.001, Math.abs(toolpath.stepdown ?? doc.passDepth));
+    const passes = buildDepthPasses(cutZ, passDepth);
+
+    let previousZ = doc.safeZ;
+    for (const passZ of passes) {
+      lines.push(...emitContourPass(doc, toolpath, passZ, previousZ));
+      previousZ = passZ;
+    }
+  }
+
+  lines.push(...emitProgramPostamble(doc));
+  return lines.join("\n") + "\n";
+}
+
+
+path: /cam/planning/documentPlanner.ts
+----------------------------------------
+import type { SketchDocument, SketchShape } from "@/features/cad-editor/model/types";
+import { collectVisibleShapes } from "@/features/cad-editor/model/grouping";
+import { optimizeTravel } from "../algorithms/travelOptimizer";
+import type { Toolpath, ToolPoint } from "@/types/gcode";
+import { extractShapeContours } from "./shapeGeometry";
+import { planContourOperationFromGeometry } from "./operationPlanner";
+
+function buildShapeLabel(shape: SketchShape): string {
+  return `${shape.type}:${shape.name}:${shape.id}`;
+}
+
+function renumberToolpaths(toolpaths: Toolpath[]): Toolpath[] {
+  return toolpaths.map((toolpath, index) => ({
+    ...toolpath,
+    name: `${String(index + 1).padStart(3, "0")} ${toolpath.name}`,
+  }));
+}
+
+export async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
+  const visibleShapes = collectVisibleShapes(doc).filter(s => !s.isConstruction);
+  const rawToolpaths: Array<
+    Toolpath & {
+      __shapeOrder: number;
+      __shapeLabel: string;
+      __contourOrder: number;
+      __localOrder: number;
+    }
+  > = [];
+
+  for (let shapeIndex = 0; shapeIndex < visibleShapes.length; shapeIndex++) {
+    const shape = visibleShapes[shapeIndex];
+    const contours = await extractShapeContours(shape, doc.points);
+
+    for (let contourIndex = 0; contourIndex < contours.length; contourIndex++) {
+      const contour = contours[contourIndex];
+      const planned = planContourOperationFromGeometry(shape, doc, contour, contourIndex);
+
+      planned.forEach((toolpath, localIndex) => {
+        rawToolpaths.push({
+          ...toolpath,
+          __shapeOrder: shapeIndex,
+          __shapeLabel: buildShapeLabel(shape),
+          __contourOrder: contourIndex,
+          __localOrder: localIndex,
+        });
+      });
+    }
+  }
+
+  if (rawToolpaths.length === 0) {
+    return [];
+  }
+
+  const oriented = optimizeTravel(
+    rawToolpaths.map((tp) => ({
+      points: tp.points.map((p) => ({ x: p.x, y: p.y })),
+      closed: tp.closed,
+    })),
+    { x: 0, y: 0 }
+  );
+
+  const reordered = oriented.map((item) => {
+    const source = rawToolpaths[item.index];
+
+    return {
+      ...source,
+      points: item.points.map((p): ToolPoint => ({ x: p.x, y: p.y, z: 0 })),
+    };
+  });
+
+  const cleaned = reordered.map(
+    ({ __shapeOrder, __shapeLabel, __contourOrder, __localOrder, ...toolpath }) => toolpath
+  );
+
+  return renumberToolpaths(cleaned);
+}
+
+
+path: /cam/planning/operationPlanner.ts
+----------------------------------------
+import type {
+  CamOperationType,
+  SketchDocument,
+  SketchShape,
+} from "@/features/cad-editor/model/types";
+import { buildOffset } from "../algorithms/offsetBuilder";
+import { generateBestPocket } from "../algorithms/pocketing";
+import type { Toolpath, ToolPoint } from "@/types/gcode";
+import type { GeometryContour } from "./shapeGeometry";
+
+type ResolvedCamSettings = {
+  operation: CamOperationType;
+  direction: "climb" | "conventional";
+  stepdown: number | null;
+  stepover: number | null;
+  tabs: {
+    enabled: boolean;
+    count: number;
+    width: number;
+    height: number;
+  };
+  ramping: {
+    enabled: boolean;
+    turns: number;
+  };
+};
+
+type PlannedToolpathOptions = {
+  closed: boolean;
+  kind: "contour" | "pocket";
+  operation: CamOperationType;
+  allowTabs: boolean;
+  allowRamping: boolean;
+};
+
+function resolveCam(shape: SketchShape, doc: SketchDocument): ResolvedCamSettings {
+  const docCam = doc.defaultCamSettings;
+  const shapeCam = shape.camSettings ?? {};
+
+  return {
+    operation: shapeCam.operation ?? docCam.operation,
+    direction: shapeCam.direction ?? docCam.direction,
+    stepdown: shapeCam.stepdown ?? docCam.stepdown,
+    stepover: shapeCam.stepover ?? docCam.stepover,
+    tabs: {
+      enabled: shapeCam.tabs?.enabled ?? docCam.tabs.enabled,
+      count: shapeCam.tabs?.count ?? docCam.tabs.count,
+      width: shapeCam.tabs?.width ?? docCam.tabs.width,
+      height: shapeCam.tabs?.height ?? docCam.tabs.height,
+    },
+    ramping: {
+      enabled: shapeCam.ramping?.enabled ?? docCam.ramping.enabled,
+      turns: shapeCam.ramping?.turns ?? docCam.ramping.turns,
+    },
+  };
+}
+
+function resolveCutZ(shape: SketchShape, doc: SketchDocument): number {
+  return shape.cutZ ?? doc.cutZ;
+}
+
+function signedArea(points: { x: number; y: number }[]): number {
+  if (points.length < 3) return 0;
+
+  let area = 0;
+  const count = points.length;
+
+  for (let i = 0; i < count; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % count];
+    area += a.x * b.y - b.x * a.y;
+  }
+
+  return area / 2;
+}
+
+function normalizeClosed(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (points.length < 2) return [...points];
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const alreadyClosed =
+    Math.hypot(first.x - last.x, first.y - last.y) <= 0.001;
+
+  return alreadyClosed ? points.slice(0, -1) : [...points];
+}
+
+function closeIfNeeded(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (points.length < 2) return [...points];
+
+  const first = points[0];
+  const last = points[points.length - 1];
+  const alreadyClosed =
+    Math.hypot(first.x - last.x, first.y - last.y) <= 0.001;
+
+  return alreadyClosed ? [...points] : [...points, { ...first }];
+}
+
+function orientPath(
+  points: { x: number; y: number }[],
+  closed: boolean,
+  operation: CamOperationType,
+  direction: "climb" | "conventional"
+): { x: number; y: number }[] {
+  if (!closed || points.length < 3) {
+    return direction === "conventional" ? [...points].reverse() : [...points];
+  }
+
+  const open = normalizeClosed(points);
+  const ccw = signedArea(open) > 0;
+
+  const wantCCW =
+    operation === "profile-inside"
+      ? direction === "climb"
+      : direction !== "climb";
+
+  const oriented = ccw === wantCCW ? open : [...open].reverse();
+  return closeIfNeeded(oriented);
+}
+
+function stepoverDistance(cam: ResolvedCamSettings, doc: SketchDocument): number {
+  const ratio = cam.stepover ?? doc.stepover;
+  return Math.max(
+    0.05,
+    doc.toolDiameter * Math.max(0.05, Math.min(1, ratio))
+  );
+}
+
+function makeToolpath(
+  name: string,
+  points: { x: number; y: number }[],
+  shape: SketchShape,
+  doc: SketchDocument,
+  cam: ResolvedCamSettings,
+  options: PlannedToolpathOptions
+): Toolpath {
+  return {
+    name,
+    points: points.map((p): ToolPoint => ({ x: p.x, y: p.y, z: 0 })),
+    closed: options.closed,
+    cutZ: resolveCutZ(shape, doc),
+    useRamping: options.allowRamping,
+    useBridges: options.allowTabs,
+    bridgeCount: options.allowTabs ? cam.tabs.count : 0,
+    bridgeWidth: options.allowTabs ? cam.tabs.width : 0,
+    bridgeHeight: options.allowTabs ? cam.tabs.height : 0,
+    rampTurns: options.allowRamping ? cam.ramping.turns : 0,
+    stepdown: cam.stepdown ?? doc.passDepth,
+  };
+}
+
+function buildNameBase(shape: SketchShape, contour: GeometryContour, index: number): string {
+  const suffix = contour.closed ? "Contour" : "Path";
+  return `${shape.type.toUpperCase()} ${shape.name} ${suffix} ${index + 1}`;
+}
+
+function planFollowPath(
+  shape: SketchShape,
+  doc: SketchDocument,
+  cam: ResolvedCamSettings,
+  contour: GeometryContour,
+  nameBase: string
+): Toolpath[] {
+  const closed = contour.closed;
+  const points = orientPath(contour.points, closed, "follow-path", cam.direction);
+
+  return [
+    makeToolpath(nameBase, points, shape, doc, cam, {
+      closed,
+      kind: "contour",
+      operation: "follow-path",
+      allowTabs: closed && cam.tabs.enabled,
+      allowRamping: closed && cam.ramping.enabled && doc.toolType !== "laser",
+    }),
+  ];
+}
+
+function planProfile(
+  shape: SketchShape,
+  doc: SketchDocument,
+  cam: ResolvedCamSettings,
+  contour: GeometryContour,
+  nameBase: string,
+  side: "inside" | "outside"
+): Toolpath[] {
+  if (!contour.closed) {
+    return planFollowPath(shape, doc, cam, contour, nameBase);
+  }
+
+  const toolRadius = Math.max(0.001, doc.toolDiameter / 2);
+  const offset = side === "outside" ? toolRadius : -toolRadius;
+  const operation: CamOperationType =
+    side === "outside" ? "profile-outside" : "profile-inside";
+
+  const loops = buildOffset(contour.points, offset, "round", 4);
+  const best = loops[0] ?? contour.points;
+  const oriented = orientPath(best, true, operation, cam.direction);
+
+  return [
+    makeToolpath(nameBase, oriented, shape, doc, cam, {
+      closed: true,
+      kind: "contour",
+      operation,
+      allowTabs: cam.tabs.enabled,
+      allowRamping: cam.ramping.enabled && doc.toolType !== "laser",
+    }),
+  ];
+}
+
+function planPocket(
+  shape: SketchShape,
+  doc: SketchDocument,
+  cam: ResolvedCamSettings,
+  contour: GeometryContour,
+  nameBase: string
+): Toolpath[] {
+  if (!contour.closed) {
+    return [];
+  }
+
+  const step = stepoverDistance(cam, doc);
+  const pocketPaths = generateBestPocket([contour.points], step, 0);
+
+  return pocketPaths.map((path, index) =>
+    makeToolpath(
+      `${nameBase} Pocket ${index + 1}`,
+      orientPath(path, false, "pocket", cam.direction),
+      shape,
+      doc,
+      cam,
+      {
+        closed: false,
+        kind: "pocket",
+        operation: "pocket",
+        allowTabs: false,
+        allowRamping: false,
+      }
+    )
+  );
+}
+
+/**
+ * Единая точка планирования 2D-операции для одного контура.
+ * В будущем сюда можно добавить drill / engrave / v-carve
+ * без изменений генератора G-code.
+ */
+export function planContourOperationFromGeometry(
+  shape: SketchShape,
+  doc: SketchDocument,
+  contour: GeometryContour,
+  index: number
+): Toolpath[] {
+  const cam = resolveCam(shape, doc);
+  const nameBase = buildNameBase(shape, contour, index);
+
+  switch (cam.operation) {
+    case "follow-path":
+      return planFollowPath(shape, doc, cam, contour, nameBase);
+
+    case "profile-outside":
+      return planProfile(shape, doc, cam, contour, nameBase, "outside");
+
+    case "profile-inside":
+      return planProfile(shape, doc, cam, contour, nameBase, "inside");
+
+    case "pocket":
+      return planPocket(shape, doc, cam, contour, nameBase);
+
+    default:
+      return planFollowPath(shape, doc, cam, contour, nameBase);
+  }
+}
+
+
+path: /cam/planning/shapeGeometry.ts
+----------------------------------------
+import type {
+  SketchArc,
+  SketchCircle,
+  SketchLine,
+  SketchPolyline,
+  SketchRectangle,
+  SketchShape,
+  SketchSvg,
+  SketchText,
+  SketchPoint,
+  SketchEllipse,
+  SketchEllipseArc,
+  SketchBSpline,
+} from "@/features/cad-editor/model/types";
+import { getTextPolylines } from "@/features/cad-editor/geometry/textGeometry";
+import { rotateCadPoint, sampleArcPoints } from "@/features/cad-editor/geometry/geometryEngine";
+
+export type GeometryContour = {
+  points: { x: number; y: number }[];
+  closed: boolean;
+};
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function rotatePoint(
+  point: { x: number; y: number },
+  origin: { x: number; y: number },
+  angleDeg: number
+) {
+  return rotateCadPoint(point, origin, angleDeg);
+}
+
+function ensureClosed(points: { x: number; y: number }[]): { x: number; y: number }[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (Math.hypot(first.x - last.x, first.y - last.y) <= 0.001) {
+    return [...points];
+  }
+  return [...points, { ...first }];
+}
+
+function rectangleToContours(shape: SketchRectangle, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  const minX = Math.min(p1.x, p2.x);
+  const maxX = Math.max(p1.x, p2.x);
+  const minY = Math.min(p1.y, p2.y);
+  const maxY = Math.max(p1.y, p2.y);
+
+  const rectPoints = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ];
+
+  const rotation = shape.rotation ?? 0;
+  const rotated = rotation
+    ? (() => {
+        const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+        return rectPoints.map((p) => rotatePoint(p, center, rotation));
+      })()
+    : rectPoints;
+
+  return [{ points: ensureClosed(rotated), closed: true }];
+}
+
+function circleToContours(shape: SketchCircle, points: SketchPoint[], segments = 96): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+
+  const contourPoints: { x: number; y: number }[] = [];
+  for (let i = 0; i < segments; i++) {
+    const t = (i / segments) * Math.PI * 2;
+    contourPoints.push({
+      x: round(center.x + Math.cos(t) * shape.radius),
+      y: round(center.y + Math.sin(t) * shape.radius),
+    });
+  }
+
+  return [{ points: ensureClosed(contourPoints), closed: true }];
+}
+
+function lineToContours(shape: SketchLine, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  return [
+    {
+      points: [
+        { x: p1.x, y: p1.y },
+        { x: p2.x, y: p2.y },
+      ],
+      closed: false,
+    },
+  ];
+}
+
+function arcToContours(shape: SketchArc, points: SketchPoint[], segments = 72): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+  const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
+  const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
+
+  const startAngle = (Math.atan2(p1.y - center.y, p1.x - center.x) * 180) / Math.PI;
+  const endAngle = (Math.atan2(p2.y - center.y, p2.x - center.x) * 180) / Math.PI;
+
+  return [
+    {
+      points: sampleArcPoints(
+        center,
+        shape.radius,
+        startAngle,
+        endAngle,
+        shape.clockwise,
+        segments
+      ),
+      closed: false,
+    },
+  ];
+}
+
+function ellipseToContours(shape: SketchEllipse | SketchEllipseArc, points: SketchPoint[], segments = 96): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const center = pointMap.get(shape.center) || { x: 0, y: 0 };
+  const majorPoint = pointMap.get(shape.majorAxisPoint) || { x: center.x + 10, y: center.y };
+
+  const dx = majorPoint.x - center.x;
+  const dy = majorPoint.y - center.y;
+  const majorRadius = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx);
+  const minorRadius = shape.minorAxisRadius;
+
+  const isArc = shape.type === "ellipse-arc";
+  const startT = isArc ? (shape as SketchEllipseArc).startAngle * Math.PI / 180 : 0;
+  const endT = isArc ? (shape as SketchEllipseArc).endAngle * Math.PI / 180 : Math.PI * 2;
+  const sweep = endT - startT;
+
+  const contourPoints: { x: number; y: number }[] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = startT + (i / segments) * sweep;
+    const px = Math.cos(t) * majorRadius;
+    const py = Math.sin(t) * minorRadius;
+
+    contourPoints.push({
+      x: round(center.x + px * Math.cos(angle) - py * Math.sin(angle)),
+      y: round(center.y + px * Math.sin(angle) + py * Math.cos(angle)),
+    });
+  }
+
+  return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
+}
+
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], _segments = 100): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const ctrlPoints = shape.controlPointIds.map(id => pointMap.get(id) || { x: 0, y: 0 });
+
+  if (ctrlPoints.length < 2) return [];
+
+  // Very simplified linear interpolation for BSpline for now
+  const contourPoints = ctrlPoints.map(p => ({ x: p.x, y: p.y }));
+  return [{
+    points: shape.periodic ? ensureClosed(contourPoints) : contourPoints,
+    closed: shape.periodic
+  }];
+}
+
+function polylineToContours(shape: SketchPolyline, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map(p => [p.id, p]));
+  const contourPoints = shape.pointIds.map((id) => {
+    const p = pointMap.get(id) || { x: 0, y: 0 };
+    return { x: p.x, y: p.y };
+  });
+
+  return [
+    {
+      points: shape.closed ? ensureClosed(contourPoints) : contourPoints,
+      closed: shape.closed,
+    },
+  ];
+}
+
+async function textToContours(shape: SketchText, points: SketchPoint[]): Promise<GeometryContour[]> {
+  const polylines = await getTextPolylines(shape, points);
+  return polylines.map((poly) => ({
+    points: ensureClosed(poly.map((p) => ({ x: p.x, y: p.y }))),
+    closed: true,
+  }));
+}
+
+function svgToContours(shape: SketchSvg, _points: SketchPoint[]): GeometryContour[] {
+  const scaleX = (shape.width / Math.max(shape.sourceWidth, 0.0001)) * (shape.scale ?? 1);
+  const scaleY = (shape.height / Math.max(shape.sourceHeight, 0.0001)) * (shape.scale ?? 1);
+  const rotation = shape.rotation ?? 0;
+  const center = { x: shape.x + shape.width / 2, y: shape.y + shape.height / 2 };
+
+  return shape.contours
+    .map((contour) => {
+      const contourPoints = contour.map((pointStr) => {
+        const [px, py] = pointStr.split(',').map(Number);
+        const next = {
+          x: round(shape.x + px * scaleX),
+          y: round(shape.y + py * scaleY),
+        };
+        return rotation ? rotatePoint(next, center, rotation) : next;
+      });
+
+      const isClosed =
+        contourPoints.length >= 3 &&
+        Math.hypot(
+          contourPoints[0].x - contourPoints[contourPoints.length - 1].x,
+          contourPoints[0].y - contourPoints[contourPoints.length - 1].y
+        ) <= 0.001;
+
+      return {
+        points: isClosed ? ensureClosed(contourPoints) : contourPoints,
+        closed: isClosed,
+      };
+    })
+    .filter((c) => c.points.length >= 2);
+}
+
+export async function extractShapeContours(shape: SketchShape, points: SketchPoint[]): Promise<GeometryContour[]> {
+  switch (shape.type) {
+    case "rectangle":
+      return rectangleToContours(shape, points);
+    case "circle":
+      return circleToContours(shape, points);
+    case "line":
+      return lineToContours(shape, points);
+    case "arc":
+      return arcToContours(shape, points);
+    case "ellipse":
+    case "ellipse-arc":
+      return ellipseToContours(shape, points);
+    case "bspline":
+      return bsplineToContours(shape, points);
+    case "polyline":
+      return polylineToContours(shape, points);
+    case "text":
+      return textToContours(shape, points);
+    case "svg":
+      return svgToContours(shape, points);
+    default:
+      return [];
+  }
+}
+
+
+path: /cam/types.ts
+----------------------------------------
+export type ToolpathPoint = {
+  x: number;
+  y: number;
+  z?: number;
+};
+
+export type Toolpath = {
+  name: string;
+  points: ToolpathPoint[];
+  closed: boolean;
+  cutZ: number;
+  kind?: "contour" | "pocket";
+  useRamping?: boolean;
+  useBridges?: boolean;
+  bridgeCount?: number;
+  bridgeWidth?: number;
+  bridgeHeight?: number;
+  rampTurns?: number;
+  stepdown?: number;
+
+  leadIn?: {
+    enabled: boolean;
+    length: number;
+  };
+
+  leadOut?: {
+    enabled: boolean;
+    length: number;
+  };
+};
+
+export type PlannedPath = {
+  name: string;
+  points: ToolpathPoint[];
+  closed: boolean;
+  depth: number;
+};
+
+export type PlannedOperation = {
+  shapeId: string;
+  shapeName: string;
+  paths: PlannedPath[];
+};
+
+
+path: /cam-v2/examples/pocket.ts
+----------------------------------------
+// examples/pocket.ts
+import { generateGCode, planPocket } from "../src";
+
+const outer = [
+  { x: 0, y: 0 },
+  { x: 120, y: 0 },
+  { x: 120, y: 80 },
+  { x: 0, y: 80 },
+  { x: 0, y: 0 },
+];
+
+const hole = [
+  { x: 40, y: 25 },
+  { x: 80, y: 25 },
+  { x: 80, y: 55 },
+  { x: 40, y: 55 },
+  { x: 40, y: 25 },
+];
+
+const toolpaths = planPocket({
+  contours: [outer, hole],
+  tool: {
+    diameter: 6,
+    passDepth: 2,
+    stepover: 0.4,
+  },
+  options: {
+    name: "Pocket",
+    cutZ: -4,
+    strategy: "auto",
+    direction: "climb",
+  },
+});
+
+const gcode = generateGCode({
+  toolpaths,
+  machine: {
+    units: "mm",
+    safeZ: 5,
+    startZ: 5,
+    feedRapid: 2000,
+    feedCut: 700,
+    feedPlunge: 220,
+    spindle: {
+      enabled: true,
+      speed: 10000,
+      direction: "cw",
+    },
+  },
+});
+
+console.log(gcode);
+
+
+path: /cam-v2/examples/profile.ts
+----------------------------------------
+import { generateGCode, planProfile } from "../src";
+
+const square = [
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
+  { x: 0, y: 0 },
+];
+
+const toolpaths = planProfile({
+  contour: square,
+  operation: "profile-outside",
+  tool: {
+    diameter: 6,
+    passDepth: 2,
+    stepover: 0.45,
+  },
+  options: {
+    name: "Outer Profile",
+    cutZ: -6,
+    direction: "climb",
+    tabs: {
+      enabled: true,
+      count: 4,
+      width: 6,
+      height: 1,
+    },
+    ramping: {
+      enabled: true,
+      turns: 2,
+    },
+  },
+});
+
+const gcode = generateGCode({
+  toolpaths,
+  machine: {
+    units: "mm",
+    safeZ: 5,
+    startZ: 5,
+    feedRapid: 2000,
+    feedCut: 800,
+    feedPlunge: 250,
+    workOffset: "G54",
+    toolNumber: 1,
+    spindle: {
+      enabled: true,
+      speed: 12000,
+      direction: "cw",
+      dwellMs: 300,
+    },
+    coolant: false,
+    returnHome: true,
+  },
+});
+
+console.log(gcode);
+
+
+path: /cam-v2/package.json
+----------------------------------------
+{
+  "name": "@gcode-studio/cam",
+  "version": "2.0.0",
+  "description": "Independent TypeScript CAM kernel for 2D toolpath planning and G-code generation",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "check": "tsc --noEmit",
+    "dev": "tsup src/index.ts --watch --dts",
+    "example:profile": "tsx examples/profile.ts",
+    "example:pocket": "tsx examples/pocket.ts"
+  },
+  "keywords": [
+    "cam",
+    "gcode",
+    "cnc",
+    "toolpath",
+    "cad",
+    "manufacturing"
+  ],
+  "author": "OpenAI",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.2.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
+
+
+path: /cam-v2/README.md
+----------------------------------------
+## README.md
+
+````md
+# @gcode-studio/cam
+
+Independent TypeScript CAM kernel for 2D toolpath planning and G-code generation.
+
+## Features
+
+- independent from CAD editor internals
+- profile inside / outside
+- follow-path
+- pocketing with auto strategy
+- travel optimization
+- multi-pass depth planning
+- tabs / bridges
+- ramping entry
+- TypeScript-first API
+
+## Installation
+
+```bash
+npm install @gcode-studio/cam
+````
+
+## Quick start
+
+```ts
+import { planProfile, generateGCode } from "@gcode-studio/cam";
+
+const contour = [
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
+  { x: 0, y: 0 },
+];
+
+const toolpaths = planProfile({
+  contour,
+  operation: "profile-outside",
+  tool: {
+    diameter: 6,
+    passDepth: 2,
+    stepover: 0.45,
+  },
+  options: {
+    cutZ: -6,
+    tabs: {
+      enabled: true,
+      count: 4,
+      width: 6,
+      height: 1,
+    },
+    ramping: {
+      enabled: true,
+      turns: 2,
+    },
+  },
+});
+
+const gcode = generateGCode({
+  toolpaths,
+  machine: {
+    units: "mm",
+    safeZ: 5,
+    startZ: 5,
+    feedRapid: 2000,
+    feedCut: 800,
+    feedPlunge: 250,
+    spindle: {
+      enabled: true,
+      speed: 12000,
+      direction: "cw",
+    },
+  },
+});
+```
+
+## API
+
+### `planProfile(input)`
+
+Plans:
+
+* `follow-path`
+* `profile-inside`
+* `profile-outside`
+
+### `planPocket(input)`
+
+Pocket strategies:
+
+* `auto`
+* `offset`
+* `parallel`
+
+### `generateGCode(input)`
+
+Generates G-code from prepared toolpaths.
+
+## Build
+
+```bash
+npm install
+npm run build
+```
+
+## Examples
+
+```bash
+npm run example:profile
+npm run example:pocket
+```
+
+
+path: /cam-v2/src/gcode/emitters.ts
+----------------------------------------
+// src/gcode/emitters.ts
+
+import type { MachineSettings } from "../types";
+import { fmt } from "./format";
+
+function spindleMCode(machine: MachineSettings): "M3" | "M4" {
+  return machine.spindle?.direction === "ccw" ? "M4" : "M3";
+}
+
+export function emitProgramPreamble(machine: MachineSettings): string[] {
+  const lines: string[] = [
+    "; Generated by @gcode-studio/cam",
+    machine.units === "inch" ? "G20" : "G21",
+    "G90",
+    machine.workOffset ?? "G54",
+    `T${Math.max(1, Math.round(machine.toolNumber ?? 1))} M6`,
+    `G0 Z${fmt(machine.startZ)}`,
+  ];
+
+  if (machine.coolant) lines.push("M8");
+  return lines;
+}
+
+export function emitProgramPostamble(machine: MachineSettings): string[] {
+  const lines: string[] = [];
+  if (machine.spindle?.enabled) lines.push("M5");
+  if (machine.coolant) lines.push("M9");
+  lines.push(`G0 Z${fmt(machine.safeZ)}`);
+  if (machine.returnHome) lines.push("G0 X0 Y0");
+  lines.push("M30");
+  return lines;
+}
+
+export function emitMoveTo(x: number, y: number): string[] {
+  return [`G0 X${fmt(x)} Y${fmt(y)}`];
+}
+
+export function emitToolStart(machine: MachineSettings): string[] {
+  if (!machine.spindle?.enabled) return [];
+  const lines: string[] = [];
+  lines.push(`${spindleMCode(machine)} S${Math.max(0, Math.round(machine.spindle.speed))}`);
+  if ((machine.spindle.dwellMs ?? 0) > 0) lines.push(`G4 P${fmt(machine.spindle.dwellMs ?? 0)}`);
+  return lines;
+}
+
+export function emitPlungeTo(machine: MachineSettings, cutZ: number): string[] {
+  return [`G1 Z${fmt(cutZ)} F${fmt(machine.feedPlunge)}`];
+}
+
+export function emitToolEnd(machine: MachineSettings): string[] {
+  return [`G0 Z${fmt(machine.safeZ)} F${fmt(machine.feedRapid)}`];
+}
+
+export function emitCutStart(machine: MachineSettings, cutZ: number): string[] {
+  return [...emitToolStart(machine), ...emitPlungeTo(machine, cutZ)];
+}
+
+export function emitCutEnd(machine: MachineSettings): string[] {
+  return emitToolEnd(machine);
+}
+
+
+path: /cam-v2/src/gcode/format.ts
+----------------------------------------
+// src/gcode/format.ts
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+export function fmt(value: number): string {
+  return round(value).toFixed(3).replace(/\.?0+$/, "");
+}
+
+
+path: /cam-v2/src/gcode/generator.ts
+----------------------------------------
+// src/gcode/generator.ts
+import type { GCodeGeneratorInput, Point3D, Toolpath } from "../types";
+import {
+  emitCutEnd,
+  emitCutStart,
+  emitMoveTo,
+  emitProgramPostamble,
+  emitProgramPreamble,
+  emitToolEnd,
+  emitToolStart,
+} from "./emitters";
+import { fmt } from "./format";
+import { generateRampingPass } from "../toolpath/ramping";
+import { buildBridgeSpans, contourLength, isInsideAnyBridge, pointAtLength } from "../toolpath/bridges";
+
+const EPS = 1e-6;
+
+function to2D(points: Point3D[]) {
+  return points.map((p) => ({ x: p.x, y: p.y }));
+}
+
+function is3DPath(points: Point3D[]): boolean {
+  return points.some((point) => typeof point.z === "number" && point.z !== 0);
+}
+
+function buildDepthPasses(targetCutZ: number, passDepth: number): number[] {
+  if (targetCutZ >= 0) return [targetCutZ];
+
+  const step = Math.max(0.001, Math.abs(passDepth));
+  const passes: number[] = [];
+  let current = -step;
+
+  while (current > targetCutZ) {
+    passes.push(Number(current.toFixed(3)));
+    current -= step;
+  }
+
+  passes.push(Number(targetCutZ.toFixed(3)));
+  return passes;
+}
+
+function emitLinearPath(points: Point3D[], feed: number): string[] {
+  const lines: string[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const point = points[i];
+    const xPart = `X${fmt(point.x)}`;
+    const yPart = `Y${fmt(point.y)}`;
+    const zPart = typeof point.z === "number" ? ` Z${fmt(point.z)}` : "";
+    lines.push(`G1 ${xPart} ${yPart}${zPart} F${fmt(feed)}`.replace(/\s+/g, " ").trim());
+  }
+  return lines;
+}
+
+function emitClosedPathWithTabs(
+  toolpath: Toolpath,
+  passZ: number,
+  finalCutZ: number,
+  plungeFeed: number,
+  cutFeed: number
+): string[] {
+  const lines: string[] = [];
+  const contour2D = to2D(toolpath.points);
+  const total = contourLength(contour2D);
+  if (contour2D.length < 3 || total <= EPS || !toolpath.tabs?.enabled) return lines;
+
+  const spans = buildBridgeSpans(contour2D, toolpath.tabs.count, toolpath.tabs.width);
+  const sampleStep = Math.max(0.5, Math.min(toolpath.tabs.width / 4 || 1, 2));
+  const steps = Math.max(contour2D.length, Math.ceil(total / sampleStep));
+
+  let currentZ = passZ;
+
+  for (let i = 1; i <= steps; i++) {
+    const at = (total * i) / steps;
+    const point = pointAtLength(contour2D, at);
+
+    const inBridge = isInsideAnyBridge(at, spans) && passZ <= finalCutZ + toolpath.tabs.height + EPS;
+    const targetZ = inBridge ? Math.min(finalCutZ + toolpath.tabs.height, 0) : passZ;
+
+    if (Math.abs(targetZ - currentZ) > EPS) {
+      lines.push(`G1 Z${fmt(targetZ)} F${fmt(plungeFeed)}`);
+      currentZ = targetZ;
+    }
+
+    lines.push(`G1 X${fmt(point.x)} Y${fmt(point.y)} F${fmt(cutFeed)}`);
+  }
+
+  if (Math.abs(currentZ - passZ) > EPS) lines.push(`G1 Z${fmt(passZ)} F${fmt(plungeFeed)}`);
+  return lines;
+}
+
+function emitContourPass(
+  toolpath: Toolpath,
+  passZ: number,
+  startZ: number,
+  machine: GCodeGeneratorInput["machine"]
+): string[] {
+  const lines: string[] = [];
+  const path = toolpath.points;
+  const base2D = to2D(path);
+  if (base2D.length < 2) return lines;
+
+  lines.push(...emitMoveTo(base2D[0].x, base2D[0].y));
+
+  if (toolpath.ramping?.enabled && toolpath.closed) {
+    lines.push(...emitToolStart(machine));
+    const ramp = generateRampingPass(base2D, startZ, passZ, Math.max(1, toolpath.ramping.turns));
+    lines.push(...emitLinearPath(ramp, machine.feedCut));
+  } else {
+    lines.push(...emitCutStart(machine, passZ));
+  }
+
+  if (toolpath.tabs?.enabled && toolpath.closed) {
+    lines.push(...emitClosedPathWithTabs(toolpath, passZ, toolpath.cutZ, machine.feedPlunge, machine.feedCut));
+  } else {
+    lines.push(...emitLinearPath(path, machine.feedCut));
+    if (toolpath.closed && path.length >= 2) {
+      const first = path[0];
+      const last = path[path.length - 1];
+      const alreadyClosed = Math.abs(first.x - last.x) <= EPS && Math.abs(first.y - last.y) <= EPS;
+      if (!alreadyClosed) lines.push(`G1 X${fmt(first.x)} Y${fmt(first.y)} F${fmt(machine.feedCut)}`);
+    }
+  }
+
+  lines.push(...emitCutEnd(machine));
+  return lines;
+}
+
+function emitPrebuilt3DPath(machine: GCodeGeneratorInput["machine"], toolpath: Toolpath): string[] {
+  const lines: string[] = [];
+  const points = toolpath.points;
+  if (points.length < 2) return lines;
+
+  lines.push(...emitMoveTo(points[0].x, points[0].y));
+  lines.push(...emitToolStart(machine));
+  lines.push(...emitLinearPath(points, machine.feedCut));
+  lines.push(...emitToolEnd(machine));
+  return lines;
+}
+
+export function generateGCode(input: GCodeGeneratorInput): string {
+  const { toolpaths, machine } = input;
+  const lines: string[] = [...emitProgramPreamble(machine)];
+
+  for (const toolpath of toolpaths) {
+    if (!toolpath || toolpath.points.length < 2) continue;
+
+    if (is3DPath(toolpath.points)) {
+      lines.push(...emitPrebuilt3DPath(machine, toolpath));
+      continue;
+    }
+
+    const cutZ = toolpath.cutZ;
+    const passDepth = Math.max(0.001, Math.abs(toolpath.stepdown ?? 1));
+    const passes = buildDepthPasses(cutZ, passDepth);
+
+    let previousZ = machine.safeZ;
+    for (const passZ of passes) {
+      lines.push(...emitContourPass(toolpath, passZ, previousZ, machine));
+      previousZ = passZ;
+    }
+  }
+
+  lines.push(...emitProgramPostamble(machine));
+  return lines.join("\n") + "\n";
+}
+
+
+path: /cam-v2/src/geometry/classifier.ts
+----------------------------------------
+// src/geometry/classifier.ts
+
+import type { Point } from "../types";
+
+export type ClassifiedContours = {
+  external: Point[][];
+  holes: Map<number, number[]>;
+  parent: number[];
+  depth: number[];
+};
+
+const EPS = 1e-9;
+
+function signedArea(polygon: Point[]): number {
+  let sum = 0;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    sum += a.x * b.y - b.x * a.y;
+  }
+  return sum / 2;
+}
+
+function areaAbs(polygon: Point[]): number {
+  return Math.abs(signedArea(polygon));
+}
+
+function boundsOf(polygon: Point[]) {
+  const xs = polygon.map((p) => p.x);
+  const ys = polygon.map((p) => p.y);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minY: Math.min(...ys),
+    maxY: Math.max(...ys),
+  };
+}
+
+function boundsContains(
+  outer: ReturnType<typeof boundsOf>,
+  inner: ReturnType<typeof boundsOf>
+): boolean {
+  return (
+    inner.minX >= outer.minX - EPS &&
+    inner.maxX <= outer.maxX + EPS &&
+    inner.minY >= outer.minY - EPS &&
+    inner.maxY <= outer.maxY + EPS
+  );
+}
+
+function contourSamplePoint(contour: Point[]): Point {
+  return contour[0] ?? { x: 0, y: 0 };
+}
+
+export function pointInPolygon(point: Point, polygon: Point[]): boolean {
+  if (polygon.length < 3) return false;
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i];
+    const b = polygon[j];
+
+    const onSegment =
+      Math.abs((b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x)) < EPS &&
+      point.x >= Math.min(a.x, b.x) - EPS &&
+      point.x <= Math.max(a.x, b.x) + EPS &&
+      point.y >= Math.min(a.y, b.y) - EPS &&
+      point.y <= Math.max(a.y, b.y) + EPS;
+
+    if (onSegment) return true;
+
+    const intersects =
+      (a.y > point.y) !== (b.y > point.y) &&
+      point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y + EPS) + a.x;
+
+    if (intersects) inside = !inside;
+  }
+
+  return inside;
+}
+
+export function classifyContours(polylines: Point[][]): ClassifiedContours {
+  const n = polylines.length;
+  const bounds = polylines.map(boundsOf);
+  const areas = polylines.map(areaAbs);
+  const parent = new Array<number>(n).fill(-1);
+  const depth = new Array<number>(n).fill(0);
+
+  for (let child = 0; child < n; child++) {
+    let bestParent = -1;
+    let bestParentArea = Infinity;
+    const probe = contourSamplePoint(polylines[child]);
+
+    for (let candidate = 0; candidate < n; candidate++) {
+      if (candidate === child) continue;
+      if (areas[candidate] <= areas[child] + EPS) continue;
+      if (!boundsContains(bounds[candidate], bounds[child])) continue;
+      if (!pointInPolygon(probe, polylines[candidate])) continue;
+
+      if (areas[candidate] < bestParentArea) {
+        bestParentArea = areas[candidate];
+        bestParent = candidate;
+      }
+    }
+
+    parent[child] = bestParent;
+  }
+
+  function computeDepth(index: number): number {
+    if (parent[index] === -1) return 0;
+    if (depth[index] > 0) return depth[index];
+    depth[index] = computeDepth(parent[index]) + 1;
+    return depth[index];
+  }
+
+  for (let i = 0; i < n; i++) {
+    depth[i] = computeDepth(i);
+  }
+
+  const externalIndices = polylines.map((_, i) => i).filter((i) => depth[i] % 2 === 0);
+  const external = externalIndices.map((i) => polylines[i]);
+  const holes = new Map<number, number[]>();
+  externalIndices.forEach((_, extIndex) => holes.set(extIndex, []));
+
+  for (let i = 0; i < n; i++) {
+    if (depth[i] % 2 === 1) {
+      let owner = parent[i];
+      while (owner !== -1 && depth[owner] % 2 === 1) owner = parent[owner];
+      if (owner !== -1) {
+        const extIndex = externalIndices.indexOf(owner);
+        if (extIndex >= 0) holes.get(extIndex)?.push(i);
+      }
+    }
+  }
+
+  return { external, holes, parent, depth };
+}
+
+
+path: /cam-v2/src/geometry/offset.ts
+----------------------------------------
+// src/geometry/offset.ts
+import type { JoinType, Point } from "../types";
+
+const EPS = 1e-6;
+const ROUND_ARC_STEPS_PER_90 = 6;
+const DEFAULT_MITER_LIMIT = 4;
+
+type Vec2 = { x: number; y: number };
+type Segment = { a: Point; b: Point };
+type DirectedEdge = {
+  from: number;
+  to: number;
+  angle: number;
+  used: boolean;
+};
+type Node = Point;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function rp(p: Point): Point {
+  return { x: round(p.x), y: round(p.y) };
+}
+
+function dist(a: Point, b: Point): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function eq(a: Point, b: Point, eps = EPS): boolean {
+  return dist(a, b) <= eps;
+}
+
+function add(a: Point, b: Vec2): Point {
+  return { x: a.x + b.x, y: a.y + b.y };
+}
+
+function sub(a: Point, b: Point): Vec2 {
+  return { x: a.x - b.x, y: a.y - b.y };
+}
+
+function mul(v: Vec2, s: number): Vec2 {
+  return { x: v.x * s, y: v.y * s };
+}
+
+function cross(a: Vec2, b: Vec2): number {
+  return a.x * b.y - a.y * b.x;
+}
+
+function len(v: Vec2): number {
+  return Math.hypot(v.x, v.y);
+}
+
+function normalize(v: Vec2): Vec2 {
+  const l = len(v);
+  if (l <= EPS) return { x: 0, y: 0 };
+  return { x: v.x / l, y: v.y / l };
+}
+
+function angleOf(v: Vec2): number {
+  return Math.atan2(v.y, v.x);
+}
+
+function signedArea(points: Point[]): number {
+  if (points.length < 3) return 0;
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return area / 2;
+}
+
+function isClockwise(points: Point[]): boolean {
+  return signedArea(points) < 0;
+}
+
+function dedupeSequential(points: Point[]): Point[] {
+  const out: Point[] = [];
+  for (const p of points) {
+    const q = rp(p);
+    const last = out[out.length - 1];
+    if (!last || !eq(last, q)) out.push(q);
+  }
+  if (out.length > 1 && eq(out[0], out[out.length - 1])) out.pop();
+  return out;
+}
+
+function normalizeClosedPolyline(points: Point[]): Point[] {
+  const clean = dedupeSequential(points);
+  if (clean.length < 3) return clean;
+  if (eq(clean[0], clean[clean.length - 1])) return clean.slice(0, -1);
+  return clean;
+}
+
+function closeLoop(points: Point[]): Point[] {
+  const clean = dedupeSequential(points);
+  if (clean.length < 3) return clean;
+  if (!eq(clean[0], clean[clean.length - 1])) return [...clean, rp(clean[0])];
+  return clean;
+}
+
+function inwardNormal(a: Point, b: Point, clockwise: boolean): Vec2 {
+  const d = normalize(sub(b, a));
+  return clockwise ? { x: d.y, y: -d.x } : { x: -d.y, y: d.x };
+}
+
+function lineIntersection(
+  p: Point,
+  r: Vec2,
+  q: Point,
+  s: Vec2
+): { point: Point; t: number; u: number } | null {
+  const rxs = cross(r, s);
+  const qmp = sub(q, p);
+  if (Math.abs(rxs) <= EPS) return null;
+
+  const t = cross(qmp, s) / rxs;
+  const u = cross(qmp, r) / rxs;
+
+  return {
+    point: rp({ x: p.x + r.x * t, y: p.y + r.y * t }),
+    t,
+    u,
+  };
+}
+
+function segmentIntersection(
+  a1: Point,
+  a2: Point,
+  b1: Point,
+  b2: Point
+): { point: Point; ta: number; tb: number } | null {
+  const r = sub(a2, a1);
+  const s = sub(b2, b1);
+  const hit = lineIntersection(a1, r, b1, s);
+  if (!hit) return null;
+
+  if (hit.t < -EPS || hit.t > 1 + EPS || hit.u < -EPS || hit.u > 1 + EPS) return null;
+  return { point: hit.point, ta: hit.t, tb: hit.u };
+}
+
+function pointLineDistance(p: Point, a: Point, b: Point): number {
+  const ab = sub(b, a);
+  const ap = sub(p, a);
+  const L = len(ab);
+  if (L <= EPS) return dist(p, a);
+  return Math.abs(cross(ap, ab)) / L;
+}
+
+function appendPoint(out: Point[], p: Point): void {
+  const q = rp(p);
+  const last = out[out.length - 1];
+  if (!last || !eq(last, q)) out.push(q);
+}
+
+function appendArc(
+  out: Point[],
+  center: Point,
+  radius: number,
+  fromAngle: number,
+  toAngle: number,
+  ccw: boolean
+): void {
+  let a0 = fromAngle;
+  let a1 = toAngle;
+
+  if (ccw) {
+    while (a1 <= a0) a1 += Math.PI * 2;
+  } else {
+    while (a1 >= a0) a1 -= Math.PI * 2;
+  }
+
+  const sweep = a1 - a0;
+  const quarterTurns = Math.max(1, Math.ceil(Math.abs(sweep) / (Math.PI / 2)));
+  const segments = quarterTurns * ROUND_ARC_STEPS_PER_90;
+
+  for (let i = 1; i <= segments; i++) {
+    const t = a0 + (sweep * i) / segments;
+    appendPoint(out, {
+      x: center.x + radius * Math.cos(t),
+      y: center.y + radius * Math.sin(t),
+    });
+  }
+}
+
+function clipMiter(
+  corner: Point,
+  intersection: Point,
+  offsetAbs: number,
+  miterLimit: number,
+  fallback: Point
+): Point {
+  const miterLen = dist(corner, intersection);
+  if (offsetAbs <= EPS) return fallback;
+  if (miterLen / offsetAbs > miterLimit) return fallback;
+  return intersection;
+}
+
+function rawOffsetLoop(
+  polyline: Point[],
+  offset: number,
+  joinType: JoinType,
+  miterLimit: number
+): Point[] {
+  const base = normalizeClosedPolyline(polyline);
+  if (base.length < 3 || Math.abs(offset) <= EPS) return [];
+
+  const clockwise = isClockwise(base);
+  const signedOffset = clockwise ? offset : -offset;
+  const offsetAbs = Math.abs(signedOffset);
+  const n = base.length;
+  const out: Point[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const prev = base[(i - 1 + n) % n];
+    const curr = base[i];
+    const next = base[(i + 1) % n];
+
+    const prevDir = normalize(sub(curr, prev));
+    const nextDir = normalize(sub(next, curr));
+    if (len(prevDir) <= EPS || len(nextDir) <= EPS) continue;
+
+    const n1 = inwardNormal(prev, curr, clockwise);
+    const n2 = inwardNormal(curr, next, clockwise);
+
+    const s1p = add(curr, mul(n1, signedOffset));
+    const s2p = add(curr, mul(n2, signedOffset));
+
+    const hit = lineIntersection(s1p, prevDir, s2p, nextDir);
+    const p1 = rp(s1p);
+    const p2 = rp(s2p);
+
+    const turn = cross(prevDir, nextDir);
+    const convex = clockwise ? turn < 0 : turn > 0;
+
+    if (Math.abs(turn) <= EPS) {
+      appendPoint(out, p2);
+      continue;
+    }
+
+    if (joinType === "miter" && hit && convex) {
+      const fallback = rp({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 });
+      appendPoint(out, clipMiter(curr, hit.point, offsetAbs, miterLimit, fallback));
+      continue;
+    }
+
+    if (joinType === "round" && convex) {
+      appendPoint(out, p1);
+      const a0 = Math.atan2(p1.y - curr.y, p1.x - curr.x);
+      const a1 = Math.atan2(p2.y - curr.y, p2.x - curr.x);
+      const ccw = signedOffset < 0 ? !clockwise : clockwise;
+      appendArc(out, curr, offsetAbs, a0, a1, ccw);
+      continue;
+    }
+
+    if (hit) appendPoint(out, hit.point);
+    else appendPoint(out, p2);
+  }
+
+  return closeLoop(out);
+}
+
+function splitSegmentsAtIntersections(loop: Point[]): Segment[] {
+  const closed = closeLoop(loop);
+  if (closed.length < 4) return [];
+
+  const baseSegments: Segment[] = [];
+  for (let i = 0; i < closed.length - 1; i++) {
+    const a = closed[i];
+    const b = closed[i + 1];
+    if (!eq(a, b)) baseSegments.push({ a, b });
+  }
+
+  const cuts: number[][] = baseSegments.map(() => [0, 1]);
+
+  for (let i = 0; i < baseSegments.length; i++) {
+    for (let j = i + 1; j < baseSegments.length; j++) {
+      const si = baseSegments[i];
+      const sj = baseSegments[j];
+      const adjacent = j === i + 1 || (i === 0 && j === baseSegments.length - 1);
+      if (adjacent) continue;
+
+      const hit = segmentIntersection(si.a, si.b, sj.a, sj.b);
+      if (!hit) continue;
+      if (hit.ta > EPS && hit.ta < 1 - EPS) cuts[i].push(hit.ta);
+      if (hit.tb > EPS && hit.tb < 1 - EPS) cuts[j].push(hit.tb);
+    }
+  }
+
+  const out: Segment[] = [];
+  for (let i = 0; i < baseSegments.length; i++) {
+    const seg = baseSegments[i];
+    const ts = Array.from(new Set(cuts[i].map((v) => round(v)))).sort((a, b) => a - b);
+    const d = sub(seg.b, seg.a);
+
+    for (let k = 0; k < ts.length - 1; k++) {
+      const t0 = ts[k];
+      const t1 = ts[k + 1];
+      if (t1 - t0 <= EPS) continue;
+
+      const a = rp({ x: seg.a.x + d.x * t0, y: seg.a.y + d.y * t0 });
+      const b = rp({ x: seg.a.x + d.x * t1, y: seg.a.y + d.y * t1 });
+      if (!eq(a, b)) out.push({ a, b });
+    }
+  }
+
+  return out;
+}
+
+function keyOfPoint(p: Point): string {
+  return `${round(p.x)}:${round(p.y)}`;
+}
+
+function buildGraph(segments: Segment[]): { nodes: Node[]; edges: DirectedEdge[]; outgoing: number[][] } {
+  const nodeMap = new Map<string, number>();
+  const nodes: Node[] = [];
+
+  const getNodeId = (p: Point): number => {
+    const key = keyOfPoint(p);
+    const found = nodeMap.get(key);
+    if (found != null) return found;
+    const id = nodes.length;
+    nodes.push(rp(p));
+    nodeMap.set(key, id);
+    return id;
+  };
+
+  const edges: DirectedEdge[] = [];
+
+  for (const s of segments) {
+    const a = getNodeId(s.a);
+    const b = getNodeId(s.b);
+    if (a === b) continue;
+
+    const ab = sub(nodes[b], nodes[a]);
+    const ba = sub(nodes[a], nodes[b]);
+    edges.push({ from: a, to: b, angle: angleOf(ab), used: false });
+    edges.push({ from: b, to: a, angle: angleOf(ba), used: false });
+  }
+
+  const outgoing: number[][] = Array.from({ length: nodes.length }, () => []);
+  for (let i = 0; i < edges.length; i++) outgoing[edges[i].from].push(i);
+  for (const arr of outgoing) arr.sort((ia, ib) => edges[ia].angle - edges[ib].angle);
+
+  return { nodes, edges, outgoing };
+}
+
+function angleDeltaCW(fromAngle: number, toAngle: number): number {
+  let d = fromAngle - toAngle;
+  while (d < 0) d += Math.PI * 2;
+  while (d >= Math.PI * 2) d -= Math.PI * 2;
+  return d;
+}
+
+function traceFace(
+  startEdgeIdx: number,
+  nodes: Node[],
+  edges: DirectedEdge[],
+  outgoing: number[][]
+): number[] {
+  const cycle: number[] = [];
+  let currentEdgeIdx = startEdgeIdx;
+
+  while (true) {
+    const e = edges[currentEdgeIdx];
+    if (e.used) break;
+
+    e.used = true;
+    cycle.push(e.from);
+
+    const arrivalAngle = angleOf(sub(nodes[e.from], nodes[e.to]));
+    const outs = outgoing[e.to];
+    if (outs.length === 0) break;
+
+    let bestIdx = -1;
+    let bestTurn = Infinity;
+
+    for (const candIdx of outs) {
+      const cand = edges[candIdx];
+      if (cand.used) continue;
+      const turn = angleDeltaCW(arrivalAngle, cand.angle);
+      if (turn < bestTurn) {
+        bestTurn = turn;
+        bestIdx = candIdx;
+      }
+    }
+
+    if (bestIdx === -1) break;
+    currentEdgeIdx = bestIdx;
+
+    if (currentEdgeIdx === startEdgeIdx) {
+      cycle.push(edges[currentEdgeIdx].from);
+      break;
+    }
+  }
+
+  return cycle;
+}
+
+function simplifyCollinear(points: Point[]): Point[] {
+  const closed = closeLoop(points);
+  if (closed.length < 4) return closed;
+
+  const open = closed.slice(0, -1);
+  const out: Point[] = [];
+
+  for (let i = 0; i < open.length; i++) {
+    const prev = open[(i - 1 + open.length) % open.length];
+    const curr = open[i];
+    const next = open[(i + 1) % open.length];
+    if (pointLineDistance(curr, prev, next) <= EPS) continue;
+    out.push(curr);
+  }
+
+  return closeLoop(out);
+}
+
+function extractSimpleLoops(loop: Point[]): Point[][] {
+  const pieces = splitSegmentsAtIntersections(loop);
+  if (pieces.length === 0) return [];
+
+  const { nodes, edges, outgoing } = buildGraph(pieces);
+  const cycles: Point[][] = [];
+
+  for (let i = 0; i < edges.length; i++) {
+    if (edges[i].used) continue;
+    const cycleNodeIds = traceFace(i, nodes, edges, outgoing);
+    if (cycleNodeIds.length < 4) continue;
+
+    const pts = cycleNodeIds.map((id) => nodes[id]);
+    const clean = simplifyCollinear(pts);
+    if (clean.length >= 4 && Math.abs(signedArea(clean.slice(0, -1))) > EPS) cycles.push(clean);
+  }
+
+  const unique = new Map<string, Point[]>();
+  for (const c of cycles) {
+    const open = c.slice(0, -1);
+    const canon = open.map((p) => `${round(p.x)},${round(p.y)}`).sort().join("|");
+    if (!unique.has(canon)) unique.set(canon, c);
+  }
+
+  return Array.from(unique.values()).sort(
+    (a, b) => Math.abs(signedArea(b.slice(0, -1))) - Math.abs(signedArea(a.slice(0, -1)))
+  );
+}
+
+function pointInPolygon(point: Point, polygon: Point[]): boolean {
+  const poly = closeLoop(polygon);
+  let inside = false;
+
+  for (let i = 0, j = poly.length - 2; i < poly.length - 1; j = i++) {
+    const xi = poly[i].x;
+    const yi = poly[i].y;
+    const xj = poly[j].x;
+    const yj = poly[j].y;
+
+    const intersect =
+      yi > point.y !== yj > point.y &&
+      point.x < ((xj - xi) * (point.y - yi)) / ((yj - yi) || EPS) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function centroid(points: Point[]): Point {
+  const poly = closeLoop(points);
+  let cx = 0;
+  let cy = 0;
+  let a = 0;
+
+  for (let i = 0; i < poly.length - 1; i++) {
+    const p = poly[i];
+    const q = poly[i + 1];
+    const f = p.x * q.y - q.x * p.y;
+    a += f;
+    cx += (p.x + q.x) * f;
+    cy += (p.y + q.y) * f;
+  }
+
+  a *= 0.5;
+  if (Math.abs(a) <= EPS) {
+    const sum = poly.slice(0, -1).reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+    const n = Math.max(1, poly.length - 1);
+    return { x: sum.x / n, y: sum.y / n };
+  }
+
+  return { x: cx / (6 * a), y: cy / (6 * a) };
+}
+
+export function buildOffset(
+  polyline: Point[],
+  offset: number,
+  joinType: JoinType = "round",
+  miterLimit = DEFAULT_MITER_LIMIT
+): Point[][] {
+  const raw = rawOffsetLoop(polyline, offset, joinType, miterLimit);
+  if (raw.length < 4) return [];
+
+  const loops = extractSimpleLoops(raw);
+  if (loops.length === 0) return [];
+
+  const src = closeLoop(normalizeClosedPolyline(polyline));
+  const filtered = loops.filter((loop) => {
+    const c = centroid(loop);
+    if (offset < 0) return pointInPolygon(c, src);
+    return true;
+  });
+
+  return filtered.length > 0 ? filtered : loops;
+}
+
+
+path: /cam-v2/src/geometry/pocket.ts
+----------------------------------------
+// src/geometry/pocket.ts
+
+import type { Point } from "../types";
+import { classifyContours, pointInPolygon } from "./classifier";
+import { buildOffset } from "./offset";
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosed(points: Point[]): Point[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (distance(first, last) <= EPS) {
+    return points.slice(0, -1).map((p) => ({ x: round(p.x), y: round(p.y) }));
+  }
+  return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
+}
+
+function boundsOf(polygon: Point[]) {
+  return {
+    minX: Math.min(...polygon.map((p) => p.x)),
+    maxX: Math.max(...polygon.map((p) => p.x)),
+    minY: Math.min(...polygon.map((p) => p.y)),
+    maxY: Math.max(...polygon.map((p) => p.y)),
+  };
+}
+
+function segmentInsidePocketArea(a: Point, b: Point, outer: Point[], holes: Point[][]): boolean {
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  if (!pointInPolygon(mid, outer)) return false;
+  for (const hole of holes) if (pointInPolygon(mid, hole)) return false;
+  return true;
+}
+
+function connectZigzagSegments(segments: Point[][]): Point[][] {
+  if (segments.length === 0) return [];
+
+  const result: Point[][] = [];
+  let current: Point[] = [];
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = i % 2 === 0 ? segments[i] : [...segments[i]].reverse();
+
+    if (current.length === 0) {
+      current.push(...segment);
+      continue;
+    }
+
+    const last = current[current.length - 1];
+    const first = segment[0];
+
+    if (distance(last, first) <= EPS * 10) current.push(...segment.slice(1));
+    else {
+      result.push(current);
+      current = [...segment];
+    }
+  }
+
+  if (current.length >= 2) result.push(current);
+  return result;
+}
+
+function generateParallelPocketForRegion(
+  outer: Point[],
+  holes: Point[][],
+  step: number,
+  angle = 0
+): Point[][] {
+  if (outer.length < 3 || step <= EPS) return [];
+  void angle;
+
+  const bounds = boundsOf(outer);
+  const segments: Point[][] = [];
+
+  for (let y = bounds.minY; y <= bounds.maxY + EPS; y += step) {
+    const intersections: number[] = [];
+
+    const accumulateIntersections = (polygon: Point[]) => {
+      for (let i = 0; i < polygon.length; i++) {
+        const a = polygon[i];
+        const b = polygon[(i + 1) % polygon.length];
+        if (Math.abs(a.y - b.y) <= EPS) continue;
+
+        const ymin = Math.min(a.y, b.y);
+        const ymax = Math.max(a.y, b.y);
+        if (y < ymin || y > ymax) continue;
+
+        const t = (y - a.y) / (b.y - a.y);
+        if (t < -EPS || t > 1 + EPS) continue;
+        intersections.push(a.x + t * (b.x - a.x));
+      }
+    };
+
+    accumulateIntersections(outer);
+    intersections.sort((a, b) => a - b);
+
+    for (let i = 0; i + 1 < intersections.length; i += 2) {
+      const x1 = intersections[i];
+      const x2 = intersections[i + 1];
+      if (Math.abs(x2 - x1) <= EPS) continue;
+
+      const a = { x: round(x1), y: round(y) };
+      const b = { x: round(x2), y: round(y) };
+      if (segmentInsidePocketArea(a, b, outer, holes)) segments.push([a, b]);
+    }
+  }
+
+  return connectZigzagSegments(segments);
+}
+
+export function buildPocketOffsets(
+  polyline: Point[],
+  toolRadius: number,
+  stepover: number,
+  keepCenterCleanup = true
+): Point[][] {
+  const base = normalizeClosed(polyline);
+  if (base.length < 3 || toolRadius <= EPS || stepover <= EPS) return [];
+
+  const paths: Point[][] = [];
+  let currentLoops = buildOffset(base, -toolRadius, "round", 4);
+
+  while (currentLoops.length > 0) {
+    const sorted = currentLoops
+      .filter((l) => l.length >= 4)
+      .sort((a, b) => {
+        const aa = Math.abs(area(a));
+        const bb = Math.abs(area(b));
+        return bb - aa;
+      });
+
+    if (sorted.length === 0) break;
+    for (const loop of sorted) paths.push(loop);
+
+    const nextSeed = sorted[0];
+    const next = buildOffset(nextSeed.slice(0, -1), -stepover, "round", 4);
+    if (next.length === 0) break;
+    currentLoops = next;
+  }
+
+  if (keepCenterCleanup && paths.length === 0) {
+    const c = centroid(base);
+    if (pointInPolygon(c, base)) {
+      paths.push([
+        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+        { x: c.x + toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+        { x: c.x + toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
+        { x: c.x - toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
+        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
+      ]);
+    }
+  }
+
+  return paths;
+}
+
+function centroid(points: Point[]): Point {
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / Math.max(points.length, 1), y: sum.y / Math.max(points.length, 1) };
+}
+
+function area(points: Point[]): number {
+  let a = 0;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const q = points[(i + 1) % points.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return a / 2;
+}
+
+export function generateOffsetPocketWithHoles(contours: Point[][], step: number): Point[][] {
+  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
+  if (normalized.length === 0 || step <= EPS) return [];
+
+  const classified = classifyContours(normalized);
+  const toolRadius = step / 2;
+  const result: Point[][] = [];
+
+  for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
+    const outer = classified.external[extIndex];
+    const loops = buildPocketOffsets(outer, toolRadius, step, true);
+    result.push(...loops);
+  }
+
+  return result;
+}
+
+export function generateParallelPocketWithHoles(
+  contours: Point[][],
+  step: number,
+  angle = 0
+): Point[][] {
+  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
+  if (normalized.length === 0 || step <= EPS) return [];
+
+  const classified = classifyContours(normalized);
+  const result: Point[][] = [];
+
+  for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
+    const outer = classified.external[extIndex];
+    const holeIndices = classified.holes.get(extIndex) ?? [];
+    const holes = holeIndices.map((idx) => normalized[idx]);
+    result.push(...generateParallelPocketForRegion(outer, holes, step, angle));
+  }
+
+  return result;
+}
+
+export function generateBestPocket(contours: Point[][], step: number, angle = 0): Point[][] {
+  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
+  if (normalized.length === 0 || step <= EPS) return [];
+
+  const classified = classifyContours(normalized);
+  const hasHoles = Array.from(classified.holes.values()).some((items) => items.length > 0);
+
+  if (hasHoles) {
+    const parallel = generateParallelPocketWithHoles(normalized, step, angle);
+    if (parallel.length > 0) return parallel;
+  }
+
+  const offsetPocket = generateOffsetPocketWithHoles(normalized, step);
+  if (offsetPocket.length > 0) return offsetPocket;
+
+  return generateParallelPocketWithHoles(normalized, step, angle);
+}
+
+
+path: /cam-v2/src/index.ts
+----------------------------------------
+export * from "./types";
+
+export * from "./geometry/offset";
+export * from "./geometry/pocket";
+export * from "./geometry/classifier";
+
+export * from "./planning/camPlanner";
+export * from "./planning/travelOptimizer";
+
+export * from "./toolpath/bridges";
+export * from "./toolpath/ramping";
+
+export * from "./gcode/generator";
+export * from "./gcode/emitters";
+export * from "./gcode/format";
+
+
+path: /cam-v2/src/planning/camPlanner.ts
+----------------------------------------
+// src/planning/camPlanner.ts
+
+import type {
+  Contour,
+  LeadConfig,
+  PlanOptions,
+  PocketPlanInput,
+  Point,
+  Point3D,
+  ProfilePlanInput,
+  RampingConfig,
+  TabsConfig,
+  Toolpath,
+} from "../types";
+import { buildOffset } from "../geometry/offset";
+import {
+  generateBestPocket,
+  generateOffsetPocketWithHoles,
+  generateParallelPocketWithHoles,
+} from "../geometry/pocket";
+import { optimizeTravel } from "./travelOptimizer";
+
+function closeIfNeeded(points: Point[]): Point[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  const closed = Math.hypot(first.x - last.x, first.y - last.y) <= 1e-6;
+  return closed ? [...points] : [...points, { ...first }];
+}
+
+function signedArea(points: Point[]): number {
+  let area = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return area / 2;
+}
+
+function normalizeClosed(points: Point[]): Point[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (Math.hypot(first.x - last.x, first.y - last.y) <= 1e-6) return points.slice(0, -1);
+  return [...points];
+}
+
+function orientPath(
+  points: Point[],
+  closed: boolean,
+  wantConventional: boolean,
+  insideLike: boolean
+): Point[] {
+  if (!closed || points.length < 3) {
+    return wantConventional ? [...points].reverse() : [...points];
+  }
+
+  const open = normalizeClosed(points);
+  const ccw = signedArea(open) > 0;
+  const wantCCW = insideLike ? !wantConventional : wantConventional;
+  const oriented = ccw === wantCCW ? open : [...open].reverse();
+  return closeIfNeeded(oriented);
+}
+
+function to3D(points: Point[], z = 0): Point3D[] {
+  return points.map((p) => ({ x: p.x, y: p.y, z }));
+}
+
+function resolveTabs(tabs?: Partial<TabsConfig>): TabsConfig {
+  return {
+    enabled: tabs?.enabled ?? false,
+    count: Math.max(1, tabs?.count ?? 2),
+    width: Math.max(0.1, tabs?.width ?? 4),
+    height: Math.max(0.1, tabs?.height ?? 1),
+  };
+}
+
+function resolveRamping(ramping?: Partial<RampingConfig>): RampingConfig {
+  return {
+    enabled: ramping?.enabled ?? false,
+    turns: Math.max(1, Math.round(ramping?.turns ?? 1)),
+  };
+}
+
+function resolveLead(lead?: Partial<LeadConfig>): LeadConfig {
+  return {
+    enabled: lead?.enabled ?? false,
+    length: Math.max(0, lead?.length ?? 0),
+  };
+}
+
+function makeName(base: string | undefined, fallback: string, index?: number): string {
+  if (index == null) return base ?? fallback;
+  return `${base ?? fallback} ${index + 1}`;
+}
+
+export function planProfile(input: ProfilePlanInput): Toolpath[] {
+  const {
+    contour,
+    operation,
+    tool,
+    options: {
+      name,
+      cutZ,
+      joinType = "round",
+      miterLimit = 4,
+      direction = "climb",
+      tabs,
+      ramping,
+      leadIn,
+      leadOut,
+    },
+  } = input;
+
+  const toolRadius = Math.max(0.001, tool.diameter / 2);
+  const wantConventional = direction === "conventional";
+  const resolvedTabs = resolveTabs(tabs);
+  const resolvedRamping = resolveRamping(ramping);
+  const resolvedLeadIn = resolveLead(leadIn);
+  const resolvedLeadOut = resolveLead(leadOut);
+
+  if (operation === "follow-path") {
+    const points = orientPath(contour, false, wantConventional, false);
+    return [{
+      name: makeName(name, "Follow Path"),
+      points: to3D(points),
+      closed: false,
+      cutZ,
+      kind: "path",
+      stepdown: tool.passDepth,
+      tabs: { ...resolvedTabs, enabled: false },
+      ramping: { ...resolvedRamping, enabled: false },
+      leadIn: resolvedLeadIn,
+      leadOut: resolvedLeadOut,
+    }];
+  }
+
+  const offset = operation === "profile-outside" ? toolRadius : -toolRadius;
+  const loops = buildOffset(contour, offset, joinType, miterLimit);
+  const targetLoops = loops.length > 0 ? loops : [closeIfNeeded(contour)];
+
+  return targetLoops.map((loop, index) => {
+    const oriented = orientPath(
+      loop,
+      true,
+      wantConventional,
+      operation === "profile-inside"
+    );
+
+    return {
+      name: makeName(name, operation === "profile-outside" ? "Profile Outside" : "Profile Inside", index),
+      points: to3D(oriented),
+      closed: true,
+      cutZ,
+      kind: "contour",
+      stepdown: tool.passDepth,
+      tabs: operation === "profile-outside" ? resolvedTabs : { ...resolvedTabs, enabled: false },
+      ramping: resolvedRamping,
+      leadIn: resolvedLeadIn,
+      leadOut: resolvedLeadOut,
+    };
+  });
+}
+
+export function planPocket(input: PocketPlanInput): Toolpath[] {
+  const {
+    contours,
+    tool,
+    options: {
+      name,
+      cutZ,
+      direction = "climb",
+      strategy = "auto",
+      angle = 0,
+      tabs,
+      ramping,
+      leadIn,
+      leadOut,
+    },
+  } = input;
+
+  const step = Math.max(0.05, tool.diameter * Math.max(0.05, Math.min(1, tool.stepover)));
+  const wantConventional = direction === "conventional";
+
+  let paths: Point[][] = [];
+  if (strategy === "offset") paths = generateOffsetPocketWithHoles(contours, step);
+  else if (strategy === "parallel") paths = generateParallelPocketWithHoles(contours, step, angle);
+  else paths = generateBestPocket(contours, step, angle);
+
+  const oriented = optimizeTravel(
+    paths.map((points) => ({ points, closed: false })),
+    { x: 0, y: 0 }
+  );
+
+  return oriented.map((path, index) => ({
+    name: makeName(name, "Pocket", index),
+    points: to3D(wantConventional ? [...path.points].reverse() : path.points),
+    closed: false,
+    cutZ,
+    kind: "pocket",
+    stepdown: tool.passDepth,
+    tabs: { ...resolveTabs(tabs), enabled: false },
+    ramping: { ...resolveRamping(ramping), enabled: false },
+    leadIn: resolveLead(leadIn),
+    leadOut: resolveLead(leadOut),
+  }));
+}
+
+
+path: /cam-v2/src/planning/travelOptimizer.ts
+----------------------------------------
+// src/planning/travelOptimizer.ts
+
+import type { Point } from "../types";
+
+export type TravelCandidate = {
+  points: Point[];
+  closed: boolean;
+};
+
+export type OrientedTravelPath = {
+  index: number;
+  points: Point[];
+  closed: boolean;
+};
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosed(points: Point[]): Point[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (distance(first, last) <= EPS) {
+    return points.slice(0, -1).map((p) => ({ x: round(p.x), y: round(p.y) }));
+  }
+  return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
+}
+
+function closeIfNeeded(points: Point[]): Point[] {
+  if (points.length < 2) return [...points];
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (distance(first, last) <= EPS) return [...points];
+  return [...points, { ...first }];
+}
+
+function rotateClosedPath(points: Point[], startIndex: number): Point[] {
+  const open = normalizeClosed(points);
+  if (open.length === 0) return [];
+  const idx = ((startIndex % open.length) + open.length) % open.length;
+  const rotated = [...open.slice(idx), ...open.slice(0, idx)];
+  return closeIfNeeded(rotated);
+}
+
+function findNearestVertexIndex(points: Point[], target: Point): number {
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (let i = 0; i < points.length; i++) {
+    const d = distance(points[i], target);
+    if (d < bestDistance) {
+      bestDistance = d;
+      bestIndex = i;
+    }
+  }
+
+  return bestIndex;
+}
+
+export function orientOpenPathFromNearest(points: Point[], current: Point): Point[] {
+  if (points.length <= 1) return [...points];
+  const start = points[0];
+  const end = points[points.length - 1];
+  return distance(current, end) < distance(current, start) ? [...points].reverse() : [...points];
+}
+
+export function orientClosedPathFromNearest(points: Point[], current: Point): Point[] {
+  const open = normalizeClosed(points);
+  if (open.length <= 1) return closeIfNeeded(open);
+  const nearestIndex = findNearestVertexIndex(open, current);
+  return rotateClosedPath(open, nearestIndex);
+}
+
+export function orientPathFromNearest(points: Point[], current: Point, closed: boolean): Point[] {
+  return closed ? orientClosedPathFromNearest(points, current) : orientOpenPathFromNearest(points, current);
+}
+
+export function optimizeTravel(
+  contours: TravelCandidate[],
+  startPoint: Point = { x: 0, y: 0 }
+): OrientedTravelPath[] {
+  const pending = contours.map((item, index) => ({ ...item, index }));
+  const result: OrientedTravelPath[] = [];
+  let current = { ...startPoint };
+
+  while (pending.length > 0) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestOriented: Point[] = [];
+
+    for (let i = 0; i < pending.length; i++) {
+      const candidate = pending[i];
+      const oriented = orientPathFromNearest(candidate.points, current, candidate.closed);
+      if (oriented.length === 0) continue;
+
+      const d = distance(current, oriented[0]);
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestIndex = i;
+        bestOriented = oriented;
+      }
+    }
+
+    const picked = pending.splice(bestIndex, 1)[0];
+    const oriented = bestOriented.length > 0 ? bestOriented : orientPathFromNearest(picked.points, current, picked.closed);
+
+    result.push({ index: picked.index, points: oriented, closed: picked.closed });
+    if (oriented.length > 0) current = oriented[oriented.length - 1];
+  }
+
+  return result;
+}
+
+
+path: /cam-v2/src/toolpath/bridges.ts
+----------------------------------------
+// src/toolpath/bridges.ts
+
+import type { Point } from "../types";
+
+export type BridgeSpan = {
+  start: number;
+  end: number;
+};
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosedContour(contour: Point[]): Point[] {
+  if (contour.length < 2) return contour.map((p) => ({ ...p }));
+  const first = contour[0];
+  const last = contour[contour.length - 1];
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map((p) => ({ ...p }));
+  return contour.map((p) => ({ ...p }));
+}
+
+export function contourLength(contour: Point[]): number {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 2) return 0;
+
+  let total = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    total += distance(normalized[i], normalized[(i + 1) % normalized.length]);
+  }
+  return total;
+}
+
+export function buildBridgeSpans(contour: Point[], bridgeCount: number, bridgeWidth: number): BridgeSpan[] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 3) return [];
+  if (bridgeCount <= 0 || bridgeWidth <= 0) return [];
+
+  const total = contourLength(normalized);
+  if (total <= EPS) return [];
+
+  const width = Math.min(Math.max(bridgeWidth, 0), total * 0.8);
+  const spacing = total / bridgeCount;
+
+  const raw: BridgeSpan[] = [];
+  for (let i = 0; i < bridgeCount; i++) {
+    const center = (i + 0.5) * spacing;
+    raw.push({ start: center - width / 2, end: center + width / 2 });
+  }
+
+  const normalizedSpans: BridgeSpan[] = [];
+  for (const span of raw) {
+    let start = span.start;
+    let end = span.end;
+
+    while (start < 0) {
+      start += total;
+      end += total;
+    }
+
+    start %= total;
+    end %= total;
+
+    if (end < start) {
+      normalizedSpans.push({ start, end: total });
+      normalizedSpans.push({ start: 0, end });
+    } else {
+      normalizedSpans.push({ start, end });
+    }
+  }
+
+  normalizedSpans.sort((a, b) => a.start - b.start);
+
+  const merged: BridgeSpan[] = [];
+  for (const span of normalizedSpans) {
+    const last = merged[merged.length - 1];
+    if (!last || span.start > last.end + EPS) merged.push({ ...span });
+    else last.end = Math.max(last.end, span.end);
+  }
+
+  return merged.map((span) => ({ start: round(span.start), end: round(span.end) }));
+}
+
+export function pointAtLength(contour: Point[], at: number): Point {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length === 0) return { x: 0, y: 0 };
+  if (normalized.length === 1) return { ...normalized[0] };
+
+  const total = contourLength(normalized);
+  if (total <= EPS) return { ...normalized[0] };
+
+  let target = at % total;
+  if (target < 0) target += total;
+
+  let accumulated = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const a = normalized[i];
+    const b = normalized[(i + 1) % normalized.length];
+    const len = distance(a, b);
+    if (len <= EPS) continue;
+
+    const nextAccumulated = accumulated + len;
+    if (target <= nextAccumulated + EPS) {
+      const t = Math.max(0, Math.min(1, (target - accumulated) / len));
+      return {
+        x: round(a.x + (b.x - a.x) * t),
+        y: round(a.y + (b.y - a.y) * t),
+      };
+    }
+
+    accumulated = nextAccumulated;
+  }
+
+  return { ...normalized[0] };
+}
+
+export function isInsideAnyBridge(lengthPos: number, spans: BridgeSpan[]): boolean {
+  return spans.some((span) => lengthPos >= span.start - EPS && lengthPos <= span.end + EPS);
+}
+
+
+path: /cam-v2/src/toolpath/ramping.ts
+----------------------------------------
+// src/toolpath/ramping.ts
+
+import type { Point } from "../types";
+
+export type ToolpathPoint3D = Point & { z: number };
+
+const EPS = 1e-6;
+
+function round(value: number): number {
+  return Number(value.toFixed(3));
+}
+
+function distance(a: Point, b: Point): number {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function normalizeClosedContour(contour: Point[]): Point[] {
+  if (contour.length < 2) return contour.map((p) => ({ ...p }));
+  const first = contour[0];
+  const last = contour[contour.length - 1];
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map((p) => ({ ...p }));
+  return contour.map((p) => ({ ...p }));
+}
+
+export function generateRampingPass(
+  contour: Point[],
+  startZ: number,
+  endZ: number,
+  turns = 1
+): ToolpathPoint3D[] {
+  const normalized = normalizeClosedContour(contour);
+  if (normalized.length < 2 || turns <= 0) return [];
+
+  const closedContour = [...normalized, normalized[0]];
+  const segmentsPerTurn = closedContour.length - 1;
+  const totalSteps = segmentsPerTurn * Math.max(1, Math.floor(turns));
+  const result: ToolpathPoint3D[] = [];
+
+  for (let step = 0; step <= totalSteps; step++) {
+    const globalT = totalSteps === 0 ? 1 : step / totalSteps;
+    const z = round(startZ + (endZ - startZ) * globalT);
+    const localIndex = step % segmentsPerTurn;
+    const point = closedContour[localIndex];
+    result.push({ x: round(point.x), y: round(point.y), z });
+  }
+
+  if (result.length > 0) {
+    const last = result[result.length - 1];
+    const first = closedContour[0];
+    if (Math.abs(last.x - first.x) > EPS || Math.abs(last.y - first.y) > EPS || Math.abs(last.z - endZ) > EPS) {
+      result.push({ x: round(first.x), y: round(first.y), z: round(endZ) });
+    }
+  }
+
+  return result;
+}
+
+
+path: /cam-v2/src/types.ts
+----------------------------------------
+export type Point = {
+  x: number;
+  y: number;
+};
+
+export type Point3D = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+export type Polyline = Point[];
+export type Contour = Point[];
+
+export type Units = "mm" | "inch";
+export type JoinType = "round" | "miter";
+export type PocketStrategy = "auto" | "offset" | "parallel";
+export type CamOperation =
+  | "follow-path"
+  | "profile-inside"
+  | "profile-outside"
+  | "pocket";
+
+export type Tool = {
+  diameter: number;
+  passDepth: number;
+  stepover: number;
+};
+
+export type SpindleSettings = {
+  enabled: boolean;
+  speed: number;
+  direction?: "cw" | "ccw";
+  dwellMs?: number;
+};
+
+export type MachineSettings = {
+  units: Units;
+  safeZ: number;
+  startZ: number;
+  feedRapid: number;
+  feedCut: number;
+  feedPlunge: number;
+  spindle?: SpindleSettings;
+  coolant?: boolean;
+  workOffset?: string;
+  toolNumber?: number;
+  returnHome?: boolean;
+};
+
+export type TabsConfig = {
+  enabled: boolean;
+  count: number;
+  width: number;
+  height: number;
+};
+
+export type RampingConfig = {
+  enabled: boolean;
+  turns: number;
+};
+
+export type LeadConfig = {
+  enabled: boolean;
+  length: number;
+};
+
+export type Toolpath = {
+  name: string;
+  points: Point3D[];
+  closed: boolean;
+  cutZ: number;
+  kind?: "contour" | "pocket" | "path";
+  stepdown?: number;
+  tabs?: TabsConfig;
+  ramping?: RampingConfig;
+  leadIn?: LeadConfig;
+  leadOut?: LeadConfig;
+};
+
+export type PlanOptions = {
+  name?: string;
+  cutZ: number;
+  joinType?: JoinType;
+  miterLimit?: number;
+  direction?: "climb" | "conventional";
+  tabs?: Partial<TabsConfig>;
+  ramping?: Partial<RampingConfig>;
+  leadIn?: Partial<LeadConfig>;
+  leadOut?: Partial<LeadConfig>;
+};
+
+export type ProfilePlanInput = {
+  contour: Contour;
+  operation: Extract<CamOperation, "follow-path" | "profile-inside" | "profile-outside">;
+  tool: Tool;
+  options: PlanOptions;
+};
+
+export type PocketPlanInput = {
+  contours: Contour[];
+  tool: Tool;
+  options: PlanOptions & {
+    strategy?: PocketStrategy;
+    angle?: number;
+  };
+};
+
+export type GCodeGeneratorInput = {
+  toolpaths: Toolpath[];
+  machine: MachineSettings;
+};
+
+
+path: /cam-v2/tsconfig.json
+----------------------------------------
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "declaration": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "lib": ["ES2020"]
+  },
+  "include": ["src", "examples"]
+}
+
+
+=== SUMMARY ===
+included: 31
+skipped(binary): 0
+skipped(size): 0
+skipped(ext): 0
+totalBytes(approx): 127164

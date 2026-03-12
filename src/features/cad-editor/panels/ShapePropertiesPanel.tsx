@@ -4,19 +4,21 @@ import {
   FiCircle,
   FiEdit3,
   FiImage,
+  FiInfo,
   FiMinus,
   FiMove,
   FiRefreshCw,
   FiType,
-  FiInfo,
 } from "react-icons/fi";
 import { createDefaultCamSettings } from "../model/document";
 import type {
+  SketchBSpline,
   SketchCamSettings,
   SketchDocument,
   SketchShape,
 } from "../model/types";
 import { updateShape } from "../model/document";
+import { updateGeometry } from "../model/solver/manager";
 import type { SelectionState } from "../model/selection";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -26,6 +28,8 @@ export type ShapePropertiesPanelProps = {
   document: SketchDocument;
   setDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   selection: SelectionState;
+  onInsertBSplineControlPoint?: () => void;
+  onRemoveBSplineControlPoint?: () => void;
 };
 
 const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
@@ -40,14 +44,24 @@ function SectionTitle({ title }: { title: string }) {
 
 function getShapeIcon(type: SketchShape["type"]) {
   switch (type) {
-    case "rectangle": return <FiBox size={14} />;
-    case "circle": return <FiCircle size={14} />;
-    case "line": return <FiMinus size={14} />;
-    case "arc": return <FiCircle size={14} />;
-    case "polyline": return <FiMove size={14} />;
-    case "text": return <FiType size={14} />;
-    case "svg": return <FiImage size={14} />;
-    default: return <FiEdit3 size={14} />;
+    case "rectangle":
+      return <FiBox size={14} />;
+    case "circle":
+      return <FiCircle size={14} />;
+    case "line":
+      return <FiMinus size={14} />;
+    case "arc":
+      return <FiCircle size={14} />;
+    case "polyline":
+      return <FiMove size={14} />;
+    case "bspline":
+      return <FiRefreshCw size={14} />;
+    case "text":
+      return <FiType size={14} />;
+    case "svg":
+      return <FiImage size={14} />;
+    default:
+      return <FiEdit3 size={14} />;
   }
 }
 
@@ -88,10 +102,17 @@ export function ShapePropertiesPanel({
   document,
   setDocument,
   selection,
+  onInsertBSplineControlPoint = () => {},
+  onRemoveBSplineControlPoint = () => {},
 }: ShapePropertiesPanelProps) {
   const selectedShape = useMemo(
-    () => document.shapes.find(s => s.id === selection.primaryId) ?? null,
-    [document.shapes, selection.primaryId]
+    () => document.shapes.find((s) => s.id === selection.primaryId) ?? null,
+    [document.shapes, selection.primaryId],
+  );
+
+  const selectedPoint = useMemo(
+    () => document.points.find((p) => p.id === selection.primaryId) ?? null,
+    [document.points, selection.primaryId],
   );
 
   const selectedGroup = useMemo(
@@ -103,15 +124,85 @@ export function ShapePropertiesPanel({
   );
 
   const shapeCamSettings = useMemo(
-    () => selectedShape ? resolveShapeCamSettings(selectedShape, document) : null,
+    () => (selectedShape ? resolveShapeCamSettings(selectedShape, document) : null),
     [selectedShape, document],
   );
 
-  if (!selectedShape) {
+  const lineLength = useMemo(() => {
+    if (selectedShape?.type !== "line") return null;
+    const p1 = document.points.find((p) => p.id === (selectedShape as any).p1);
+    const p2 = document.points.find((p) => p.id === (selectedShape as any).p2);
+    if (!p1 || !p2) return 0;
+    return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
+  }, [selectedShape, document.points]);
+
+  const selectedBSpline = selectedShape?.type === "bspline"
+    ? (selectedShape as SketchBSpline)
+    : null;
+
+  if (!selectedShape && !selectedPoint) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <FiInfo size={32} className="text-border mb-3" />
-        <div className="text-xs text-text-muted">Выберите объект на холсте для просмотра свойств</div>
+        <div className="text-xs text-text-muted">
+          Выберите объект на холсте для просмотра свойств
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedPoint) {
+    return (
+      <div className="flex flex-col gap-4 p-1">
+        <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
+          <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
+            <FiMove size={14} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-bold text-text truncate">
+              Точка {selectedPoint.id}
+            </div>
+            <div className="text-[11px] text-text-muted capitalize">
+              Vertex
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <SectionTitle title="Геометрия" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-1.5">
+                <Label>X</Label>
+                <Input type="number" value={selectedPoint.x.toFixed(3)} disabled />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Y</Label>
+                <Input type="number" value={selectedPoint.y.toFixed(3)} disabled />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-4">
+              <input
+                type="checkbox"
+                id="isFixed"
+                checked={!!selectedPoint.isFixed}
+                onChange={(e) => {
+                  setDocument((prev) => ({
+                    ...prev,
+                    points: prev.points.map((p) =>
+                      p.id === selectedPoint.id ? { ...p, isFixed: e.target.checked } : p,
+                    ),
+                  }));
+                }}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="isFixed" className="mb-0 cursor-pointer">
+                Закрепить (Lock)
+              </Label>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -129,6 +220,7 @@ export function ShapePropertiesPanel({
       | ((prev: SketchCamSettings) => SketchCamSettings),
   ) {
     if (!selectedShape) return;
+
     const current = resolveShapeCamSettings(selectedShape, document);
     const next =
       typeof patch === "function"
@@ -142,18 +234,31 @@ export function ShapePropertiesPanel({
     );
   }
 
+  function updateSelectedBSpline(patch: Partial<SketchBSpline>) {
+    if (!selectedBSpline) return;
+
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((shape) =>
+        shape.id === selectedBSpline.id
+          ? ({ ...shape, ...patch } as SketchShape)
+          : shape,
+      ),
+    }));
+  }
+
   return (
     <div className="flex flex-col gap-4 p-1">
       <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
         <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
-          {getShapeIcon(selectedShape.type)}
+          {selectedShape ? getShapeIcon(selectedShape.type) : null}
         </div>
         <div className="min-w-0">
           <div className="text-[13px] font-bold text-text truncate">
-            {selectedShape.name}
+            {selectedShape?.name}
           </div>
           <div className="text-[11px] text-text-muted capitalize">
-            {selectedShape.type}
+            {selectedShape?.type}
           </div>
         </div>
       </div>
@@ -165,31 +270,208 @@ export function ShapePropertiesPanel({
             <div className="grid gap-1.5">
               <Label>Имя объекта</Label>
               <Input
-                value={selectedShape.name}
+                value={selectedShape?.name || ""}
                 onChange={(e) => updateSelected({ name: e.target.value })}
               />
+            </div>
+
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                id="isConstruction"
+                checked={!!selectedShape?.isConstruction}
+                onChange={(e) => updateSelected({ isConstruction: e.target.checked })}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="isConstruction" className="mb-0 cursor-pointer">
+                Вспомогательная геометрия
+              </Label>
             </div>
           </div>
         </div>
 
         <div>
           <SectionTitle title="Геометрия" />
+
+          {selectedShape?.type === "line" && (
+            <div className="grid gap-1.5 mb-3">
+              <Label>Длина</Label>
+              <Input
+                type="number"
+                value={lineLength?.toFixed(3)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  if (isNaN(val)) return;
+
+                  setDocument((prev) => {
+                    const s = selectedShape as any;
+                    const existing = prev.constraints.find(
+                      (c) =>
+                        c.type === "distance" &&
+                        c.pointIds.includes(s.p1) &&
+                        c.pointIds.includes(s.p2),
+                    );
+
+                    let nextConstraints = prev.constraints;
+                    if (existing) {
+                      nextConstraints = prev.constraints.map((c) =>
+                        c.id === existing.id ? { ...c, value: val } : c,
+                      );
+                    } else {
+                      const newC = {
+                        id: `const-${Math.random()}`,
+                        type: "distance" as const,
+                        pointIds: [s.p1, s.p2],
+                        shapeIds: [s.id],
+                        value: val,
+                        enabled: true,
+                      };
+                      nextConstraints = [...prev.constraints, newC];
+                    }
+
+                    return updateGeometry({
+                      ...prev,
+                      constraints: nextConstraints,
+                    });
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {(selectedShape?.type === "circle" || selectedShape?.type === "arc") && (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid gap-1.5">
+                <Label>Радиус</Label>
+                <Input
+                  type="number"
+                  value={(selectedShape as any).radius?.toFixed(3)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (isNaN(val)) return;
+                    updateSelected({ radius: val });
+                    setDocument((prev) => updateGeometry(prev));
+                  }}
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label>Диаметр</Label>
+                <Input
+                  type="number"
+                  value={((selectedShape as any).radius * 2)?.toFixed(3)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (isNaN(val)) return;
+                    updateSelected({ radius: val / 2 });
+                    setDocument((prev) => updateGeometry(prev));
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {selectedBSpline && (
+            <div className="mb-3 space-y-3">
+              <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label>Степень (Degree)</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max={Math.max(1, selectedBSpline.controlPointIds.length - 1)}
+                      value={selectedBSpline.degree}
+                      onChange={(e) => {
+                        const maxDegree = Math.max(
+                          1,
+                          selectedBSpline.controlPointIds.length - 1,
+                        );
+                        const nextDegree = Math.max(
+                          1,
+                          Math.min(maxDegree, Number(e.target.value) || 1),
+                        );
+                        updateSelectedBSpline({ degree: nextDegree });
+                      }}
+                    />
+                  </div>
+
+                  <div className="grid gap-1.5">
+                    <Label>Контрольных точек</Label>
+                    <Input
+                      type="number"
+                      value={selectedBSpline.controlPointIds.length}
+                      disabled
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="bspline-periodic"
+                    checked={!!selectedBSpline.periodic}
+                    onChange={(e) =>
+                      updateSelectedBSpline({ periodic: e.target.checked })
+                    }
+                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <Label htmlFor="bspline-periodic" className="mb-0 cursor-pointer">
+                    Замкнутый / Periodic spline
+                  </Label>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full bg-panel-solid"
+                    onClick={onInsertBSplineControlPoint}
+                  >
+                    Добавить control point
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full bg-panel-solid"
+                    onClick={onRemoveBSplineControlPoint}
+                    disabled={
+                      !selection.primaryId ||
+                      !selection.primaryId.startsWith("pt-") ||
+                      !selectedBSpline.controlPointIds.includes(selection.primaryId)
+                    }
+                  >
+                    Удалить выбранную control point
+                  </Button>
+                </div>
+
+                <div className="text-[11px] text-text-muted leading-relaxed">
+                  Кнопка «Добавить control point» вставляет новую точку в наиболее подходящий
+                  сегмент control polygon. Чтобы удалить точку, сначала выдели control point сплайна.
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Глубина Z</Label>
               <Input
                 type="number"
-                value={selectedShape.cutZ ?? document.cutZ}
-                onChange={(e) => updateSelected({ cutZ: Number(e.target.value) || 0 })}
+                value={selectedShape?.cutZ ?? document.cutZ}
+                onChange={(e) =>
+                  updateSelected({ cutZ: Number(e.target.value) || 0 })
+                }
               />
             </div>
+
             <div className="grid gap-1.5">
               <Label>Толщина линии</Label>
               <Input
                 type="number"
                 min="0.1"
                 step="0.1"
-                value={selectedShape.strokeWidth ?? 1}
+                value={selectedShape?.strokeWidth ?? 1}
                 onChange={(e) =>
                   updateSelected({
                     strokeWidth: Math.max(0.1, Number(e.target.value) || 0.1),
@@ -210,6 +492,7 @@ export function ShapePropertiesPanel({
                   ? "Линейный массив"
                   : "Круговой массив"}
               </div>
+
               <Button
                 variant="outline"
                 size="sm"

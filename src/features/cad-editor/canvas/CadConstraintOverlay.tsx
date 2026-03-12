@@ -1,385 +1,216 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
-import {
-  distanceSignByEdge,
-  edgeAxis,
-  getConstraintTargetBounds,
-  getDistanceBetweenEdges,
-  getEdgeMidpoint,
-  getSheetBounds,
-} from "../model/constraints";
-import { shapeBounds } from "../model/shapeBounds";
 import type {
-  ConstraintEdge,
+  SketchConstraint,
   SketchDocument,
+  SketchPoint,
+  SketchShape,
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
 
-type ConstraintDraftTarget =
-  | {
-      kind: "sheet";
-      edge: ConstraintEdge;
-    }
-  | {
-      kind: "shape";
-      shapeId: string;
-      edge: ConstraintEdge;
-    };
-
-type ConstraintDraftState = {
-  shapeId: string;
-  edge: ConstraintEdge;
-  pointer: { x: number; y: number };
-  hoverTarget: ConstraintDraftTarget | null;
-} | null;
-
 type CadConstraintOverlayProps = {
   document: SketchDocument;
-  selection: SelectionState;
   documentHeight: number;
   view: ViewTransform;
-  constraintDraft: ConstraintDraftState;
-  onEdgeHandlePointerDown: (
-    event: React.PointerEvent<SVGCircleElement>,
-    edge: ConstraintEdge,
-  ) => void;
-  onConstraintLabelPointerDown: (
-    event: React.PointerEvent<SVGRectElement>,
-    constraintId: string,
-  ) => void;
+  selection: SelectionState;
+  onPointerDown?: (event: React.PointerEvent<SVGElement>, id: string) => void;
 };
 
-function edgeTitle(edge: ConstraintEdge): string {
-  switch (edge) {
-    case "left":
-      return "L";
-    case "right":
-      return "R";
-    case "top":
+function isPointSelectionId(id: string): boolean {
+  return id.startsWith("pt_");
+}
+
+function getConstraintSymbol(type: string): string {
+  switch (type) {
+    case "horizontal":
+      return "H";
+    case "vertical":
+      return "V";
+    case "coincident":
+      return "C";
+    case "parallel":
+      return "||";
+    case "perpendicular":
+      return "⊥";
+    case "equal":
+      return "=";
+    case "tangent":
       return "T";
-    case "bottom":
-      return "B";
+    case "distance":
+      return "D";
+    case "distance-x":
+      return "Dx";
+    case "distance-y":
+      return "Dy";
+    case "angle":
+      return "∠";
+    case "radius":
+      return "R";
+    case "diameter":
+      return "Ø";
+    default:
+      return "?";
   }
 }
 
-function formatDistance(value: number): string {
-  return `${Number(value.toFixed(3)).toString()} мм`;
-}
+function getShapePointIds(shape: SketchShape): string[] {
+  const s = shape as any;
+  const ids: string[] = [];
 
-function labelPosition(
-  source: { x: number; y: number },
-  target: { x: number; y: number },
-  edge: ConstraintEdge,
-) {
-  const mid = {
-    x: (source.x + target.x) / 2,
-    y: (source.y + target.y) / 2,
-  };
+  if (s.p1) ids.push(s.p1);
+  if (s.p2) ids.push(s.p2);
+  if (s.center) ids.push(s.center);
+  if (s.majorAxisPoint) ids.push(s.majorAxisPoint);
+  if (Array.isArray(s.pointIds)) ids.push(...s.pointIds);
+  if (Array.isArray(s.controlPointIds)) ids.push(...s.controlPointIds);
 
-  if (edgeAxis(edge) === "x") {
-    return { x: mid.x, y: mid.y - 18 };
-  }
-
-  return { x: mid.x + 18, y: mid.y };
-}
-
-function sourceHandleColor(
-  edge: ConstraintEdge,
-  theme: ReturnType<typeof useTheme>["theme"],
-): string {
-  switch (edge) {
-    case "left":
-    case "right":
-      return theme.cad.constraintHandleX;
-    case "top":
-    case "bottom":
-      return theme.cad.constraintHandleY;
-  }
+  return ids;
 }
 
 export function CadConstraintOverlay({
   document,
-  selection,
   documentHeight,
   view,
-  constraintDraft,
-  onEdgeHandlePointerDown,
-  onConstraintLabelPointerDown,
+  selection,
+  onPointerDown,
 }: CadConstraintOverlayProps) {
   const { theme } = useTheme();
 
-  const selectedShape =
-    document.shapes.find((shape) => shape.id === selection.primaryId) ?? null;
+  const selectedShapeIds = selection.ids.filter((id) => !isPointSelectionId(id));
+  const selectedPointIds = selection.ids.filter((id) => isPointSelectionId(id));
 
-  const selectedBounds = selectedShape ? shapeBounds(selectedShape) : null;
-  const selectedConstraints = selectedShape
-    ? document.constraints.filter((item) => item.shapeId === selectedShape.id)
-    : [];
+  const visiblePointIds = new Set<string>();
+
+  for (const shapeId of selectedShapeIds) {
+    const shape = document.shapes.find((item) => item.id === shapeId);
+    if (!shape) continue;
+
+    if (shape.groupId) {
+      const groupShapes = document.shapes.filter((item) => item.groupId === shape.groupId);
+      const groupShapeIds = groupShapes.map((item) => item.id);
+      const wholeGroupSelected =
+        groupShapeIds.length > 0 && groupShapeIds.every((id) => selectedShapeIds.includes(id));
+
+      if (wholeGroupSelected) {
+        for (const groupShape of groupShapes) {
+          for (const pointId of getShapePointIds(groupShape)) {
+            visiblePointIds.add(pointId);
+          }
+        }
+        continue;
+      }
+    }
+
+    for (const pointId of getShapePointIds(shape)) {
+      visiblePointIds.add(pointId);
+    }
+  }
+
+  for (const pointId of selectedPointIds) {
+    visiblePointIds.add(pointId);
+  }
+
+  const constraintsByPoint = new Map<string, SketchConstraint[]>();
+  for (const constraint of document.constraints) {
+    if (constraint.pointIds.length === 0) continue;
+    const pointId = constraint.pointIds[0];
+    if (!visiblePointIds.has(pointId)) continue;
+
+    const list = constraintsByPoint.get(pointId) ?? [];
+    list.push(constraint);
+    constraintsByPoint.set(pointId, list);
+  }
 
   return (
     <g>
-      {selectedConstraints.map((constraint) => {
-        const sourceShape = document.shapes.find((item) => item.id === constraint.shapeId);
-        if (!sourceShape) return null;
+      {Array.from(constraintsByPoint.entries()).map(([pointId, constraints]) => {
+        const point = document.points.find((p) => p.id === pointId);
+        if (!point) return null;
 
-        const sourceBounds = shapeBounds(sourceShape);
-        const targetBounds = getConstraintTargetBounds(document, constraint);
-        if (!targetBounds) return null;
-
-        const sourceMid = getEdgeMidpoint(sourceBounds, constraint.edge);
-        const targetMid = getEdgeMidpoint(targetBounds, constraint.targetEdge);
-
-        const sourceScreen = cadToScreenPoint(sourceMid, documentHeight, view);
-        const targetScreen = cadToScreenPoint(targetMid, documentHeight, view);
-        const label = labelPosition(sourceScreen, targetScreen, constraint.edge);
-
-        const displayDistance =
-          constraint.target.kind === "shape" || constraint.target.kind === "sheet"
-            ? getDistanceBetweenEdges(
-                sourceBounds,
-                constraint.edge,
-                targetBounds,
-                constraint.targetEdge,
-              )
-            : constraint.distance;
+        const screen = cadToScreenPoint(point, documentHeight, view);
 
         return (
-          <g key={constraint.id}>
-            <line
-              x1={sourceScreen.x}
-              y1={sourceScreen.y}
-              x2={targetScreen.x}
-              y2={targetScreen.y}
-              stroke={constraint.enabled ? theme.cad.constraintStroke : theme.cad.constraintMuted}
-              strokeWidth={1.5}
-              strokeDasharray={edgeAxis(constraint.edge) === "x" ? "8 5" : "6 4"}
-              opacity={0.9}
-              pointerEvents="none"
-            />
+          <g key={`constraint-icons-${pointId}`} transform={`translate(${screen.x}, ${screen.y})`}>
+            {constraints.map((constraint, index) => {
+              const offsetX = index * 18 - (constraints.length - 1) * 9;
+              const offsetY = -28;
 
-            <circle
-              cx={sourceScreen.x}
-              cy={sourceScreen.y}
-              r={3.5}
-              fill={theme.cad.constraintLabelFill}
-              stroke={theme.cad.constraintSource}
-              strokeWidth={1.5}
-              pointerEvents="none"
-            />
-
-            <circle
-              cx={targetScreen.x}
-              cy={targetScreen.y}
-              r={3.5}
-              fill={theme.cad.constraintLabelFill}
-              stroke={theme.cad.constraintTarget}
-              strokeWidth={1.5}
-              pointerEvents="none"
-            />
-
-            <g>
-              <rect
-                x={label.x - 32}
-                y={label.y - 11}
-                width={64}
-                height={22}
-                rx={11}
-                fill={theme.cad.constraintLabelFill}
-                stroke={theme.cad.constraintLabelStroke}
-                strokeWidth={1}
-                onPointerDown={(event) => onConstraintLabelPointerDown(event, constraint.id)}
-                style={{ cursor: edgeAxis(constraint.edge) === "x" ? "ew-resize" : "ns-resize" }}
-              />
-              <text
-                x={label.x}
-                y={label.y + 4}
-                fontSize="12"
-                fontWeight="700"
-                fill={theme.cad.constraintLabelText}
-                textAnchor="middle"
-                pointerEvents="none"
-              >
-                {formatDistance(displayDistance)}
-              </text>
-            </g>
+              return (
+                <g
+                  key={constraint.id}
+                  transform={`translate(${offsetX}, ${offsetY})`}
+                  onPointerDown={(event) => onPointerDown?.(event, constraint.id)}
+                  style={{ cursor: "pointer", pointerEvents: "all" }}
+                >
+                  <rect
+                    x="-8"
+                    y="-8"
+                    width="16"
+                    height="16"
+                    rx="3"
+                    fill={theme.cad.constraintLabelFill}
+                    stroke={theme.cad.constraintLabelStroke}
+                    strokeWidth="1.5"
+                  />
+                  <text
+                    x="0"
+                    y="4"
+                    fontSize="10"
+                    textAnchor="middle"
+                    fill={theme.cad.constraintLabelText}
+                    fontWeight="bold"
+                    pointerEvents="none"
+                    style={{ userSelect: "none" }}
+                  >
+                    {getConstraintSymbol(constraint.type)}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         );
       })}
 
-      {selectedBounds &&
-        (["left", "right", "top", "bottom"] as ConstraintEdge[]).map((edge) => {
-          const point = getEdgeMidpoint(selectedBounds, edge);
-          const screen = cadToScreenPoint(point, documentHeight, view);
-          const color = sourceHandleColor(edge, theme);
+      {document.points.map((point: SketchPoint) => {
+        if (!visiblePointIds.has(point.id)) return null;
 
-          return (
-            <g key={`edge-handle-${edge}`}>
-              <circle
-                cx={screen.x}
-                cy={screen.y}
-                r={13}
-                fill="transparent"
-                onPointerDown={(event) => onEdgeHandlePointerDown(event, edge)}
-                style={{ cursor: "crosshair" }}
-              />
-              <circle
-                cx={screen.x}
-                cy={screen.y}
-                r={6}
-                fill={theme.cad.constraintLabelFill}
-                stroke={color}
-                strokeWidth={2}
-                onPointerDown={(event) => onEdgeHandlePointerDown(event, edge)}
-                style={{ cursor: "crosshair" }}
-              />
-              <text
-                x={screen.x}
-                y={screen.y - 11}
-                fontSize="11"
-                fontWeight="700"
-                fill={color}
-                textAnchor="middle"
-                pointerEvents="none"
-              >
-                {edgeTitle(edge)}
-              </text>
-            </g>
-          );
-        })}
-
-      {constraintDraft && selectedShape && (() => {
-        const shape = document.shapes.find((item) => item.id === constraintDraft.shapeId);
-        if (!shape) return null;
-
-        const sourceBounds = shapeBounds(shape);
-        const sourceMid = getEdgeMidpoint(sourceBounds, constraintDraft.edge);
-        const sourceScreen = cadToScreenPoint(sourceMid, documentHeight, view);
-
-        let targetCad = constraintDraft.pointer;
-
-        if (constraintDraft.hoverTarget) {
-          if (constraintDraft.hoverTarget.kind === "sheet") {
-            targetCad = getEdgeMidpoint(
-              getSheetBounds(document),
-              constraintDraft.hoverTarget.edge,
-            );
-          } else {
-            const targetShape = document.shapes.find(
-              (item) =>
-                item.id ===
-                (constraintDraft.hoverTarget as Extract<
-                  ConstraintDraftTarget,
-                  { kind: "shape" }
-                >).shapeId,
-            );
-            if (targetShape) {
-              targetCad = getEdgeMidpoint(
-                shapeBounds(targetShape),
-                constraintDraft.hoverTarget.edge,
-              );
-            }
-          }
-        }
-
-        const targetScreen = cadToScreenPoint(targetCad, documentHeight, view);
-        const label = labelPosition(sourceScreen, targetScreen, constraintDraft.edge);
-
-        let previewDistance = 0;
-
-        if (constraintDraft.hoverTarget) {
-          const targetBounds =
-            constraintDraft.hoverTarget.kind === "sheet"
-              ? getSheetBounds(document)
-              : shapeBounds(
-                  document.shapes.find(
-                    (item) =>
-                      item.id ===
-                      (constraintDraft.hoverTarget as Extract<
-                        ConstraintDraftTarget,
-                        { kind: "shape" }
-                      >).shapeId,
-                  )!,
-                );
-
-          previewDistance = getDistanceBetweenEdges(
-            sourceBounds,
-            constraintDraft.edge,
-            targetBounds,
-            constraintDraft.hoverTarget.edge,
-          );
-        } else {
-          const axis = edgeAxis(constraintDraft.edge);
-          const sourceValue =
-            axis === "x" ? sourceMid.x : sourceMid.y;
-          const pointerValue =
-            axis === "x" ? constraintDraft.pointer.x : constraintDraft.pointer.y;
-          previewDistance = Number(
-            (
-              (pointerValue - sourceValue) *
-              distanceSignByEdge(constraintDraft.edge)
-            ).toFixed(3),
-          );
-        }
+        const screen = cadToScreenPoint(point, documentHeight, view);
+        const isSelected = selection.ids.includes(point.id);
+        const constraintCount = document.constraints.filter((c) => c.pointIds.includes(point.id)).length;
+        const isConstrained = constraintCount > 0;
+        const isFixed = !!point.isFixed;
 
         return (
-          <g>
-            <line
-              x1={sourceScreen.x}
-              y1={sourceScreen.y}
-              x2={targetScreen.x}
-              y2={targetScreen.y}
-              stroke={theme.cad.constraintPreviewStroke}
-              strokeWidth={2}
-              strokeDasharray="8 5"
-              pointerEvents="none"
-            />
-
+          <g key={`point-handle-${point.id}`}>
             <circle
-              cx={sourceScreen.x}
-              cy={sourceScreen.y}
-              r={4}
-              fill={theme.cad.constraintLabelFill}
-              stroke={theme.cad.constraintPreviewStroke}
-              strokeWidth={2}
-              pointerEvents="none"
+              cx={screen.x}
+              cy={screen.y}
+              r={12}
+              fill="transparent"
+              onPointerDown={(event) => onPointerDown?.(event, `point:${point.id}`)}
+              style={{ cursor: "move", pointerEvents: "all" }}
             />
-
             <circle
-              cx={targetScreen.x}
-              cy={targetScreen.y}
-              r={4}
-              fill={theme.cad.constraintLabelFill}
-              stroke={theme.cad.constraintPreviewStroke}
-              strokeWidth={2}
+              cx={screen.x}
+              cy={screen.y}
+              r={5}
+              fill={
+                isSelected
+                  ? theme.cad.selectedStroke
+                  : isFixed
+                    ? "#ef4444"
+                    : isConstrained
+                      ? "#22c55e"
+                      : "#3b82f6"
+              }
+              stroke="#ffffff"
+              strokeWidth={isSelected ? 2 : 1.5}
               pointerEvents="none"
             />
-
-            <rect
-              x={label.x - 34}
-              y={label.y - 11}
-              width={68}
-              height={22}
-              rx={11}
-              fill={theme.cad.constraintPreviewFill}
-              stroke={theme.cad.constraintPreviewBorder}
-              strokeWidth={1}
-              pointerEvents="none"
-            />
-            <text
-              x={label.x}
-              y={label.y + 4}
-              fontSize="12"
-              fontWeight="700"
-              fill={theme.cad.constraintPreviewText}
-              textAnchor="middle"
-              pointerEvents="none"
-            >
-              {formatDistance(previewDistance)}
-            </text>
           </g>
         );
-      })()}
+      })}
     </g>
   );
 }

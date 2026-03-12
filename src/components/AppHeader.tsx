@@ -26,9 +26,17 @@ export function AppHeader({
   return (
     <div className="h-12 flex items-center justify-between px-3 bg-panel-solid border-b border-border shadow-sm">
       <div className="flex items-center gap-3 min-w-0">
+
+        {/* Logo */}
         <div className="flex items-center gap-2 mr-2">
-          <div className="w-8 h-8 rounded bg-primary grid place-items-center text-white font-black text-lg">G</div>
-          <span className="font-bold text-sm tracking-tight hidden sm:inline">GCode Studio</span>
+          <img
+            src="/logo.svg"
+            alt="GCode Studio"
+            className="w-8 h-8 object-contain"
+          />
+          <span className="font-bold text-sm tracking-tight hidden sm:inline">
+            GCode Studio
+          </span>
         </div>
 
         <Separator orientation="vertical" className="h-6" />

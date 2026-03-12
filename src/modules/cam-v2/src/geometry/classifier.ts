@@ -1,7 +1,9 @@
-import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+// src/geometry/classifier.ts
+
+import type { Point } from "../types";
 
 export type ClassifiedContours = {
-  external: CadPoint[][];
+  external: Point[][];
   holes: Map<number, number[]>;
   parent: number[];
   depth: number[];
@@ -9,7 +11,7 @@ export type ClassifiedContours = {
 
 const EPS = 1e-9;
 
-function signedArea(polygon: CadPoint[]): number {
+function signedArea(polygon: Point[]): number {
   let sum = 0;
   for (let i = 0; i < polygon.length; i++) {
     const a = polygon[i];
@@ -19,13 +21,13 @@ function signedArea(polygon: CadPoint[]): number {
   return sum / 2;
 }
 
-function areaAbs(polygon: CadPoint[]): number {
+function areaAbs(polygon: Point[]): number {
   return Math.abs(signedArea(polygon));
 }
 
-function boundsOf(polygon: CadPoint[]) {
-  const xs = polygon.map(p => p.x);
-  const ys = polygon.map(p => p.y);
+function boundsOf(polygon: Point[]) {
+  const xs = polygon.map((p) => p.x);
+  const ys = polygon.map((p) => p.y);
   return {
     minX: Math.min(...xs),
     maxX: Math.max(...xs),
@@ -34,7 +36,10 @@ function boundsOf(polygon: CadPoint[]) {
   };
 }
 
-function boundsContains(outer: ReturnType<typeof boundsOf>, inner: ReturnType<typeof boundsOf>): boolean {
+function boundsContains(
+  outer: ReturnType<typeof boundsOf>,
+  inner: ReturnType<typeof boundsOf>
+): boolean {
   return (
     inner.minX >= outer.minX - EPS &&
     inner.maxX <= outer.maxX + EPS &&
@@ -43,13 +48,14 @@ function boundsContains(outer: ReturnType<typeof boundsOf>, inner: ReturnType<ty
   );
 }
 
-function contourSamplePoint(contour: CadPoint[]): CadPoint {
+function contourSamplePoint(contour: Point[]): Point {
   return contour[0] ?? { x: 0, y: 0 };
 }
 
-export function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
+export function pointInPolygon(point: Point, polygon: Point[]): boolean {
   if (polygon.length < 3) return false;
   let inside = false;
+
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const a = polygon[i];
     const b = polygon[j];
@@ -60,17 +66,20 @@ export function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
       point.x <= Math.max(a.x, b.x) + EPS &&
       point.y >= Math.min(a.y, b.y) - EPS &&
       point.y <= Math.max(a.y, b.y) + EPS;
+
     if (onSegment) return true;
 
     const intersects =
       (a.y > point.y) !== (b.y > point.y) &&
       point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y + EPS) + a.x;
+
     if (intersects) inside = !inside;
   }
+
   return inside;
 }
 
-export function classifyContours(polylines: CadPoint[][]): ClassifiedContours {
+export function classifyContours(polylines: Point[][]): ClassifiedContours {
   const n = polylines.length;
   const bounds = polylines.map(boundsOf);
   const areas = polylines.map(areaAbs);
@@ -87,11 +96,13 @@ export function classifyContours(polylines: CadPoint[][]): ClassifiedContours {
       if (areas[candidate] <= areas[child] + EPS) continue;
       if (!boundsContains(bounds[candidate], bounds[child])) continue;
       if (!pointInPolygon(probe, polylines[candidate])) continue;
+
       if (areas[candidate] < bestParentArea) {
         bestParentArea = areas[candidate];
         bestParent = candidate;
       }
     }
+
     parent[child] = bestParent;
   }
 
@@ -102,10 +113,12 @@ export function classifyContours(polylines: CadPoint[][]): ClassifiedContours {
     return depth[index];
   }
 
-  for (let i = 0; i < n; i++) depth[i] = computeDepth(i);
+  for (let i = 0; i < n; i++) {
+    depth[i] = computeDepth(i);
+  }
 
-  const externalIndices = polylines.map((_, i) => i).filter(i => depth[i] % 2 === 0);
-  const external = externalIndices.map(i => polylines[i]);
+  const externalIndices = polylines.map((_, i) => i).filter((i) => depth[i] % 2 === 0);
+  const external = externalIndices.map((i) => polylines[i]);
   const holes = new Map<number, number[]>();
   externalIndices.forEach((_, extIndex) => holes.set(extIndex, []));
 

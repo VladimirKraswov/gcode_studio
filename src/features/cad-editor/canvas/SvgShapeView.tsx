@@ -1,7 +1,9 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
-import type { SketchSvg } from "../model/types";
+import type { SketchSvg, SketchPoint } from "../model/types";
 
 function rotatePoint(
   point: { x: number; y: number },
@@ -20,11 +22,13 @@ function rotatePoint(
   };
 }
 
-type SvgShapeViewProps = {
+export type SvgShapeViewProps = {
   shape: SketchSvg;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
 };
 
@@ -33,12 +37,13 @@ export function SvgShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
-}: SvgShapeViewProps) {
+}: Omit<SvgShapeViewProps, "points">) {
   const { theme } = useTheme();
 
-  const scaleX = shape.width / Math.max(shape.sourceWidth, 0.0001);
-  const scaleY = shape.height / Math.max(shape.sourceHeight, 0.0001);
+  const scaleX = (shape.width / Math.max(shape.sourceWidth, 0.0001)) * (shape.scale ?? 1);
+  const scaleY = (shape.height / Math.max(shape.sourceHeight, 0.0001)) * (shape.scale ?? 1);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
   const rotation = shape.rotation ?? 0;
@@ -47,22 +52,33 @@ export function SvgShapeView({
     y: shape.y + shape.height / 2,
   };
 
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
+
   return (
     <g onPointerDown={onPointerDown}>
-      {shape.contours.map((polyline, index) => {
-        const points = polyline
-          .map((point) => {
+      {shape.contours.map((contour, index) => {
+        const points = contour
+          .map((pointStr) => {
+            const [px, py] = pointStr.split(",").map(Number);
             const cadPoint = {
-              x: shape.x + point.x * scaleX,
-              y: shape.y + point.y * scaleY,
+              x: shape.x + px * scaleX,
+              y: shape.y + py * scaleY,
             };
 
             const rotated = rotation
               ? rotatePoint(cadPoint, center, rotation)
               : cadPoint;
 
-            const p = cadToScreenPoint(rotated, documentHeight, view);
-            return `${p.x},${p.y}`;
+            const screenP = cadToScreenPoint(rotated, documentHeight, view);
+            return `${screenP.x},${screenP.y}`;
           })
           .join(" ");
 
@@ -71,7 +87,7 @@ export function SvgShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+              stroke={strokeColor}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"

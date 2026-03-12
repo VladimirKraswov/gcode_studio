@@ -1,103 +1,41 @@
-export type ToolpathPoint = {
-  x: number;
-  y: number;
-  z?: number;
-};
-
-export type Toolpath = {
-  name: string;
-  points: ToolpathPoint[];
-  closed: boolean;
-  cutZ: number;
-  kind?: "contour" | "pocket";
-  useRamping?: boolean;
-  useBridges?: boolean;
-  bridgeCount?: number;
-  bridgeWidth?: number;
-};
-
-export type PlannedPath = {
-  name: string;
-  points: ToolpathPoint[];
-  closed: boolean;
-  depth: number;
-};
-
-export type PlannedOperation = {
-  shapeId: string;
-  shapeName: string;
-  paths: PlannedPath[];
-};
-
-export type CadPoint = {
-  x: number;
-  y: number;
-};
-
-export type JoinType = "round" | "miter";
-
-export type CamMode = "contour" | "pocket";
-
-export type PlanContourInput = {
-  shapeId: string;
-  shapeName: string;
-  polyline: CadPoint[];
-  toolRadius: number;
-  isExternal: boolean;
-  stepover?: number;
-  maxOffset?: number;
-  depth: number;
-  joinType?: JoinType;
-  miterLimit?: number;
-};
-
-export type PlanPocketInput = {
-  shapeId: string;
-  shapeName: string;
-  polyline: CadPoint[];
-  toolRadius: number;
-  stepover: number;
-  depth: number;
-  joinType?: JoinType;
-  miterLimit?: number;
-  keepCenterCleanup?: boolean;
-};
+// src/geometry/offset.ts
+import type { JoinType, Point } from "../types";
 
 const EPS = 1e-6;
 const ROUND_ARC_STEPS_PER_90 = 6;
 const DEFAULT_MITER_LIMIT = 4;
 
 type Vec2 = { x: number; y: number };
-type Segment = { a: CadPoint; b: CadPoint };
+type Segment = { a: Point; b: Point };
 type DirectedEdge = {
   from: number;
   to: number;
   angle: number;
   used: boolean;
 };
-type Node = CadPoint;
+type Node = Point;
 
 function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function rp(p: CadPoint): CadPoint {
+function rp(p: Point): Point {
   return { x: round(p.x), y: round(p.y) };
 }
 
-function dist(a: CadPoint, b: CadPoint): number {
+function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
-function eq(a: CadPoint, b: CadPoint, eps = EPS): boolean {
+function eq(a: Point, b: Point, eps = EPS): boolean {
   return dist(a, b) <= eps;
 }
 
-function add(a: CadPoint, b: Vec2): CadPoint {
+function add(a: Point, b: Vec2): Point {
   return { x: a.x + b.x, y: a.y + b.y };
 }
 
-function sub(a: CadPoint, b: CadPoint): Vec2 {
+function sub(a: Point, b: Point): Vec2 {
   return { x: a.x - b.x, y: a.y - b.y };
 }
 
@@ -123,7 +61,7 @@ function angleOf(v: Vec2): number {
   return Math.atan2(v.y, v.x);
 }
 
-function signedArea(points: CadPoint[]): number {
+function signedArea(points: Point[]): number {
   if (points.length < 3) return 0;
   let area = 0;
   for (let i = 0; i < points.length; i++) {
@@ -134,55 +72,48 @@ function signedArea(points: CadPoint[]): number {
   return area / 2;
 }
 
-function isClockwise(points: CadPoint[]): boolean {
+function isClockwise(points: Point[]): boolean {
   return signedArea(points) < 0;
 }
 
-function dedupeSequential(points: CadPoint[]): CadPoint[] {
-  const out: CadPoint[] = [];
+function dedupeSequential(points: Point[]): Point[] {
+  const out: Point[] = [];
   for (const p of points) {
     const q = rp(p);
     const last = out[out.length - 1];
     if (!last || !eq(last, q)) out.push(q);
   }
-  if (out.length > 1 && eq(out[0], out[out.length - 1])) {
-    out.pop();
-  }
+  if (out.length > 1 && eq(out[0], out[out.length - 1])) out.pop();
   return out;
 }
 
-function normalizeClosedPolyline(points: CadPoint[]): CadPoint[] {
+function normalizeClosedPolyline(points: Point[]): Point[] {
   const clean = dedupeSequential(points);
   if (clean.length < 3) return clean;
-  if (eq(clean[0], clean[clean.length - 1])) {
-    return clean.slice(0, -1);
-  }
+  if (eq(clean[0], clean[clean.length - 1])) return clean.slice(0, -1);
   return clean;
 }
 
-function closeLoop(points: CadPoint[]): CadPoint[] {
+function closeLoop(points: Point[]): Point[] {
   const clean = dedupeSequential(points);
   if (clean.length < 3) return clean;
-  if (!eq(clean[0], clean[clean.length - 1])) {
-    return [...clean, rp(clean[0])];
-  }
+  if (!eq(clean[0], clean[clean.length - 1])) return [...clean, rp(clean[0])];
   return clean;
 }
 
-function inwardNormal(a: CadPoint, b: CadPoint, clockwise: boolean): Vec2 {
+function inwardNormal(a: Point, b: Point, clockwise: boolean): Vec2 {
   const d = normalize(sub(b, a));
   return clockwise ? { x: d.y, y: -d.x } : { x: -d.y, y: d.x };
 }
 
 function lineIntersection(
-  p: CadPoint,
+  p: Point,
   r: Vec2,
-  q: CadPoint,
+  q: Point,
   s: Vec2
-): { point: CadPoint; t: number; u: number } | null {
+): { point: Point; t: number; u: number } | null {
   const rxs = cross(r, s);
   const qmp = sub(q, p);
-
   if (Math.abs(rxs) <= EPS) return null;
 
   const t = cross(qmp, s) / rxs;
@@ -196,24 +127,21 @@ function lineIntersection(
 }
 
 function segmentIntersection(
-  a1: CadPoint,
-  a2: CadPoint,
-  b1: CadPoint,
-  b2: CadPoint
-): { point: CadPoint; ta: number; tb: number } | null {
+  a1: Point,
+  a2: Point,
+  b1: Point,
+  b2: Point
+): { point: Point; ta: number; tb: number } | null {
   const r = sub(a2, a1);
   const s = sub(b2, b1);
   const hit = lineIntersection(a1, r, b1, s);
   if (!hit) return null;
 
-  if (hit.t < -EPS || hit.t > 1 + EPS || hit.u < -EPS || hit.u > 1 + EPS) {
-    return null;
-  }
-
+  if (hit.t < -EPS || hit.t > 1 + EPS || hit.u < -EPS || hit.u > 1 + EPS) return null;
   return { point: hit.point, ta: hit.t, tb: hit.u };
 }
 
-function pointLineDistance(p: CadPoint, a: CadPoint, b: CadPoint): number {
+function pointLineDistance(p: Point, a: Point, b: Point): number {
   const ab = sub(b, a);
   const ap = sub(p, a);
   const L = len(ab);
@@ -221,15 +149,15 @@ function pointLineDistance(p: CadPoint, a: CadPoint, b: CadPoint): number {
   return Math.abs(cross(ap, ab)) / L;
 }
 
-function appendPoint(out: CadPoint[], p: CadPoint): void {
+function appendPoint(out: Point[], p: Point): void {
   const q = rp(p);
   const last = out[out.length - 1];
   if (!last || !eq(last, q)) out.push(q);
 }
 
 function appendArc(
-  out: CadPoint[],
-  center: CadPoint,
+  out: Point[],
+  center: Point,
   radius: number,
   fromAngle: number,
   toAngle: number,
@@ -258,12 +186,12 @@ function appendArc(
 }
 
 function clipMiter(
-  corner: CadPoint,
-  intersection: CadPoint,
+  corner: Point,
+  intersection: Point,
   offsetAbs: number,
   miterLimit: number,
-  fallback: CadPoint
-): CadPoint {
+  fallback: Point
+): Point {
   const miterLen = dist(corner, intersection);
   if (offsetAbs <= EPS) return fallback;
   if (miterLen / offsetAbs > miterLimit) return fallback;
@@ -271,20 +199,19 @@ function clipMiter(
 }
 
 function rawOffsetLoop(
-  polyline: CadPoint[],
+  polyline: Point[],
   offset: number,
   joinType: JoinType,
   miterLimit: number
-): CadPoint[] {
+): Point[] {
   const base = normalizeClosedPolyline(polyline);
   if (base.length < 3 || Math.abs(offset) <= EPS) return [];
 
   const clockwise = isClockwise(base);
   const signedOffset = clockwise ? offset : -offset;
   const offsetAbs = Math.abs(signedOffset);
-
   const n = base.length;
-  const out: CadPoint[] = [];
+  const out: Point[] = [];
 
   for (let i = 0; i < n; i++) {
     const prev = base[(i - 1 + n) % n];
@@ -302,7 +229,6 @@ function rawOffsetLoop(
     const s2p = add(curr, mul(n2, signedOffset));
 
     const hit = lineIntersection(s1p, prevDir, s2p, nextDir);
-
     const p1 = rp(s1p);
     const p2 = rp(s2p);
 
@@ -315,10 +241,7 @@ function rawOffsetLoop(
     }
 
     if (joinType === "miter" && hit && convex) {
-      const fallback = rp({
-        x: (p1.x + p2.x) / 2,
-        y: (p1.y + p2.y) / 2,
-      });
+      const fallback = rp({ x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 });
       appendPoint(out, clipMiter(curr, hit.point, offsetAbs, miterLimit, fallback));
       continue;
     }
@@ -332,17 +255,14 @@ function rawOffsetLoop(
       continue;
     }
 
-    if (hit) {
-      appendPoint(out, hit.point);
-    } else {
-      appendPoint(out, p2);
-    }
+    if (hit) appendPoint(out, hit.point);
+    else appendPoint(out, p2);
   }
 
   return closeLoop(out);
 }
 
-function splitSegmentsAtIntersections(loop: CadPoint[]): Segment[] {
+function splitSegmentsAtIntersections(loop: Point[]): Segment[] {
   const closed = closeLoop(loop);
   if (closed.length < 4) return [];
 
@@ -359,27 +279,20 @@ function splitSegmentsAtIntersections(loop: CadPoint[]): Segment[] {
     for (let j = i + 1; j < baseSegments.length; j++) {
       const si = baseSegments[i];
       const sj = baseSegments[j];
-
-      const adjacent =
-        j === i + 1 ||
-        (i === 0 && j === baseSegments.length - 1);
-
+      const adjacent = j === i + 1 || (i === 0 && j === baseSegments.length - 1);
       if (adjacent) continue;
 
       const hit = segmentIntersection(si.a, si.b, sj.a, sj.b);
       if (!hit) continue;
-
       if (hit.ta > EPS && hit.ta < 1 - EPS) cuts[i].push(hit.ta);
       if (hit.tb > EPS && hit.tb < 1 - EPS) cuts[j].push(hit.tb);
     }
   }
 
   const out: Segment[] = [];
-
   for (let i = 0; i < baseSegments.length; i++) {
     const seg = baseSegments[i];
     const ts = Array.from(new Set(cuts[i].map((v) => round(v)))).sort((a, b) => a - b);
-
     const d = sub(seg.b, seg.a);
 
     for (let k = 0; k < ts.length - 1; k++) {
@@ -389,7 +302,6 @@ function splitSegmentsAtIntersections(loop: CadPoint[]): Segment[] {
 
       const a = rp({ x: seg.a.x + d.x * t0, y: seg.a.y + d.y * t0 });
       const b = rp({ x: seg.a.x + d.x * t1, y: seg.a.y + d.y * t1 });
-
       if (!eq(a, b)) out.push({ a, b });
     }
   }
@@ -397,7 +309,7 @@ function splitSegmentsAtIntersections(loop: CadPoint[]): Segment[] {
   return out;
 }
 
-function keyOfPoint(p: CadPoint): string {
+function keyOfPoint(p: Point): string {
   return `${round(p.x)}:${round(p.y)}`;
 }
 
@@ -405,7 +317,7 @@ function buildGraph(segments: Segment[]): { nodes: Node[]; edges: DirectedEdge[]
   const nodeMap = new Map<string, number>();
   const nodes: Node[] = [];
 
-  const getNodeId = (p: CadPoint): number => {
+  const getNodeId = (p: Point): number => {
     const key = keyOfPoint(p);
     const found = nodeMap.get(key);
     if (found != null) return found;
@@ -424,20 +336,13 @@ function buildGraph(segments: Segment[]): { nodes: Node[]; edges: DirectedEdge[]
 
     const ab = sub(nodes[b], nodes[a]);
     const ba = sub(nodes[a], nodes[b]);
-
     edges.push({ from: a, to: b, angle: angleOf(ab), used: false });
     edges.push({ from: b, to: a, angle: angleOf(ba), used: false });
   }
 
   const outgoing: number[][] = Array.from({ length: nodes.length }, () => []);
-
-  for (let i = 0; i < edges.length; i++) {
-    outgoing[edges[i].from].push(i);
-  }
-
-  for (const arr of outgoing) {
-    arr.sort((ia, ib) => edges[ia].angle - edges[ib].angle);
-  }
+  for (let i = 0; i < edges.length; i++) outgoing[edges[i].from].push(i);
+  for (const arr of outgoing) arr.sort((ia, ib) => edges[ia].angle - edges[ib].angle);
 
   return { nodes, edges, outgoing };
 }
@@ -467,7 +372,6 @@ function traceFace(
 
     const arrivalAngle = angleOf(sub(nodes[e.from], nodes[e.to]));
     const outs = outgoing[e.to];
-
     if (outs.length === 0) break;
 
     let bestIdx = -1;
@@ -476,8 +380,7 @@ function traceFace(
     for (const candIdx of outs) {
       const cand = edges[candIdx];
       if (cand.used) continue;
-      const arrival = arrivalAngle; // Use arrivalAngle directly
-      const turn = angleDeltaCW(arrival, cand.angle);
+      const turn = angleDeltaCW(arrivalAngle, cand.angle);
       if (turn < bestTurn) {
         bestTurn = turn;
         bestIdx = candIdx;
@@ -496,18 +399,17 @@ function traceFace(
   return cycle;
 }
 
-function simplifyCollinear(points: CadPoint[]): CadPoint[] {
+function simplifyCollinear(points: Point[]): Point[] {
   const closed = closeLoop(points);
   if (closed.length < 4) return closed;
 
   const open = closed.slice(0, -1);
-  const out: CadPoint[] = [];
+  const out: Point[] = [];
 
   for (let i = 0; i < open.length; i++) {
     const prev = open[(i - 1 + open.length) % open.length];
     const curr = open[i];
     const next = open[(i + 1) % open.length];
-
     if (pointLineDistance(curr, prev, next) <= EPS) continue;
     out.push(curr);
   }
@@ -515,12 +417,12 @@ function simplifyCollinear(points: CadPoint[]): CadPoint[] {
   return closeLoop(out);
 }
 
-function extractSimpleLoops(loop: CadPoint[]): CadPoint[][] {
+function extractSimpleLoops(loop: Point[]): Point[][] {
   const pieces = splitSegmentsAtIntersections(loop);
   if (pieces.length === 0) return [];
 
   const { nodes, edges, outgoing } = buildGraph(pieces);
-  const cycles: CadPoint[][] = [];
+  const cycles: Point[][] = [];
 
   for (let i = 0; i < edges.length; i++) {
     if (edges[i].used) continue;
@@ -529,20 +431,13 @@ function extractSimpleLoops(loop: CadPoint[]): CadPoint[][] {
 
     const pts = cycleNodeIds.map((id) => nodes[id]);
     const clean = simplifyCollinear(pts);
-
-    if (clean.length >= 4 && Math.abs(signedArea(clean.slice(0, -1))) > EPS) {
-      cycles.push(clean);
-    }
+    if (clean.length >= 4 && Math.abs(signedArea(clean.slice(0, -1))) > EPS) cycles.push(clean);
   }
 
-  const unique = new Map<string, CadPoint[]>();
-
+  const unique = new Map<string, Point[]>();
   for (const c of cycles) {
     const open = c.slice(0, -1);
-    const canon = open
-      .map((p) => `${round(p.x)},${round(p.y)}`)
-      .sort()
-      .join("|");
+    const canon = open.map((p) => `${round(p.x)},${round(p.y)}`).sort().join("|");
     if (!unique.has(canon)) unique.set(canon, c);
   }
 
@@ -551,7 +446,7 @@ function extractSimpleLoops(loop: CadPoint[]): CadPoint[][] {
   );
 }
 
-function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
+function pointInPolygon(point: Point, polygon: Point[]): boolean {
   const poly = closeLoop(polygon);
   let inside = false;
 
@@ -571,7 +466,7 @@ function pointInPolygon(point: CadPoint, polygon: CadPoint[]): boolean {
   return inside;
 }
 
-function centroid(points: CadPoint[]): CadPoint {
+function centroid(points: Point[]): Point {
   const poly = closeLoop(points);
   let cx = 0;
   let cy = 0;
@@ -588,10 +483,7 @@ function centroid(points: CadPoint[]): CadPoint {
 
   a *= 0.5;
   if (Math.abs(a) <= EPS) {
-    const sum = poly.slice(0, -1).reduce(
-      (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
-      { x: 0, y: 0 }
-    );
+    const sum = poly.slice(0, -1).reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
     const n = Math.max(1, poly.length - 1);
     return { x: sum.x / n, y: sum.y / n };
   }
@@ -600,11 +492,11 @@ function centroid(points: CadPoint[]): CadPoint {
 }
 
 export function buildOffset(
-  polyline: CadPoint[],
+  polyline: Point[],
   offset: number,
   joinType: JoinType = "round",
   miterLimit = DEFAULT_MITER_LIMIT
-): CadPoint[][] {
+): Point[][] {
   const raw = rawOffsetLoop(polyline, offset, joinType, miterLimit);
   if (raw.length < 4) return [];
 
@@ -612,203 +504,11 @@ export function buildOffset(
   if (loops.length === 0) return [];
 
   const src = closeLoop(normalizeClosedPolyline(polyline));
-
   const filtered = loops.filter((loop) => {
     const c = centroid(loop);
-    if (offset < 0) {
-      return pointInPolygon(c, src);
-    }
+    if (offset < 0) return pointInPolygon(c, src);
     return true;
   });
 
   return filtered.length > 0 ? filtered : loops;
-}
-
-export function buildContourOffsets(
-  polyline: CadPoint[],
-  isExternal: boolean,
-  step: number,
-  maxOffset: number,
-  joinType: JoinType = "round",
-  miterLimit = DEFAULT_MITER_LIMIT
-): CadPoint[][] {
-  const base = normalizeClosedPolyline(polyline);
-  if (base.length < 3 || step <= EPS || maxOffset < 0) return [];
-
-  const result: CadPoint[][] = [closeLoop(base)];
-  const sign = isExternal ? 1 : -1;
-  const limit = Math.abs(maxOffset);
-
-  for (let current = step; current <= limit + EPS; current += step) {
-    const loops = buildOffset(base, sign * current, joinType, miterLimit);
-    if (loops.length === 0) break;
-
-    const main = loops.sort(
-      (a, b) => Math.abs(signedArea(b.slice(0, -1))) - Math.abs(signedArea(a.slice(0, -1)))
-    )[0];
-
-    if (!main || main.length < 4) break;
-    result.push(main);
-  }
-
-  return result;
-}
-
-export function buildPocketOffsets(
-  polyline: CadPoint[],
-  toolRadius: number,
-  stepover: number,
-  joinType: JoinType = "round",
-  miterLimit = DEFAULT_MITER_LIMIT,
-  keepCenterCleanup = true
-): CadPoint[][] {
-  const base = normalizeClosedPolyline(polyline);
-  if (base.length < 3 || toolRadius <= EPS || stepover <= EPS) return [];
-
-  const paths: CadPoint[][] = [];
-  let currentLoops = buildOffset(base, -toolRadius, joinType, miterLimit);
-
-  while (currentLoops.length > 0) {
-    const sorted = currentLoops
-      .filter((l) => l.length >= 4)
-      .sort((a, b) => Math.abs(signedArea(b.slice(0, -1))) - Math.abs(signedArea(a.slice(0, -1))));
-
-    if (sorted.length === 0) break;
-
-    for (const loop of sorted) {
-      paths.push(loop);
-    }
-
-    const nextSeed = sorted[0];
-    const next = buildOffset(nextSeed.slice(0, -1), -stepover, joinType, miterLimit);
-    if (next.length === 0) break;
-    currentLoops = next;
-  }
-
-  if (keepCenterCleanup && paths.length === 0) {
-    const c = centroid(base);
-    if (pointInPolygon(c, closeLoop(base))) {
-      paths.push(closeLoop([
-        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
-        { x: c.x + toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
-        { x: c.x + toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
-        { x: c.x - toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
-      ]));
-    }
-  }
-
-  return paths;
-}
-
-function toToolpathPoints(points: CadPoint[], z?: number): ToolpathPoint[] {
-  return points.map((p) => ({ x: round(p.x), y: round(p.y), ...(z != null ? { z } : {}) }));
-}
-
-export function planContourOperation(input: PlanContourInput): PlannedOperation {
-  const {
-    shapeId,
-    shapeName,
-    polyline,
-    toolRadius,
-    isExternal,
-    stepover = toolRadius,
-    maxOffset = toolRadius,
-    depth,
-    joinType = "round",
-    miterLimit = DEFAULT_MITER_LIMIT,
-  } = input;
-
-  const startOffset = isExternal ? toolRadius : -toolRadius;
-  const offsets = buildContourOffsets(
-    polyline,
-    isExternal,
-    Math.max(stepover, EPS),
-    Math.max(maxOffset, Math.abs(toolRadius)),
-    joinType,
-    miterLimit
-  );
-
-  const paths: PlannedPath[] = [];
-
-  if (offsets.length === 0) {
-    const single = buildOffset(polyline, startOffset, joinType, miterLimit);
-    for (let i = 0; i < single.length; i++) {
-      paths.push({
-        name: `${shapeName}-contour-${i + 1}`,
-        points: toToolpathPoints(single[i], depth),
-        closed: true,
-        depth,
-      });
-    }
-  } else {
-    for (let i = 0; i < offsets.length; i++) {
-      const off = i === 0
-        ? buildOffset(polyline, startOffset, joinType, miterLimit)[0] ?? offsets[0]
-        : offsets[i];
-
-      paths.push({
-        name: `${shapeName}-contour-${i + 1}`,
-        points: toToolpathPoints(off, depth),
-        closed: true,
-        depth,
-      });
-    }
-  }
-
-  return { shapeId, shapeName, paths };
-}
-
-export function planPocketOperation(input: PlanPocketInput): PlannedOperation {
-  const {
-    shapeId,
-    shapeName,
-    polyline,
-    toolRadius,
-    stepover,
-    depth,
-    joinType = "round",
-    miterLimit = DEFAULT_MITER_LIMIT,
-    keepCenterCleanup = true,
-  } = input;
-
-  const pocketLoops = buildPocketOffsets(
-    polyline,
-    toolRadius,
-    stepover,
-    joinType,
-    miterLimit,
-    keepCenterCleanup
-  );
-
-  const paths: PlannedPath[] = pocketLoops.map((loop, i) => ({
-    name: `${shapeName}-pocket-${i + 1}`,
-    points: toToolpathPoints(loop, depth),
-    closed: true,
-    depth,
-  }));
-
-  return { shapeId, shapeName, paths };
-}
-
-export function planCamOperation(
-  mode: CamMode,
-  input: PlanContourInput | PlanPocketInput
-): PlannedOperation {
-  if (mode === "contour") {
-    return planContourOperation(input as PlanContourInput);
-  }
-  return planPocketOperation(input as PlanPocketInput);
-}
-
-export function plannedOperationToToolpaths(
-  op: PlannedOperation,
-  kind: "contour" | "pocket"
-): Toolpath[] {
-  return op.paths.map((p) => ({
-    name: p.name,
-    points: p.points,
-    closed: p.closed,
-    cutZ: p.depth,
-    kind,
-  }));
 }

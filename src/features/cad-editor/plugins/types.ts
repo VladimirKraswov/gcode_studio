@@ -3,36 +3,36 @@ import type {
   SketchDocument,
   SketchShape,
   SketchTool,
+  SketchPoint,
 } from "../model/types";
 import type { ViewTransform } from "../model/view";
 import type { SelectionState } from "../model/selection";
 import type { Bounds2D } from "../model/shapeBounds";
+import type { SketchSolveState } from "../model/solver/diagnostics";
 
 export type ShapeRenderProps<TShape extends SketchShape = SketchShape> = {
   shape: TShape;
+  points: SketchPoint[];
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
   textPreviewMap: Record<string, { x: number; y: number }[][]>;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
 };
 
 export type ShapePlugin<TShape extends SketchShape = SketchShape> = {
   type: TShape["type"];
   render: (props: ShapeRenderProps<TShape>) => React.ReactNode;
-  getBounds: (shape: TShape) => Bounds2D;
+  getBounds: (shape: TShape, points: SketchPoint[]) => Bounds2D;
   hitTest?: (
     point: { x: number; y: number },
     shape: TShape,
+    points: SketchPoint[],
     tolerance: number,
   ) => boolean;
 };
 
-/**
- * "Стертый" тип для хранения в registry.
- * На границе registry мы теряем конкретный TShape,
- * а типобезопасность сохраняем через defineShapePlugin().
- */
 export type AnyShapePlugin = ShapePlugin<any>;
 
 export function defineShapePlugin<TShape extends SketchShape>(

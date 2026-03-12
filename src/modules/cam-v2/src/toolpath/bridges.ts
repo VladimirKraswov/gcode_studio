@@ -1,4 +1,6 @@
-import type { CadPoint } from "@/features/cad-editor/geometry/textGeometry";
+// src/toolpath/bridges.ts
+
+import type { Point } from "../types";
 
 export type BridgeSpan = {
   start: number;
@@ -11,21 +13,19 @@ function round(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function distance(a: CadPoint, b: CadPoint): number {
+function distance(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
-function normalizeClosedContour(contour: CadPoint[]): CadPoint[] {
+function normalizeClosedContour(contour: Point[]): Point[] {
   if (contour.length < 2) return contour.map((p) => ({ ...p }));
   const first = contour[0];
   const last = contour[contour.length - 1];
-  if (distance(first, last) <= EPS) {
-    return contour.slice(0, -1).map((p) => ({ ...p }));
-  }
+  if (distance(first, last) <= EPS) return contour.slice(0, -1).map((p) => ({ ...p }));
   return contour.map((p) => ({ ...p }));
 }
 
-export function contourLength(contour: CadPoint[]): number {
+export function contourLength(contour: Point[]): number {
   const normalized = normalizeClosedContour(contour);
   if (normalized.length < 2) return 0;
 
@@ -36,11 +36,7 @@ export function contourLength(contour: CadPoint[]): number {
   return total;
 }
 
-export function buildBridgeSpans(
-  contour: CadPoint[],
-  bridgeCount: number,
-  bridgeWidth: number
-): BridgeSpan[] {
+export function buildBridgeSpans(contour: Point[], bridgeCount: number, bridgeWidth: number): BridgeSpan[] {
   const normalized = normalizeClosedContour(contour);
   if (normalized.length < 3) return [];
   if (bridgeCount <= 0 || bridgeWidth <= 0) return [];
@@ -54,10 +50,7 @@ export function buildBridgeSpans(
   const raw: BridgeSpan[] = [];
   for (let i = 0; i < bridgeCount; i++) {
     const center = (i + 0.5) * spacing;
-    raw.push({
-      start: center - width / 2,
-      end: center + width / 2,
-    });
+    raw.push({ start: center - width / 2, end: center + width / 2 });
   }
 
   const normalizedSpans: BridgeSpan[] = [];
@@ -86,23 +79,14 @@ export function buildBridgeSpans(
   const merged: BridgeSpan[] = [];
   for (const span of normalizedSpans) {
     const last = merged[merged.length - 1];
-    if (!last || span.start > last.end + EPS) {
-      merged.push({ ...span });
-    } else {
-      last.end = Math.max(last.end, span.end);
-    }
+    if (!last || span.start > last.end + EPS) merged.push({ ...span });
+    else last.end = Math.max(last.end, span.end);
   }
 
-  return merged.map((span) => ({
-    start: round(span.start),
-    end: round(span.end),
-  }));
+  return merged.map((span) => ({ start: round(span.start), end: round(span.end) }));
 }
 
-export function pointAtLength(
-  contour: CadPoint[],
-  at: number
-): CadPoint {
+export function pointAtLength(contour: Point[], at: number): Point {
   const normalized = normalizeClosedContour(contour);
   if (normalized.length === 0) return { x: 0, y: 0 };
   if (normalized.length === 1) return { ...normalized[0] };
@@ -135,31 +119,6 @@ export function pointAtLength(
   return { ...normalized[0] };
 }
 
-export function sampleContourByStep(
-  contour: CadPoint[],
-  step = 1
-): CadPoint[] {
-  const normalized = normalizeClosedContour(contour);
-  if (normalized.length < 2) return normalized;
-
-  const total = contourLength(normalized);
-  if (total <= EPS) return normalized;
-
-  const count = Math.max(normalized.length, Math.ceil(total / Math.max(step, 0.25)));
-  const points: CadPoint[] = [];
-
-  for (let i = 0; i < count; i++) {
-    points.push(pointAtLength(normalized, (total * i) / count));
-  }
-
-  return points;
-}
-
-export function isInsideAnyBridge(
-  lengthPos: number,
-  spans: BridgeSpan[]
-): boolean {
-  return spans.some(
-    (span) => lengthPos >= span.start - EPS && lengthPos <= span.end + EPS
-  );
+export function isInsideAnyBridge(lengthPos: number, spans: BridgeSpan[]): boolean {
+  return spans.some((span) => lengthPos >= span.start - EPS && lengthPos <= span.end + EPS);
 }
