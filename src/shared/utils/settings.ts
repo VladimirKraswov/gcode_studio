@@ -4,6 +4,10 @@ export type UserSettings = {
   cad: {
     panButton: CadPanButtonMode;
   };
+  preview: {
+    showToolpath: boolean;
+    showRapids: boolean;
+  };
 };
 
 const STORAGE_KEY = "gcode-studio-settings";
@@ -11,6 +15,10 @@ const STORAGE_KEY = "gcode-studio-settings";
 const DEFAULT_SETTINGS: UserSettings = {
   cad: {
     panButton: "right",
+  },
+  preview: {
+    showToolpath: true,
+    showRapids: true,
   },
 };
 
@@ -20,6 +28,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isPanButtonMode(value: unknown): value is CadPanButtonMode {
   return value === "middle" || value === "right" || value === "both";
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === "boolean";
 }
 
 export function getDefaultSettings(): UserSettings {
@@ -39,13 +51,27 @@ export function loadSettings(): UserSettings {
     }
 
     const cad = isObject(parsed.cad) ? parsed.cad : {};
+    const preview = isObject(parsed.preview) ? parsed.preview : {};
+
     const panButton = isPanButtonMode(cad.panButton)
       ? cad.panButton
       : DEFAULT_SETTINGS.cad.panButton;
 
+    const showToolpath = isBoolean(preview.showToolpath)
+      ? preview.showToolpath
+      : DEFAULT_SETTINGS.preview.showToolpath;
+
+    const showRapids = isBoolean(preview.showRapids)
+      ? preview.showRapids
+      : DEFAULT_SETTINGS.preview.showRapids;
+
     return {
       cad: {
         panButton,
+      },
+      preview: {
+        showToolpath,
+        showRapids,
       },
     };
   } catch {

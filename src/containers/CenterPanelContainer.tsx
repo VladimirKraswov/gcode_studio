@@ -50,6 +50,8 @@ export function CenterPanelContainer() {
     setCameraInfo,
   } = useCad();
   const { settings } = useSettings();
+  const showToolpath = settings.preview.showToolpath;
+  const showRapids = settings.preview.showRapids;
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 bg-panel-solid">
