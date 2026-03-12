@@ -7,7 +7,7 @@ import {
   optimizeTravel,
   planPocket,
   planProfile,
-} from "@/shared/libs/cam-v2/src"
+} from "@/shared/libs/cam-v2/src";
 
 import type {
   Contour,
