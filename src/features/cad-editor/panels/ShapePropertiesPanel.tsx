@@ -9,6 +9,8 @@ import {
   FiMove,
   FiRefreshCw,
   FiType,
+  FiHash,
+  FiTrash2,
 } from "react-icons/fi";
 import { createDefaultCamSettings } from "../model/document";
 import type {
@@ -16,6 +18,7 @@ import type {
   SketchCamSettings,
   SketchDocument,
   SketchShape,
+  SketchConstraint,
 } from "../model/types";
 import { updateShape } from "../model/document";
 import { updateGeometry } from "../model/solver/manager";
@@ -23,6 +26,11 @@ import type { SelectionState } from "../model/selection";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
 import { Button } from "@/shared/components/ui/Button";
+import {
+  getConstraintPointIds,
+  getConstraintShapeIds,
+  isDimensionalConstraint,
+} from "../model/constraints";
 
 export type ShapePropertiesPanelProps = {
   document: SketchDocument;
@@ -30,6 +38,7 @@ export type ShapePropertiesPanelProps = {
   selection: SelectionState;
   onInsertBSplineControlPoint?: () => void;
   onRemoveBSplineControlPoint?: () => void;
+  onDeleteConstraint?: (constraintId: string) => void;
 };
 
 const EDIT_ARRAY_GROUP_EVENT = "cad:edit-array-group";
@@ -62,6 +71,34 @@ function getShapeIcon(type: SketchShape["type"]) {
       return <FiImage size={14} />;
     default:
       return <FiEdit3 size={14} />;
+  }
+}
+
+function getConstraintLabel(constraint: SketchConstraint): string {
+  const value =
+    typeof constraint.value === "number"
+      ? ` ${Number(constraint.value.toFixed(3))}`
+      : "";
+
+  switch (constraint.type) {
+    case "horizontal": return "Horizontal";
+    case "vertical": return "Vertical";
+    case "coincident": return "Coincident";
+    case "parallel": return "Parallel";
+    case "perpendicular": return "Perpendicular";
+    case "equal": return "Equal";
+    case "tangent": return "Tangent";
+    case "distance": return `Distance${value}`;
+    case "distance-x": return `Distance X${value}`;
+    case "distance-y": return `Distance Y${value}`;
+    case "angle": return `Angle${value}`;
+    case "radius": return `Radius${value}`;
+    case "diameter": return `Diameter${value}`;
+    case "point-on-object": return "Point on Object";
+    case "midpoint": return "Midpoint";
+    case "collinear": return "Collinear";
+    case "lock": return "Lock";
+    default: return constraint.type;
   }
 }
 
@@ -104,15 +141,30 @@ export function ShapePropertiesPanel({
   selection,
   onInsertBSplineControlPoint = () => {},
   onRemoveBSplineControlPoint = () => {},
+  onDeleteConstraint = () => {},
 }: ShapePropertiesPanelProps) {
   const selectedShape = useMemo(
-    () => document.shapes.find((s) => s.id === selection.primaryId) ?? null,
-    [document.shapes, selection.primaryId],
+    () =>
+      selection.primaryRef?.kind === "shape"
+        ? document.shapes.find((shape) => shape.id === selection.primaryRef?.id) ?? null
+        : null,
+    [document.shapes, selection.primaryRef],
   );
 
   const selectedPoint = useMemo(
-    () => document.points.find((p) => p.id === selection.primaryId) ?? null,
-    [document.points, selection.primaryId],
+    () =>
+      selection.primaryRef?.kind === "point"
+        ? document.points.find((point) => point.id === selection.primaryRef?.id) ?? null
+        : null,
+    [document.points, selection.primaryRef],
+  );
+
+  const selectedConstraint = useMemo(
+    () =>
+      selection.primaryRef?.kind === "constraint"
+        ? document.constraints.find((constraint) => constraint.id === selection.primaryRef?.id) ?? null
+        : null,
+    [document.constraints, selection.primaryRef],
   );
 
   const selectedGroup = useMemo(
@@ -130,8 +182,8 @@ export function ShapePropertiesPanel({
 
   const lineLength = useMemo(() => {
     if (selectedShape?.type !== "line") return null;
-    const p1 = document.points.find((p) => p.id === (selectedShape as any).p1);
-    const p2 = document.points.find((p) => p.id === (selectedShape as any).p2);
+    const p1 = document.points.find((point) => point.id === (selectedShape as any).p1);
+    const p2 = document.points.find((point) => point.id === (selectedShape as any).p2);
     if (!p1 || !p2) return 0;
     return Math.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
   }, [selectedShape, document.points]);
@@ -140,7 +192,7 @@ export function ShapePropertiesPanel({
     ? (selectedShape as SketchBSpline)
     : null;
 
-  if (!selectedShape && !selectedPoint) {
+  if (!selectedShape && !selectedPoint && !selectedConstraint) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <FiInfo size={32} className="text-border mb-3" />
@@ -190,8 +242,8 @@ export function ShapePropertiesPanel({
                 onChange={(e) => {
                   setDocument((prev) => ({
                     ...prev,
-                    points: prev.points.map((p) =>
-                      p.id === selectedPoint.id ? { ...p, isFixed: e.target.checked } : p,
+                    points: prev.points.map((point) =>
+                      point.id === selectedPoint.id ? { ...point, isFixed: e.target.checked } : point,
                     ),
                   }));
                 }}
@@ -203,6 +255,137 @@ export function ShapePropertiesPanel({
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (selectedConstraint) {
+    const pointIds = getConstraintPointIds(selectedConstraint);
+    const shapeIds = getConstraintShapeIds(selectedConstraint);
+
+    return (
+      <div className="flex flex-col gap-4 p-1">
+        <div className="flex items-center gap-3 p-2 bg-panel-muted rounded-lg border border-border">
+          <div className="w-8 h-8 rounded bg-primary-soft text-primary grid place-items-center">
+            <FiHash size={14} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[13px] font-bold text-text truncate">
+              {getConstraintLabel(selectedConstraint)}
+            </div>
+            <div className="text-[11px] text-text-muted capitalize">
+              Constraint
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <SectionTitle title="Параметры" />
+          <div className="space-y-3">
+            <div className="grid gap-1.5">
+              <Label>Тип</Label>
+              <Input value={selectedConstraint.type} disabled />
+            </div>
+
+            {isDimensionalConstraint(selectedConstraint) && (
+              <div className="grid gap-1.5">
+                <Label>Значение</Label>
+                <Input
+                  type="number"
+                  value={selectedConstraint.value ?? 0}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    if (!Number.isFinite(value)) return;
+
+                    setDocument((prev) =>
+                      updateGeometry({
+                        ...prev,
+                        constraints: prev.constraints.map((constraint) =>
+                          constraint.id === selectedConstraint.id
+                            ? { ...constraint, value }
+                            : constraint,
+                        ),
+                      }),
+                    );
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="constraint-enabled"
+                checked={selectedConstraint.enabled}
+                onChange={(e) => {
+                  setDocument((prev) =>
+                    updateGeometry({
+                      ...prev,
+                      constraints: prev.constraints.map((constraint) =>
+                        constraint.id === selectedConstraint.id
+                          ? { ...constraint, enabled: e.target.checked }
+                          : constraint,
+                      ),
+                    }),
+                  );
+                }}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="constraint-enabled" className="mb-0 cursor-pointer">
+                Ограничение активно
+              </Label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="constraint-driven"
+                checked={!!selectedConstraint.driven}
+                onChange={(e) => {
+                  setDocument((prev) =>
+                    updateGeometry({
+                      ...prev,
+                      constraints: prev.constraints.map((constraint) =>
+                        constraint.id === selectedConstraint.id
+                          ? { ...constraint, driven: e.target.checked }
+                          : constraint,
+                      ),
+                    }),
+                  );
+                }}
+                className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+              />
+              <Label htmlFor="constraint-driven" className="mb-0 cursor-pointer">
+                Справочный размер (Driven)
+              </Label>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <SectionTitle title="Привязки" />
+          <div className="space-y-2">
+            <div className="grid gap-1.5">
+              <Label>Точки</Label>
+              <Input value={pointIds.join(", ")} disabled />
+            </div>
+
+            <div className="grid gap-1.5">
+              <Label>Объекты</Label>
+              <Input value={shapeIds.join(", ")} disabled />
+            </div>
+          </div>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full border-danger text-danger"
+          onClick={() => onDeleteConstraint(selectedConstraint.id)}
+        >
+          <FiTrash2 size={14} className="mr-2" />
+          Удалить ограничение
+        </Button>
       </div>
     );
   }
@@ -300,34 +483,23 @@ export function ShapePropertiesPanel({
                 type="number"
                 value={lineLength?.toFixed(3)}
                 onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  if (isNaN(val)) return;
+                  const value = parseFloat(e.target.value);
+                  if (isNaN(value)) return;
 
                   setDocument((prev) => {
-                    const s = selectedShape as any;
                     const existing = prev.constraints.find(
-                      (c) =>
-                        c.type === "distance" &&
-                        c.pointIds.includes(s.p1) &&
-                        c.pointIds.includes(s.p2),
+                      (constraint) =>
+                        constraint.type === "distance" &&
+                        getConstraintShapeIds(constraint).includes(selectedShape.id),
                     );
 
-                    let nextConstraints = prev.constraints;
-                    if (existing) {
-                      nextConstraints = prev.constraints.map((c) =>
-                        c.id === existing.id ? { ...c, value: val } : c,
-                      );
-                    } else {
-                      const newC = {
-                        id: `const-${Math.random()}`,
-                        type: "distance" as const,
-                        pointIds: [s.p1, s.p2],
-                        shapeIds: [s.id],
-                        value: val,
-                        enabled: true,
-                      };
-                      nextConstraints = [...prev.constraints, newC];
-                    }
+                    const nextConstraints = existing
+                      ? prev.constraints.map((constraint) =>
+                          constraint.id === existing.id
+                            ? { ...constraint, value }
+                            : constraint,
+                        )
+                      : prev.constraints;
 
                     return updateGeometry({
                       ...prev,
@@ -347,9 +519,9 @@ export function ShapePropertiesPanel({
                   type="number"
                   value={(selectedShape as any).radius?.toFixed(3)}
                   onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (isNaN(val)) return;
-                    updateSelected({ radius: val });
+                    const value = parseFloat(e.target.value);
+                    if (isNaN(value)) return;
+                    updateSelected({ radius: value });
                     setDocument((prev) => updateGeometry(prev));
                   }}
                 />
@@ -360,9 +532,9 @@ export function ShapePropertiesPanel({
                   type="number"
                   value={((selectedShape as any).radius * 2)?.toFixed(3)}
                   onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    if (isNaN(val)) return;
-                    updateSelected({ radius: val / 2 });
+                    const value = parseFloat(e.target.value);
+                    if (isNaN(value)) return;
+                    updateSelected({ radius: value / 2 });
                     setDocument((prev) => updateGeometry(prev));
                   }}
                 />

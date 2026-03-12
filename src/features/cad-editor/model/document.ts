@@ -1,8 +1,5 @@
-// =============================
-// FILE: src/modules/cad/model/document.ts
-// =============================
-
 import type { SketchCamSettings, SketchDocument, SketchShape, SketchPoint } from "./types";
+import { getConstraintShapeIds } from "./constraints";
 
 export function createDefaultCamSettings(): SketchCamSettings {
   return {
@@ -58,19 +55,15 @@ export function createEmptySketchDocument(): SketchDocument {
   return {
     width: 300,
     height: 180,
-
     units: "mm",
     workOffset: "G54",
-
     startZ: 5,
     safeZ: 5,
     cutZ: -1,
     passDepth: 1,
-
     feedCut: 500,
     feedPlunge: 180,
     feedRapid: 1200,
-
     spindleOn: false,
     spindleSpeed: 12000,
     spindleDirection: "cw",
@@ -78,14 +71,11 @@ export function createEmptySketchDocument(): SketchDocument {
     dwellMs: 0,
     coolant: false,
     returnHome: true,
-
     toolType: "router",
     toolNumber: 1,
     toolDiameter: 3.175,
     stepover: 0.45,
-
     defaultCamSettings: createDefaultCamSettings(),
-
     snapEnabled: true,
     snapStep: 5,
     points: [],
@@ -109,7 +99,7 @@ export function removeShape(document: SketchDocument, shapeId: string): SketchDo
     ...document,
     shapes: document.shapes.filter((shape) => shape.id !== shapeId),
     constraints: document.constraints.filter(
-      (constraint) => !constraint.shapeIds.includes(shapeId),
+      (constraint) => !getConstraintShapeIds(constraint).includes(shapeId),
     ),
   };
 }

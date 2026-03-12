@@ -165,6 +165,8 @@ export default function EditTab(props: EditTabProps) {
               onScaleHandlePointerDown={editor.bindScaleHandleStart}
               onRotateHandlePointerDown={editor.bindRotateHandleStart}
               onConstraintPointerDown={editor.onConstraintPointerDown}
+              onConstraintValueChange={editor.updateConstraintValue}
+              onConstraintDelete={editor.deleteConstraintById}
               isTransforming={editor.isTransforming}
             />
           </div>

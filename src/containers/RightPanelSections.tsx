@@ -1,11 +1,15 @@
 import { FiEdit, FiSettings } from "react-icons/fi";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
-import { ShapePropertiesPanel, DocumentSettingsPanel, calculateBSplineInsertionPoint } from "@/features/cad-editor";
+import {
+  ShapePropertiesPanel,
+  DocumentSettingsPanel,
+  calculateBSplineInsertionPoint,
+} from "@/features/cad-editor";
 import type { SketchDocument, SelectionState } from "@/features/cad-editor";
 
 interface CadPropertiesSectionProps {
   editDocument: SketchDocument;
-  setEditDocument: (update: React.SetStateAction<SketchDocument>) => void;
+  setEditDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
   selection: SelectionState;
   cadEditor: any;
 }
@@ -23,17 +27,34 @@ export function CadPropertiesSection({
           document={editDocument}
           setDocument={setEditDocument}
           selection={selection}
+          onDeleteConstraint={(constraintId) => {
+            cadEditor?.deleteConstraintById?.(constraintId);
+          }}
           onInsertBSplineControlPoint={() => {
-            const primaryShape = editDocument.shapes.find((s) => s.id === selection.primaryId);
+            const primaryShapeId =
+              selection.primaryRef?.kind === "shape"
+                ? selection.primaryRef.id
+                : selection.primaryId;
+
+            const primaryShape = editDocument.shapes.find(
+              (s) => s.id === primaryShapeId,
+            );
             if (!primaryShape || primaryShape.type !== "bspline") return;
 
-            const insertionPoint = calculateBSplineInsertionPoint(primaryShape, editDocument.points);
+            const insertionPoint = calculateBSplineInsertionPoint(
+              primaryShape,
+              editDocument.points,
+            );
+
             if (insertionPoint) {
-              cadEditor?.insertControlPointToSelectedBSpline(insertionPoint.x, insertionPoint.y);
+              cadEditor?.insertControlPointToSelectedBSpline?.(
+                insertionPoint.x,
+                insertionPoint.y,
+              );
             }
           }}
           onRemoveBSplineControlPoint={() => {
-            cadEditor?.removeSelectedPointFromBSpline();
+            cadEditor?.removeSelectedPointFromBSpline?.();
           }}
         />
       </CollapsibleSection>
@@ -43,7 +64,7 @@ export function CadPropertiesSection({
 
 interface CamPropertiesSectionProps {
   editDocument: SketchDocument;
-  setEditDocument: (update: React.SetStateAction<SketchDocument>) => void;
+  setEditDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
 }
 
 export function CamPropertiesSection({
@@ -53,7 +74,10 @@ export function CamPropertiesSection({
   return (
     <div className="flex flex-col gap-4">
       <CollapsibleSection title="Настройки документа" icon={<FiSettings size={18} />}>
-        <DocumentSettingsPanel document={editDocument} setDocument={setEditDocument} />
+        <DocumentSettingsPanel
+          document={editDocument}
+          setDocument={setEditDocument}
+        />
       </CollapsibleSection>
     </div>
   );

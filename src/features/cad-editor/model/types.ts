@@ -1,7 +1,3 @@
-// =============================
-// FILE: src/modules/cad/model/types.ts
-// =============================
-
 export type SketchPolylinePoint = {
   x: number;
   y: number;
@@ -38,22 +34,34 @@ export type SketchConstraintType =
   | "angle"
   | "radius"
   | "diameter"
-  | "lock";
+  | "lock"
+  | "point-on-object"
+  | "midpoint"
+  | "collinear";
+
+export type SketchConstraintTarget =
+  | { kind: "point"; pointId: string }
+  | { kind: "shape"; shapeId: string }
+  | { kind: "line"; shapeId: string }
+  | { kind: "circle"; shapeId: string }
+  | { kind: "arc"; shapeId: string };
 
 export type SketchConstraint = {
   id: string;
   type: SketchConstraintType;
-  pointIds: string[];
-  shapeIds: string[];
+  targets: SketchConstraintTarget[];
   value?: number;
   parameterId?: string;
   enabled: boolean;
+  driven?: boolean;
+  labelX?: number;
+  labelY?: number;
 };
 
 export type SketchLinearArrayParams = {
   count: number;
   spacing: number;
-  axis: "x" | "y" | string; // ID of a line for axis
+  axis: "x" | "y" | string;
   direction: "positive" | "negative" | "both";
   gridSecondAxis?: {
     count: number;
@@ -64,7 +72,7 @@ export type SketchLinearArrayParams = {
 
 export type SketchCircularArrayParams = {
   count: number;
-  centerX: number | string; // coordinate or point ID
+  centerX: number | string;
   centerY: number | string;
   centerPointId?: string;
   radius: number;
@@ -137,37 +145,37 @@ export type SketchBase = {
 
 export type SketchRectangle = SketchBase & {
   type: "rectangle";
-  p1: string; // Point ID (top-left)
-  p2: string; // Point ID (bottom-right)
+  p1: string;
+  p2: string;
   rotation?: number;
 };
 
 export type SketchCircle = SketchBase & {
   type: "circle";
-  center: string; // Point ID
+  center: string;
   radius: number;
-  radiusPoint?: string; // Optional Point ID on circumference
+  radiusPoint?: string;
 };
 
 export type SketchLine = SketchBase & {
   type: "line";
-  p1: string; // Point ID
-  p2: string; // Point ID
+  p1: string;
+  p2: string;
 };
 
 export type SketchArc = SketchBase & {
   type: "arc";
-  center: string; // Point ID
-  p1: string; // Point ID (start)
-  p2: string; // Point ID (end)
+  center: string;
+  p1: string;
+  p2: string;
   clockwise: boolean;
   radius: number;
 };
 
 export type SketchEllipse = SketchBase & {
   type: "ellipse";
-  center: string; // Point ID
-  majorAxisPoint: string; // Point ID
+  center: string;
+  majorAxisPoint: string;
   minorAxisRadius: number;
 };
 
@@ -216,7 +224,7 @@ export type SketchSvg = SketchBase & {
   sourceWidth: number;
   sourceHeight: number;
   preserveAspectRatio: boolean;
-  contours: string[][]; // Array of polylines, each a string of "x,y" coordinates
+  contours: string[][];
   rotation?: number;
   scale?: number;
 };
@@ -304,3 +312,8 @@ export interface CadToolRegistry {
 }
 
 export type SketchTool = keyof CadToolRegistry;
+
+export type SketchSelectionRef =
+  | { kind: "shape"; id: string }
+  | { kind: "point"; id: string }
+  | { kind: "constraint"; id: string };

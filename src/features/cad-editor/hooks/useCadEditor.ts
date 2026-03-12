@@ -38,29 +38,28 @@ import type {
   SketchPolylinePoint,
   SketchTool,
   MirrorAxis,
-  SketchPoint,
   SketchShape,
   SketchBSpline,
   SketchArrayDefinition,
+  SketchConstraintType,
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import {
   clearSelection,
-  isSelected,
+  makeConstraintRef,
+  makePointRef,
+  makeShapeRef,
   selectOnly,
-  toggleSelection,
 } from "../model/selection";
 import {
-  getDragShapeIds,
   groupSelectedShapes,
-  normalizeSelectionAfterDelete,
   ungroupSelectedShapes,
 } from "../model/grouping";
 import { generateSketchGCode } from "../cam/generateSketchGCode";
 import { screenToCadPoint } from "@/utils/coordinates";
 import { clamp } from "@/shared/utils/common";
 import { useTextPreviewMap } from "./useTextPreviewMap";
-import { applyDefaultSnap } from "../geometry/snap";
+import { resolveSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
 import {
@@ -69,10 +68,7 @@ import {
   toggleGroupCollapsed as modelToggleGroupCollapsed,
 } from "../model/grouping";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
-import {
-  createConstraint,
-  addConstraint,
-} from "../model/constraints";
+import { addConstraint, createConstraint, removeConstraint } from "../model/constraints";
 import { distance } from "../geometry/distance";
 import {
   applyCircularArray,
@@ -85,6 +81,21 @@ import {
   insertBSplineControlPoint,
   removeBSplineControlPoint,
 } from "../geometry/bsplineEditing";
+import { createQuickConstraintFromSelection } from "../model/constraintFacade";
+import {
+  cloneSelectedEntities,
+  collectDraggedPointIds,
+  deleteSelectedEntities,
+  deleteShapeCascade,
+  mirrorSelectedEntities,
+} from "../model/editorFacade";
+import { materializeSnappedPoint } from "../model/constraintFacade";
+import {
+  buildGroupShapeSelection,
+  isPointSelectionId,
+  resolveDragSelectionIds,
+  resolveSelectionOnPointerDown,
+} from "../model/selectionFacade";
 
 type UseCadEditorParams = {
   document: SketchDocument;
@@ -123,10 +134,6 @@ function isSamePoint(
 ): boolean {
   if (!a || !b) return false;
   return Math.abs(a.x - b.x) < epsilon && Math.abs(a.y - b.y) < epsilon;
-}
-
-function isPointSelectionId(id: string): boolean {
-  return id.startsWith("pt_") || id.startsWith("pt-");
 }
 
 function createDragState(
@@ -207,7 +214,7 @@ export function useCadEditor({
 
   const focusCreatedShape = useCallback((shapeId: string) => {
     setToolState("select");
-    onSelectionChange(selectOnly(shapeId));
+    onSelectionChange(selectOnly(makeShapeRef(shapeId)));
     setDraft(null);
     setPolylineDraft([]);
     setPolylineHoverPoint(null);
@@ -224,15 +231,24 @@ export function useCadEditor({
     checkpointHistory();
 
     let nextDoc = { ...document };
-    const pids = polylineDraft.map((p) => {
-      const pt = createPoint(p.x, p.y);
-      nextDoc = addPoint(nextDoc, pt);
-      return pt.id;
-    });
+    const pointIds: string[] = [];
+
+    for (const draftPoint of polylineDraft) {
+      const result = materializeSnappedPoint(nextDoc, draftPoint);
+      nextDoc = result.document;
+      pointIds.push(result.pointId);
+    }
+
+    const dedupedPointIds = pointIds.filter((id, index, arr) => index === 0 || arr[index - 1] !== id);
+    if (dedupedPointIds.length < 2) {
+      setPolylineDraft([]);
+      setPolylineHoverPoint(null);
+      return;
+    }
 
     const shape = createPolylineShape(
       `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
-      pids,
+      dedupedPointIds,
       false,
     );
 
@@ -250,15 +266,24 @@ export function useCadEditor({
     checkpointHistory();
 
     let nextDoc = { ...document };
-    const pids = polylineDraft.map((p) => {
-      const pt = createPoint(p.x, p.y);
-      nextDoc = addPoint(nextDoc, pt);
-      return pt.id;
-    });
+    const pointIds: string[] = [];
+
+    for (const draftPoint of polylineDraft) {
+      const result = materializeSnappedPoint(nextDoc, draftPoint);
+      nextDoc = result.document;
+      pointIds.push(result.pointId);
+    }
+
+    const dedupedPointIds = pointIds.filter((id, index, arr) => index === 0 || arr[index - 1] !== id);
+    if (dedupedPointIds.length < 2) {
+      setPolylineDraft([]);
+      setPolylineHoverPoint(null);
+      return;
+    }
 
     const shape = createBSplineShape(
       `Spline ${document.shapes.filter((s) => s.type === "bspline").length + 1}`,
-      pids,
+      dedupedPointIds,
     );
 
     setDocument(updateGeometry(addShape(nextDoc, shape)));
@@ -297,7 +322,13 @@ export function useCadEditor({
     );
     if (sourceIds.length === 0) return;
 
-    onSelectionChange({ ids: sourceIds, primaryId: sourceIds[0] ?? null });
+    onSelectionChange({
+      refs: sourceIds.map((id) => makeShapeRef(id)),
+      primaryRef: makeShapeRef(sourceIds[0] ?? ""),
+      ids: sourceIds,
+      primaryId: sourceIds[0] ?? null,
+    });
+
     setEditingArrayGroupId(groupId);
 
     if (group.array.type === "linear") {
@@ -477,18 +508,30 @@ export function useCadEditor({
   const addLine = useCallback((x1: number, y1: number, x2: number, y2: number) => {
     if (distance({ x: x1, y: y1 }, { x: x2, y: y2 }) < 0.5) return;
 
-    const p1 = createPoint(x1, y1);
-    const p2 = createPoint(x2, y2);
-    let nextDoc = addPoint(document, p1);
-    nextDoc = addPoint(nextDoc, p2);
+    let nextDoc = { ...document };
 
-    const dx = Math.abs(x1 - x2);
-    const dy = Math.abs(y1 - y2);
+    const first = materializeSnappedPoint(nextDoc, { x: x1, y: y1 });
+    nextDoc = first.document;
+
+    const second = materializeSnappedPoint(nextDoc, { x: x2, y: y2 });
+    nextDoc = second.document;
+
+    const p1Id = first.pointId;
+    const p2Id = second.pointId;
+
+    if (p1Id === p2Id) return;
+
+    const p1 = nextDoc.points.find((p) => p.id === p1Id);
+    const p2 = nextDoc.points.find((p) => p.id === p2Id);
+    if (!p1 || !p2) return;
+
+    const dx = Math.abs(p1.x - p2.x);
+    const dy = Math.abs(p1.y - p2.y);
 
     if (dy < dx * 0.05) {
-      nextDoc.constraints.push(createConstraint("horizontal", [p1.id, p2.id], [], 0));
+      nextDoc.constraints.push(createConstraint("horizontal", [makePointRef(p1.id).id, makePointRef(p2.id).id]));
     } else if (dx < dy * 0.05) {
-      nextDoc.constraints.push(createConstraint("vertical", [p1.id, p2.id], [], 0));
+      nextDoc.constraints.push(createConstraint("vertical", [makePointRef(p1.id).id, makePointRef(p2.id).id]));
     }
 
     const shape = createLineShape(
@@ -563,10 +606,10 @@ export function useCadEditor({
     const l4 = { ...createLineShape(`Rectangle ${rectIndex} - Left`, p4.id, p1.id), groupId };
 
     const nextConstraints = [
-      createConstraint("horizontal", [p1.id, p2.id], [l1.id]),
-      createConstraint("vertical", [p2.id, p3.id], [l2.id]),
-      createConstraint("horizontal", [p3.id, p4.id], [l3.id]),
-      createConstraint("vertical", [p4.id, p1.id], [l4.id]),
+      createConstraint("horizontal", [p1.id, p2.id]),
+      createConstraint("vertical", [p2.id, p3.id]),
+      createConstraint("horizontal", [p3.id, p4.id]),
+      createConstraint("vertical", [p4.id, p1.id]),
     ];
 
     checkpointHistory();
@@ -587,13 +630,8 @@ export function useCadEditor({
     });
 
     setDocument(nextDoc);
-
     setToolState("select");
-    onSelectionChange({
-      ids: [l1.id, l2.id, l3.id, l4.id],
-      primaryId: l1.id,
-    });
-
+    onSelectionChange(buildGroupShapeSelection([l1, l2, l3, l4]));
     setDraft(null);
     setPolylineDraft([]);
     setPolylineHoverPoint(null);
@@ -661,10 +699,12 @@ export function useCadEditor({
     if (!rawCad) return;
 
     const cad = document.snapEnabled
-      ? applyDefaultSnap(rawCad, {
+      ? resolveSnap(rawCad, {
           gridStep: Math.max(1, document.snapStep),
           points: document.points,
-        })
+          shapes: document.shapes,
+          tolerance: 6,
+        }).point
       : rawCad;
 
     if (tool === "rectangle") {
@@ -753,11 +793,7 @@ export function useCadEditor({
       const hit = hitTestShapes(cad, document.shapes, document.points);
       if (hit) {
         checkpointHistory();
-        setDocument((prev) => ({
-          ...prev,
-          shapes: prev.shapes.filter((s) => s.id !== hit.id),
-          constraints: prev.constraints.filter((c) => !c.shapeIds.includes(hit.id)),
-        }));
+        setDocument((prev) => deleteShapeCascade(prev, hit.id));
       }
       return;
     }
@@ -789,10 +825,12 @@ export function useCadEditor({
     if (!rawCad) return;
 
     const cad = document.snapEnabled
-      ? applyDefaultSnap(rawCad, {
+      ? resolveSnap(rawCad, {
           gridStep: Math.max(1, document.snapStep),
           points: document.points,
-        })
+          shapes: document.shapes,
+          tolerance: 6,
+        }).point
       : rawCad;
 
     if (tool === "polyline" || tool === "bspline") {
@@ -814,7 +852,7 @@ export function useCadEditor({
         const pointIds = new Set(
           dragState.selectionIds.length > 0
             ? dragState.selectionIds.filter((id) => isPointSelectionId(id))
-            : [activePointId]
+            : [activePointId],
         );
 
         setDocumentSilently((prev) => movePointsAndSolve(prev, pointIds, next.dx, next.dy));
@@ -827,29 +865,10 @@ export function useCadEditor({
           ? dragState.selectionIds
           : [dragState.shapeId];
 
-      const affectedPointIds = new Set<string>();
-      const nonParametricShapeIds = new Set<string>();
-
-      selectedIds.forEach((id) => {
-        if (isPointSelectionId(id)) {
-          affectedPointIds.add(id);
-        } else {
-          const s = document.shapes.find((shape) => shape.id === id);
-          if (!s) return;
-
-          if (s.type === "text" || s.type === "svg") {
-            nonParametricShapeIds.add(s.id);
-          } else {
-            const shape = s as any;
-            if ("p1" in shape) affectedPointIds.add(shape.p1);
-            if ("p2" in shape) affectedPointIds.add(shape.p2);
-            if ("center" in shape) affectedPointIds.add(shape.center);
-            if ("pointIds" in shape) shape.pointIds.forEach((pid: string) => affectedPointIds.add(pid));
-            if ("controlPointIds" in shape) shape.controlPointIds.forEach((pid: string) => affectedPointIds.add(pid));
-            if ("majorAxisPoint" in shape) affectedPointIds.add(shape.majorAxisPoint);
-          }
-        }
-      });
+      const { affectedPointIds, nonParametricShapeIds } = collectDraggedPointIds(
+        document,
+        selectedIds,
+      );
 
       setDocumentSilently((prev) => {
         let nextDoc = movePointsAndSolve(prev, affectedPointIds, next.dx, next.dy);
@@ -857,11 +876,15 @@ export function useCadEditor({
         if (nonParametricShapeIds.size > 0) {
           nextDoc = {
             ...nextDoc,
-            shapes: nextDoc.shapes.map((s) => {
-              if (nonParametricShapeIds.has(s.id)) {
-                return { ...s, x: (s as any).x + next.dx, y: (s as any).y + next.dy } as any;
+            shapes: nextDoc.shapes.map((shape) => {
+              if (nonParametricShapeIds.has(shape.id)) {
+                return {
+                  ...shape,
+                  x: (shape as any).x + next.dx,
+                  y: (shape as any).y + next.dy,
+                } as any;
               }
-              return s;
+              return shape;
             }),
           };
         }
@@ -916,20 +939,23 @@ export function useCadEditor({
 
     event.stopPropagation();
 
-    const id = rawId.startsWith("point:") ? rawId.slice(6) : rawId;
+    const { ref, nextSelection } = resolveSelectionOnPointerDown({
+      selection,
+      rawId,
+      shiftKey: event.shiftKey,
+    });
 
     const rawCad = getCadPoint(event);
     if (!rawCad) return;
 
     const cad = document.snapEnabled
-      ? applyDefaultSnap(rawCad, { points: document.points })
+      ? resolveSnap(rawCad, {
+          gridStep: Math.max(1, document.snapStep),
+          points: document.points,
+          shapes: document.shapes,
+          tolerance: 6,
+        }).point
       : rawCad;
-
-    const nextSelection = event.shiftKey
-      ? toggleSelection(selection, id)
-      : isSelected(selection, id)
-        ? selection
-        : selectOnly(id);
 
     if (nextSelection !== selection) {
       onSelectionChangeSilently(nextSelection);
@@ -939,24 +965,39 @@ export function useCadEditor({
 
     checkpointHistory();
 
-    if (isPointSelectionId(id)) {
+    const dragIds = resolveDragSelectionIds({
+      document,
+      ref,
+      nextSelection,
+    });
+
+    if (ref.kind === "point") {
       setDragState({
-        shapeId: "point:" + id,
+        shapeId: `point:${ref.id}`,
         startX: cad.x,
         startY: cad.y,
-        selectionIds: nextSelection.ids.filter((sid) => isPointSelectionId(sid)),
+        selectionIds: dragIds,
       });
-    } else {
+    } else if (ref.kind === "shape") {
       setDragState(
         createDragState(
-          id,
+          ref.id,
           cad.x,
           cad.y,
-          getDragShapeIds(document, id, nextSelection),
+          dragIds,
         ),
       );
     }
-  }, [tool, isPanMouseButton, startPan, getCadPoint, document, selection, onSelectionChangeSilently, checkpointHistory]);
+  }, [
+    tool,
+    isPanMouseButton,
+    startPan,
+    selection,
+    getCadPoint,
+    document,
+    onSelectionChangeSilently,
+    checkpointHistory,
+  ]);
 
   const bindSelectionDragStart = useCallback((event: React.PointerEvent<SVGRectElement>) => {
     if (isPanMouseButton(event.button)) {
@@ -970,7 +1011,12 @@ export function useCadEditor({
     if (!rawCad) return;
 
     const cad = document.snapEnabled
-      ? applyDefaultSnap(rawCad, { points: document.points })
+      ? resolveSnap(rawCad, {
+          gridStep: Math.max(1, document.snapStep),
+          points: document.points,
+          shapes: document.shapes,
+          tolerance: 6,
+        }).point
       : rawCad;
 
     checkpointHistory();
@@ -979,7 +1025,13 @@ export function useCadEditor({
         selection.primaryId,
         cad.x,
         cad.y,
-        getDragShapeIds(document, selection.primaryId, selection),
+        resolveDragSelectionIds({
+          document,
+          ref: isPointSelectionId(selection.primaryId)
+            ? makePointRef(selection.primaryId)
+            : makeShapeRef(selection.primaryId),
+          nextSelection: selection,
+        }),
       ),
     );
   }, [isPanMouseButton, startPan, tool, selection, getCadPoint, document, checkpointHistory]);
@@ -1095,10 +1147,7 @@ export function useCadEditor({
       };
     });
 
-    onSelectionChangeSilently({
-      ids: [ownerSpline.id],
-      primaryId: ownerSpline.id,
-    });
+    onSelectionChangeSilently(selectOnly(makeShapeRef(ownerSpline.id)));
   }, [selection.primaryId, document.shapes, checkpointHistory, setDocument, onSelectionChangeSilently]);
 
   const resetView = useCallback(() => {
@@ -1108,195 +1157,40 @@ export function useCadEditor({
 
   const cloneSelected = useCallback(() => {
     checkpointHistory();
-
-    const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
-    if (selectedShapes.length === 0) return;
-
-    const pointMap = new Map<string, string>();
-    const clonedPoints: SketchPoint[] = [];
-    const clonedShapes: SketchShape[] = [];
-    const clonedConstraints: any[] = [];
-
-    selectedShapes.forEach((s) => {
-      const shape = s as any;
-      const pids: string[] = [];
-      if (shape.p1) pids.push(shape.p1);
-      if (shape.p2) pids.push(shape.p2);
-      if (shape.center) pids.push(shape.center);
-      if (shape.pointIds) pids.push(...shape.pointIds);
-      if (shape.controlPointIds) pids.push(...shape.controlPointIds);
-      if (shape.majorAxisPoint) pids.push(shape.majorAxisPoint);
-
-      pids.forEach((pid) => {
-        if (!pointMap.has(pid)) {
-          const original = document.points.find((p) => p.id === pid);
-          if (original) {
-            const cp = createPoint(original.x + 10, original.y + 10);
-            pointMap.set(pid, cp.id);
-            clonedPoints.push(cp);
-          }
-        }
-      });
-    });
-
-    selectedShapes.forEach((s) => {
-      const cloned = { ...s, id: createId(s.type) };
-      const cs = cloned as any;
-      if (cs.p1) cs.p1 = pointMap.get(cs.p1);
-      if (cs.p2) cs.p2 = pointMap.get(cs.p2);
-      if (cs.center) cs.center = pointMap.get(cs.center);
-      if (cs.pointIds) cs.pointIds = cs.pointIds.map((pid: string) => pointMap.get(pid));
-      if (cs.controlPointIds) cs.controlPointIds = cs.controlPointIds.map((pid: string) => pointMap.get(pid));
-      if (cs.majorAxisPoint) cs.majorAxisPoint = pointMap.get(cs.majorAxisPoint);
-      clonedShapes.push(cloned as SketchShape);
-    });
-
-    document.constraints.forEach((c) => {
-      if (c.pointIds.every((pid) => pointMap.has(pid))) {
-        clonedConstraints.push({
-          ...c,
-          id: createId("const"),
-          pointIds: c.pointIds.map((pid) => pointMap.get(pid)!),
-          shapeIds: clonedShapes.map((s) => s.id),
-        });
-      }
-    });
-
-    const nextDoc = {
-      ...document,
-      points: [...document.points, ...clonedPoints],
-      shapes: [...document.shapes, ...clonedShapes],
-      constraints: [...document.constraints, ...clonedConstraints],
-    };
-
-    setDocument(nextDoc);
-    onSelectionChange({
-      ids: clonedShapes.map((s) => s.id),
-      primaryId: clonedShapes[0]?.id || null,
-    });
+    const result = cloneSelectedEntities(document, selection);
+    setDocument(result.document);
+    onSelectionChange(result.selection);
   }, [document, selection, checkpointHistory, setDocument, onSelectionChange]);
 
   const mirrorSelected = useCallback((axis: MirrorAxis) => {
     checkpointHistory();
-
-    const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
-    if (selectedShapes.length === 0) return;
-
-    const affectedPointIds = new Set<string>();
-    selectedShapes.forEach((s) => {
-      const shape = s as any;
-      if (shape.p1) affectedPointIds.add(shape.p1);
-      if (shape.p2) affectedPointIds.add(shape.p2);
-      if (shape.center) affectedPointIds.add(shape.center);
-      if (shape.pointIds) shape.pointIds.forEach((pid: string) => affectedPointIds.add(pid));
-      if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => affectedPointIds.add(pid));
-      if (shape.majorAxisPoint) affectedPointIds.add(shape.majorAxisPoint);
-    });
-
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-
-    affectedPointIds.forEach((pid) => {
-      const p = document.points.find((pt) => pt.id === pid);
-      if (p) {
-        minX = Math.min(minX, p.x);
-        maxX = Math.max(maxX, p.x);
-        minY = Math.min(minY, p.y);
-        maxY = Math.max(maxY, p.y);
-      }
-    });
-
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-
-    setDocument((prev) => ({
-      ...prev,
-      points: prev.points.map((p) => {
-        if (affectedPointIds.has(p.id)) {
-          if (axis === "x") return { ...p, y: cy - (p.y - cy) };
-          if (axis === "y") return { ...p, x: cx - (p.x - cx) };
-        }
-        return p;
-      }),
-    }));
-  }, [document, selection, checkpointHistory, setDocument]);
+    setDocument((prev) => mirrorSelectedEntities(prev, selection, axis));
+  }, [selection, checkpointHistory, setDocument]);
 
   const deleteSelected = useCallback(() => {
     checkpointHistory();
-
-    const selectedItemIds = new Set(selection.ids);
-
-    const remainingShapes = document.shapes.filter((s) => !selectedItemIds.has(s.id));
-    const remainingPoints = document.points.filter((p) => !selectedItemIds.has(p.id));
-
-    const usedPointIds = new Set<string>();
-    remainingShapes.forEach((s) => {
-      const shape = s as any;
-      if (shape.p1) usedPointIds.add(shape.p1);
-      if (shape.p2) usedPointIds.add(shape.p2);
-      if (shape.center) usedPointIds.add(shape.center);
-      if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
-      if (shape.controlPointIds) shape.controlPointIds.forEach((id: string) => usedPointIds.add(id));
-      if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
-    });
-
-    const nextPoints = remainingPoints.filter((p) => usedPointIds.has(p.id));
-    const nextConstraints = document.constraints.filter(
-      (c) =>
-        c.pointIds.every((pid) => usedPointIds.has(pid)) &&
-        !c.shapeIds.some((sid) => selectedItemIds.has(sid)),
-    );
-
-    const nextDocument = {
-      ...document,
-      points: nextPoints,
-      shapes: remainingShapes,
-      constraints: nextConstraints,
-    };
-
-    setDocument(nextDocument);
-    onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
+    const result = deleteSelectedEntities(document, selection);
+    setDocument(result.document);
+    onSelectionChange(result.selection);
   }, [document, selection, checkpointHistory, setDocument, onSelectionChange]);
 
   const deleteShape = useCallback((id: string) =>
-    setDocument((d) => {
-      const remainingShapes = d.shapes.filter((s) => s.id !== id);
-      const usedPointIds = new Set<string>();
-
-      remainingShapes.forEach((s) => {
-        const shape = s as any;
-        if (shape.p1) usedPointIds.add(shape.p1);
-        if (shape.p2) usedPointIds.add(shape.p2);
-        if (shape.center) usedPointIds.add(shape.center);
-        if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
-        if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => usedPointIds.add(pid));
-        if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
-      });
-
-      return {
-        ...d,
-        shapes: remainingShapes,
-        points: d.points.filter((p) => usedPointIds.has(p.id)),
-        constraints: d.constraints.filter((c) => !c.shapeIds.includes(id)),
-      };
-    }), [setDocument]);
+    setDocument((doc) => deleteShapeCascade(doc, id)), [setDocument]);
 
   const renameShape = useCallback((id: string, name: string) =>
-    setDocument((d) => ({
-      ...d,
-      shapes: d.shapes.map((s) => (s.id === id ? { ...s, name } : s)),
+    setDocument((doc) => ({
+      ...doc,
+      shapes: doc.shapes.map((shape) => (shape.id === id ? { ...shape, name } : shape)),
     })), [setDocument]);
 
   const toggleShapeVisibility = useCallback((id: string) =>
-    setDocument((d) => ({
-      ...d,
-      shapes: d.shapes.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)),
+    setDocument((doc) => ({
+      ...doc,
+      shapes: doc.shapes.map((shape) => (shape.id === id ? { ...shape, visible: !shape.visible } : shape)),
     })), [setDocument]);
 
-  const groupSelected = useCallback(() => setDocument((d) => groupSelectedShapes(d, selection)), [setDocument, selection]);
-  const ungroupSelected = useCallback(() => setDocument((d) => ungroupSelectedShapes(d, selection)), [setDocument, selection]);
+  const groupSelected = useCallback(() => setDocument((doc) => groupSelectedShapes(doc, selection)), [setDocument, selection]);
+  const ungroupSelected = useCallback(() => setDocument((doc) => ungroupSelectedShapes(doc, selection)), [setDocument, selection]);
 
   const handleGenerateClick = useCallback(async () => {
     setIsGenerating(true);
@@ -1343,24 +1237,8 @@ export function useCadEditor({
     });
   }, [onViewChange]);
 
-  const bindScaleHandleStart = useCallback((_e: any, _handle: any) => {
-    if (selection.primaryId) {
-      const shape = document.shapes.find((s) => s.id === selection.primaryId);
-      if (shape?.type === "text" || shape?.type === "svg") {
-        // TODO: Implement direct scaling for text/svg
-      }
-    }
-  }, [selection.primaryId, document.shapes]);
-
-  const bindRotateHandleStart = useCallback((_e: any) => {
-    if (selection.primaryId) {
-      const shape = document.shapes.find((s) => s.id === selection.primaryId);
-      if (shape?.type === "text" || shape?.type === "svg") {
-        // TODO: Implement direct rotation for text/svg
-      }
-    }
-  }, [selection.primaryId, document.shapes]);
-
+  const bindScaleHandleStart = useCallback((_e: any, _handle: any) => {}, []);
+  const bindRotateHandleStart = useCallback((_e: any) => {}, []);
   const bindConstraintEdgeHandleStart = useCallback(() => {}, []);
   const bindConstraintLabelDragStart = useCallback(() => {}, []);
 
@@ -1370,22 +1248,22 @@ export function useCadEditor({
 
     setDocument((prev) => ({
       ...prev,
-      shapes: prev.shapes.map((s) =>
-        selection.ids.includes(s.id)
-          ? { ...s, isConstruction: !s.isConstruction }
-          : s,
+      shapes: prev.shapes.map((shape) =>
+        selection.ids.includes(shape.id)
+          ? { ...shape, isConstruction: !shape.isConstruction }
+          : shape,
       ),
     }));
   }, [selection.ids, checkpointHistory, setDocument]);
 
   const renameGroup = useCallback((id: string, name: string) =>
-    setDocument((d) => modelRenameGroup(d, id, name)), [setDocument]);
+    setDocument((doc) => modelRenameGroup(doc, id, name)), [setDocument]);
 
   const toggleGroupCollapsed = useCallback((id: string) =>
-    setDocument((d) => modelToggleGroupCollapsed(d, id)), [setDocument]);
+    setDocument((doc) => modelToggleGroupCollapsed(doc, id)), [setDocument]);
 
   const reorderDocumentShapes = useCallback((ids: string[]) =>
-    setDocument((d) => modelReorderShapes(d, ids)), [setDocument]);
+    setDocument((doc) => modelReorderShapes(doc, ids)), [setDocument]);
 
   const updateLinearArrayParams = useCallback((p: any) =>
     setLinearArrayParams((prev) => ({ ...prev, ...p })), []);
@@ -1423,114 +1301,50 @@ export function useCadEditor({
       definition,
     );
 
-    return previewDoc.shapes.filter((s) => s.groupId === groupId);
+    return previewDoc.shapes.filter((shape) => shape.groupId === groupId);
   }, [arrayToolMode, selection.ids, document, linearArrayParams, circularArrayParams]);
 
-  const addQuickConstraint = useCallback((type: string) => {
+  const addQuickConstraint = useCallback((type: SketchConstraintType) => {
+    const constraint = createQuickConstraintFromSelection(document, selection, type);
+    if (!constraint) return;
+
     checkpointHistory();
+    setDocument(addConstraint(document, constraint));
+  }, [document, selection, checkpointHistory, setDocument]);
 
-    let pids: string[] = [];
-    const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
-
-    selectedShapes.forEach((s) => {
-      const shape = s as any;
-
-      if (s.type === "line" || s.type === "rectangle" || s.type === "arc") {
-        if (shape.p1) pids.push(shape.p1);
-        if (shape.p2) pids.push(shape.p2);
-        if (shape.center) pids.push(shape.center);
-      } else if (s.type === "circle") {
-        if (shape.center) pids.push(shape.center);
-      } else if (s.type === "polyline" || s.type === "bspline") {
-        if (shape.pointIds) pids.push(...shape.pointIds);
-        if (shape.controlPointIds) pids.push(...shape.controlPointIds);
-      }
-    });
-
-    let finalPids = pids;
-
-    if (type === "parallel" || type === "perpendicular") {
-      const lines = selectedShapes.filter((s) => s.type === "line");
-      if (lines.length >= 2) {
-        finalPids = [
-          (lines[0] as any).p1,
-          (lines[0] as any).p2,
-          (lines[1] as any).p1,
-          (lines[1] as any).p2,
-        ];
-      } else {
-        console.warn(`${type} constraint requires 2 lines`);
-        return;
-      }
-    } else if (type === "coincident" || type === "distance") {
-      finalPids = pids.slice(0, 2);
-    } else {
-      finalPids = pids.slice(0, 2);
-    }
-
-    if (type === "lock") {
-      setDocument((prev) => ({
-        ...prev,
-        points: prev.points.map((p) =>
-          finalPids.includes(p.id) ? { ...p, isFixed: true } : p,
-        ),
-      }));
-      return;
-    }
-
-    const constraint = createConstraint(
-      type as any,
-      finalPids,
-      selection.ids,
-      ["distance", "angle", "radius", "diameter"].includes(type) ? 50 : undefined,
-    );
-
-    setDocument(updateGeometry(addConstraint(document, constraint)));
-  }, [document, selection.ids, checkpointHistory, setDocument]);
-
-  const onConstraintPointerDown = useCallback((e: React.PointerEvent, id: string) => {
-    e.stopPropagation();
+  const onConstraintPointerDown = useCallback((event: React.PointerEvent, id: string) => {
+    event.stopPropagation();
 
     if (id.startsWith("point:")) {
       const pointId = id.split(":")[1];
-      bindSelectStart(e as any, pointId);
+      bindSelectStart(event as any, `point:${pointId}`);
       return;
     }
 
-    const constraint = document.constraints.find((c) => c.id === id);
-    if (
-      !constraint ||
-      !["distance", "distance-x", "distance-y", "radius", "diameter", "angle"].includes(constraint.type)
-    ) {
-      return;
-    }
+    onSelectionChangeSilently(selectOnly(makeConstraintRef(id)));
+  }, [bindSelectStart, onSelectionChangeSilently]);
 
-    const newValStr = window.prompt(
-      `Enter new value for ${constraint.type} constraint:`,
-      String(constraint.value || 0),
-    );
-    if (newValStr === null) return;
-
-    if (newValStr.trim().toLowerCase() === "delete") {
-      checkpointHistory();
-      setDocument((prev) => ({
-        ...prev,
-        constraints: prev.constraints.filter((c) => c.id !== id),
-      }));
-      return;
-    }
-
-    const newVal = parseFloat(newValStr);
-    if (isNaN(newVal)) return;
+  const updateConstraintValue = useCallback((constraintId: string, value: number) => {
+    if (!Number.isFinite(value)) return;
 
     checkpointHistory();
-    setDocument((prev) => {
-      const nextConstraints = prev.constraints.map((c) =>
-        c.id === id ? { ...c, value: newVal } : c,
-      );
-      return updateGeometry({ ...prev, constraints: nextConstraints });
-    });
-  }, [document.constraints, bindSelectStart, checkpointHistory, setDocument]);
+    setDocument((prev) =>
+      updateGeometry({
+        ...prev,
+        constraints: prev.constraints.map((constraint) =>
+          constraint.id === constraintId
+            ? { ...constraint, value }
+            : constraint,
+        ),
+      }),
+    );
+  }, [checkpointHistory, setDocument]);
+
+  const deleteConstraintById = useCallback((constraintId: string) => {
+    checkpointHistory();
+    setDocument((prev) => removeConstraint(prev, constraintId));
+    onSelectionChangeSilently(clearSelection());
+  }, [checkpointHistory, setDocument, onSelectionChangeSilently]);
 
   return {
     svgRef,
@@ -1620,5 +1434,7 @@ export function useCadEditor({
 
     addQuickConstraint,
     onConstraintPointerDown,
+    updateConstraintValue,
+    deleteConstraintById,
   };
 }
