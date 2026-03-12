@@ -1,4 +1,5 @@
 import type { SketchDocument } from "./types";
+import { getConstraintPointIds } from "./constraints";
 
 export type ValidationResult = {
   isValid: boolean;
@@ -6,9 +7,6 @@ export type ValidationResult = {
   warnings: string[];
 };
 
-/**
- * Validates the sketch for common issues.
- */
 export function validateSketch(document: SketchDocument): ValidationResult {
   const result: ValidationResult = {
     isValid: true,
@@ -16,7 +14,6 @@ export function validateSketch(document: SketchDocument): ValidationResult {
     warnings: [],
   };
 
-  // 1. Check for open contours in closed shapes
   document.shapes.forEach(shape => {
     if (shape.type === "polyline" && shape.closed) {
       if (!isContourClosed(shape)) {
@@ -26,10 +23,9 @@ export function validateSketch(document: SketchDocument): ValidationResult {
     }
   });
 
-  // 2. Detect over-constrained points
   const pointDegrees = new Map<string, number>();
   document.constraints.forEach(c => {
-    c.pointIds.forEach(id => {
+    getConstraintPointIds(c).forEach(id => {
       pointDegrees.set(id, (pointDegrees.get(id) || 0) + 1);
     });
   });

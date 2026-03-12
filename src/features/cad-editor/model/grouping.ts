@@ -1,4 +1,3 @@
-
 // =============================
 // FILE: src/modules/cad/model/grouping.ts
 // =============================
@@ -6,6 +5,7 @@
 import type { SketchDocument, SketchGroup, SketchShape } from "./types";
 import type { SelectionState } from "./selection";
 import { createId } from "./ids";
+import { normalizeSelectionForDocument } from "./editorFacade";
 
 function uniqueIds(ids: string[]): string[] {
   return Array.from(new Set(ids));
@@ -29,9 +29,6 @@ export function getDragShapeIds(
   shapeId: string,
   selection: SelectionState,
 ): string[] {
-  // If shapeId is already selected, drag the whole selection.
-  // Otherwise, drag just the shapeId.
-  // We no longer automatically drag the whole group.
   if (selection.ids.includes(shapeId)) {
     return selection.ids;
   }
@@ -122,13 +119,14 @@ export function normalizeSelectionAfterDelete(
   document: SketchDocument,
   selection: SelectionState,
 ): SelectionState {
-  const existing = new Set([
-    ...document.shapes.map((shape) => shape.id),
-    ...document.points.map((p) => p.id)
-  ]);
-  const ids = uniqueIds(selection.ids.filter((id) => existing.has(id)));
-  return {
-    ids,
-    primaryId: ids.includes(selection.primaryId ?? "") ? selection.primaryId : (ids[0] ?? null),
+  const deduped: SelectionState = {
+    ...selection,
+    refs: selection.refs.filter(
+      (ref, index, arr) =>
+        arr.findIndex((item) => item.kind === ref.kind && item.id === ref.id) === index,
+    ),
+    ids: uniqueIds(selection.ids),
   };
+
+  return normalizeSelectionForDocument(document, deduped);
 }

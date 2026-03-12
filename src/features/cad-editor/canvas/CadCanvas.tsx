@@ -55,6 +55,8 @@ type CadCanvasProps = {
   ) => void;
   onRotateHandlePointerDown?: (event: React.PointerEvent<SVGCircleElement>) => void;
   onConstraintPointerDown?: (event: React.PointerEvent<SVGElement>, constraintId: string) => void;
+  onConstraintValueChange?: (constraintId: string, value: number) => void;
+  onConstraintDelete?: (constraintId: string) => void;
 };
 
 function ArrayPreviewOverlay({
@@ -133,6 +135,8 @@ export function CadCanvas({
   onScaleHandlePointerDown,
   onRotateHandlePointerDown,
   onConstraintPointerDown,
+  onConstraintValueChange,
+  onConstraintDelete,
 }: CadCanvasProps) {
   const { theme } = useTheme();
 
@@ -206,6 +210,8 @@ export function CadCanvas({
           solveState={solveState}
           conflictingConstraintIds={conflictingConstraintIds}
           onPointerDown={onConstraintPointerDown}
+          onDimensionValueChange={onConstraintValueChange}
+          onDimensionDelete={onConstraintDelete}
         />
       )}
 

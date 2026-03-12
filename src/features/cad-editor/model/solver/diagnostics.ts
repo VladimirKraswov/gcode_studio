@@ -3,6 +3,7 @@ import type {
   SketchDocument,
   SketchPoint,
 } from "../types";
+import { getConstraintPointIds, getConstraintShapeIds } from "../constraints";
 
 export type SketchSolveState =
   | "underdefined"
@@ -48,6 +49,8 @@ function getConstraintRemovedDof(constraint: SketchConstraint): number {
   switch (constraint.type) {
     case "coincident":
       return 2;
+    case "midpoint":
+      return 2;
     case "horizontal":
     case "vertical":
     case "parallel":
@@ -60,6 +63,8 @@ function getConstraintRemovedDof(constraint: SketchConstraint): number {
     case "angle":
     case "radius":
     case "diameter":
+    case "point-on-object":
+    case "collinear":
       return 1;
     case "symmetric":
       return 2;
@@ -79,6 +84,9 @@ function collectDuplicateConstraintIssues(
   for (const c of constraints) {
     if (!c.enabled) continue;
 
+    const pointIds = getConstraintPointIds(c);
+    const shapeIds = getConstraintShapeIds(c);
+
     let key = "";
     switch (c.type) {
       case "horizontal":
@@ -88,25 +96,31 @@ function collectDuplicateConstraintIssues(
       case "distance-x":
       case "distance-y":
       case "equal":
-        key = `${c.type}:${normalizePair(c.pointIds)}`;
+      case "midpoint":
+        key = `${c.type}:${normalizePair(pointIds)}`;
         break;
 
       case "parallel":
       case "perpendicular":
       case "angle":
       case "symmetric":
-        key = `${c.type}:${normalizeQuadAsSegments(c.pointIds)}`;
+      case "collinear":
+        key = `${c.type}:${normalizeQuadAsSegments(pointIds)}`;
+        break;
+
+      case "point-on-object":
+        key = `${c.type}:${pointIds.join("|")}:${shapeIds.join("|")}`;
         break;
 
       case "radius":
       case "diameter":
       case "tangent":
       case "lock":
-        key = `${c.type}:${c.pointIds.join("|")}:${c.shapeIds.join("|")}:${c.value ?? ""}`;
+        key = `${c.type}:${pointIds.join("|")}:${shapeIds.join("|")}:${c.value ?? ""}`;
         break;
 
       default:
-        key = `${c.type}:${c.pointIds.join("|")}:${c.shapeIds.join("|")}:${c.value ?? ""}`;
+        key = `${c.type}:${pointIds.join("|")}:${shapeIds.join("|")}:${c.value ?? ""}`;
         break;
     }
 
@@ -138,16 +152,18 @@ function collectSimpleConflictIssues(
   for (const c of constraints) {
     if (!c.enabled) continue;
 
-    if (c.type === "horizontal" && c.pointIds.length >= 2) {
-      horizontalMap.set(normalizePair(c.pointIds.slice(0, 2)), c.id);
+    const pointIds = getConstraintPointIds(c);
+
+    if (c.type === "horizontal" && pointIds.length >= 2) {
+      horizontalMap.set(normalizePair(pointIds.slice(0, 2)), c.id);
     }
 
-    if (c.type === "vertical" && c.pointIds.length >= 2) {
-      verticalMap.set(normalizePair(c.pointIds.slice(0, 2)), c.id);
+    if (c.type === "vertical" && pointIds.length >= 2) {
+      verticalMap.set(normalizePair(pointIds.slice(0, 2)), c.id);
     }
 
-    if (c.type === "lock" && c.pointIds.length >= 1) {
-      const pid = c.pointIds[0];
+    if (c.type === "lock" && pointIds.length >= 1) {
+      const pid = pointIds[0];
       const existing = lockMap.get(pid);
       if (existing) {
         issues.push({
@@ -196,8 +212,9 @@ export function analyzeSketchDiagnostics(document: SketchDocument): SketchDiagno
   );
 
   for (const c of constraints) {
-    if (c.type === "lock" && c.pointIds[0]) {
-      lockedPointIds.add(c.pointIds[0]);
+    const pointIds = getConstraintPointIds(c);
+    if (c.type === "lock" && pointIds[0]) {
+      lockedPointIds.add(pointIds[0]);
     }
   }
 

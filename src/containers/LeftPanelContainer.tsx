@@ -23,12 +23,14 @@ export function LeftPanelContainer() {
     detailLevel,
     setDetailLevel,
   } = useGCode();
+  
   const {
     resetCamera,
     editDocument,
     setEditDocument,
     selection,
     setSelection,
+    deleteConstraintById,
   } = useCad();
 
   if (activeTab === "edit") {
@@ -39,6 +41,7 @@ export function LeftPanelContainer() {
             document={editDocument}
             selection={selection}
             onSelectionChange={setSelection}
+            onDeleteConstraint={deleteConstraintById}
             onRenameShape={(id, name) => {
               setEditDocument(prev => ({
                 ...prev,
