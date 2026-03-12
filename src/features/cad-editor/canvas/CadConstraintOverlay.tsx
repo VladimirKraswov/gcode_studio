@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type {
@@ -5,6 +6,7 @@ import type {
   SketchDocument,
   SketchPoint,
 } from "../model/types";
+import { DimensionDialog } from "./DimensionDialog";
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
 import type { SketchSolveState } from "../model/solver/diagnostics";
@@ -93,10 +95,8 @@ export function CadConstraintOverlay({
   onDimensionDelete,
 }: CadConstraintOverlayProps) {
   const { theme } = useTheme();
-  const editingConstraintId =
-    selection.primaryRef?.kind === "constraint"
-      ? selection.primaryRef.id
-      : null;
+  const [editingConstraint, setEditingConstraint] = useState<SketchConstraint | null>(null);
+  const [dialogPos, setDialogPos] = useState({ x: 0, y: 0 });
 
   const visiblePointIds = new Set<string>();
   selection.ids.forEach((id) => {
@@ -176,7 +176,6 @@ export function CadConstraintOverlay({
         if (!anchor) return null;
 
         const screen = cadToScreenPoint(anchor, documentHeight, view);
-        const isEditing = editingConstraintId === constraint.id;
         const displayValue =
           typeof constraint.value === "number"
             ? Number(constraint.value.toFixed(3))
@@ -184,82 +183,62 @@ export function CadConstraintOverlay({
 
         return (
           <g key={constraint.id} transform={`translate(${screen.x}, ${screen.y - 18})`}>
-            {!isEditing ? (
-              <g
-                onPointerDown={(event) => onPointerDown?.(event, constraint.id)}
-                style={{ cursor: "text", pointerEvents: "all" }}
+            <g
+              onPointerDown={(event) => {
+                onPointerDown?.(event, constraint.id);
+                setEditingConstraint(constraint);
+                setDialogPos({ x: event.clientX, y: event.clientY });
+              }}
+              style={{ cursor: "text", pointerEvents: "all" }}
+            >
+              <rect
+                x="-24"
+                y="-10"
+                width="48"
+                height="20"
+                rx="5"
+                fill={theme.cad.constraintLabelFill}
+                stroke={theme.cad.constraintLabelStroke}
+                strokeWidth="1.5"
+              />
+              <text
+                x="0"
+                y="4"
+                fontSize="11"
+                textAnchor="middle"
+                fill={theme.cad.constraintLabelText}
+                fontWeight="bold"
+                pointerEvents="none"
+                style={{ userSelect: "none" }}
               >
-                <rect
-                  x="-24"
-                  y="-10"
-                  width="48"
-                  height="20"
-                  rx="5"
-                  fill={theme.cad.constraintLabelFill}
-                  stroke={theme.cad.constraintLabelStroke}
-                  strokeWidth="1.5"
-                />
-                <text
-                  x="0"
-                  y="4"
-                  fontSize="11"
-                  textAnchor="middle"
-                  fill={theme.cad.constraintLabelText}
-                  fontWeight="bold"
-                  pointerEvents="none"
-                  style={{ userSelect: "none" }}
-                >
-                  {constraint.type === "diameter" ? "Ø" : ""}
-                  {displayValue}
-                </text>
-              </g>
-            ) : (
-              <foreignObject x="-36" y="-12" width="72" height="24">
-                <input
-                  autoFocus
-                  type="number"
-                  defaultValue={String(displayValue)}
-                  style={{
-                    width: "72px",
-                    height: "24px",
-                    border: "1px solid #3b82f6",
-                    borderRadius: "6px",
-                    padding: "0 6px",
-                    fontSize: "11px",
-                    outline: "none",
-                    background: "#ffffff",
-                    color: "#111827",
-                  }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onBlur={(event) => {
-                    const nextValue = Number(event.currentTarget.value);
-                    if (Number.isFinite(nextValue)) {
-                      onDimensionValueChange?.(constraint.id, nextValue);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      const nextValue = Number((event.currentTarget as HTMLInputElement).value);
-                      if (Number.isFinite(nextValue)) {
-                        onDimensionValueChange?.(constraint.id, nextValue);
-                      }
-                      (event.currentTarget as HTMLInputElement).blur();
-                    }
-
-                    if (event.key === "Delete") {
-                      onDimensionDelete?.(constraint.id);
-                    }
-
-                    if (event.key === "Escape") {
-                      (event.currentTarget as HTMLInputElement).blur();
-                    }
-                  }}
-                />
-              </foreignObject>
-            )}
+                {constraint.type === "diameter" ? "Ø" : ""}
+                {displayValue}
+              </text>
+            </g>
           </g>
         );
       })}
+
+      <DimensionDialog
+        isOpen={!!editingConstraint}
+        onClose={() => setEditingConstraint(null)}
+        onSubmit={(value) => {
+          if (editingConstraint) {
+            onDimensionValueChange?.(editingConstraint.id, value);
+          }
+          setEditingConstraint(null);
+        }}
+        onDelete={() => {
+          if (editingConstraint) {
+            onDimensionDelete?.(editingConstraint.id);
+          }
+          setEditingConstraint(null);
+        }}
+        initialValue={editingConstraint?.value ?? 0}
+        title={`Размер: ${editingConstraint?.type || ""}`}
+        x={dialogPos.x}
+        y={dialogPos.y}
+      />
 
       {document.points.map((point: SketchPoint) => {
         if (!visiblePointIds.has(point.id)) return null;
