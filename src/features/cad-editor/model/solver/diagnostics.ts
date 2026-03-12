@@ -64,8 +64,9 @@ function getConstraintRemovedDof(constraint: SketchConstraint): number {
     case "radius":
     case "diameter":
     case "point-on-object":
-    case "collinear":
       return 1;
+    case "collinear":
+      return 2;
     case "symmetric":
       return 2;
     case "lock":

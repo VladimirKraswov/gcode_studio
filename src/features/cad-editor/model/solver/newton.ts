@@ -1,10 +1,10 @@
-import { Equations } from "./equations";
+import { computeResiduals } from "./equations";
 import type { SketchPoint, SketchConstraint, SketchShape } from "../types";
-import { getConstraintPointIds, getConstraintShapeIds } from "../constraints";
 
 const MAX_ITERATIONS = 50;
 const TOLERANCE = 1e-6;
 const EPS = 1e-8;
+const INITIAL_LAMBDA = 1e-3;
 
 export function solveConstraints(
   points: SketchPoint[],
@@ -22,22 +22,61 @@ export function solveConstraints(
     variables.push({ pointId: p.id, axis: "y" });
   });
 
+  let lambda = INITIAL_LAMBDA;
+  let prevError = Infinity;
+
   for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
     const residuals = computeAllResiduals(currentPoints, constraints, shapes);
-    const error = Math.sqrt(residuals.reduce((sum, r) => sum + r * r, 0));
+    const error = Math.sqrt(residuals.reduce((sum, r) => sum + r * r, 0) / (residuals.length || 1));
 
     if (error < TOLERANCE) break;
 
     const J = computeJacobian(currentPoints, constraints, shapes, variables);
-    const delta = solveLinearSystem(J, residuals);
 
-    for (let i = 0; i < variables.length; i++) {
-      const v = variables[i];
-      const p = currentPoints.find((pt) => pt.id === v.pointId);
-      if (!p || !Number.isFinite(delta[i])) continue;
-      if (v.axis === "x") p.x -= delta[i];
-      else p.y -= delta[i];
+    // Levenberg-Marquardt step
+    let delta: number[] = [];
+    let success = false;
+
+    // Try to solve with current lambda
+    for(let lmIter = 0; lmIter < 5; lmIter++) {
+        delta = solveLinearSystemLM(J, residuals, lambda);
+
+        const nextPoints = currentPoints.map(p => ({...p}));
+        for (let i = 0; i < variables.length; i++) {
+            const v = variables[i];
+            const p = nextPoints.find((pt) => pt.id === v.pointId);
+            if (!p || !Number.isFinite(delta[i])) continue;
+            if (v.axis === "x") p.x -= delta[i];
+            else p.y -= delta[i];
+        }
+
+        const nextResiduals = computeAllResiduals(nextPoints, constraints, shapes);
+        const nextError = Math.sqrt(nextResiduals.reduce((sum, r) => sum + r * r, 0) / (nextResiduals.length || 1));
+
+        if (nextError < error) {
+            currentPoints = nextPoints;
+            lambda /= 10;
+            success = true;
+            break;
+        } else {
+            lambda *= 10;
+        }
     }
+
+    if (!success) {
+        // If we couldn't improve error, try one normal step or stop
+        const deltaNormal = solveLinearSystemLM(J, residuals, 1e-6);
+        for (let i = 0; i < variables.length; i++) {
+            const v = variables[i];
+            const p = currentPoints.find((pt) => pt.id === v.pointId);
+            if (!p || !Number.isFinite(deltaNormal[i])) continue;
+            if (v.axis === "x") p.x -= deltaNormal[i];
+            else p.y -= deltaNormal[i];
+        }
+    }
+
+    if (Math.abs(prevError - error) < TOLERANCE * 0.1) break;
+    prevError = error;
   }
 
   return currentPoints;
@@ -53,96 +92,8 @@ function computeAllResiduals(
   const shapeMap = new Map(shapes.map((shape) => [shape.id, shape]));
 
   for (const c of constraints) {
-    if (!c.enabled) continue;
-
-    const pointIds = getConstraintPointIds(c);
-    const shapeIds = getConstraintShapeIds(c);
-    const pts = pointIds.map((id) => pointMap.get(id)).filter(Boolean) as SketchPoint[];
-
-    switch (c.type) {
-      case "coincident":
-        if (pts.length >= 2) {
-          residuals.push(Equations.coincidentX(pts[0], pts[1]));
-          residuals.push(Equations.coincidentY(pts[0], pts[1]));
-        }
-        break;
-
-      case "horizontal":
-        if (pts.length >= 2) residuals.push(Equations.horizontal(pts[0], pts[1]));
-        break;
-
-      case "vertical":
-        if (pts.length >= 2) residuals.push(Equations.vertical(pts[0], pts[1]));
-        break;
-
-      case "distance":
-        if (pts.length >= 2) residuals.push(Equations.distance(pts[0], pts[1], c.value ?? 0));
-        break;
-
-      case "parallel":
-        if (pts.length >= 4) residuals.push(Equations.parallel(pts[0], pts[1], pts[2], pts[3]));
-        break;
-
-      case "perpendicular":
-        if (pts.length >= 4) residuals.push(Equations.perpendicular(pts[0], pts[1], pts[2], pts[3]));
-        break;
-
-      case "distance-x":
-        if (pts.length >= 2) residuals.push(Equations.distanceX(pts[0], pts[1], c.value ?? 0));
-        break;
-
-      case "distance-y":
-        if (pts.length >= 2) residuals.push(Equations.distanceY(pts[0], pts[1], c.value ?? 0));
-        break;
-
-      case "equal":
-        if (pts.length >= 4) residuals.push(Equations.equal(pts[0], pts[1], pts[2], pts[3]));
-        break;
-
-      case "tangent":
-        if (pts.length >= 3) residuals.push(Equations.tangent(pts[0], c.value ?? 0, pts[1], pts[2]));
-        break;
-
-      case "symmetric":
-        if (pts.length >= 4) residuals.push(Equations.symmetry(pts[0], pts[1], pts[2], pts[3]));
-        break;
-
-      case "angle":
-        if (pts.length >= 4) residuals.push(Equations.angle(pts[0], pts[1], pts[2], pts[3], c.value ?? 0));
-        break;
-
-      case "radius":
-        if (pts.length >= 2) residuals.push(Equations.radius(pts[0], pts[1], c.value ?? 0));
-        break;
-
-      case "midpoint":
-        if (pts.length >= 3) {
-          residuals.push(Equations.midpointX(pts[0], pts[1], pts[2]));
-          residuals.push(Equations.midpointY(pts[0], pts[1], pts[2]));
-        }
-        break;
-
-      case "point-on-object": {
-        if (pts.length < 1 || shapeIds.length < 1) break;
-        const shape = shapeMap.get(shapeIds[0]);
-        if (!shape) break;
-
-        if (shape.type === "line") {
-          const a = pointMap.get(shape.p1);
-          const b = pointMap.get(shape.p2);
-          if (!a || !b) break;
-          residuals.push(Equations.pointOnLine(pts[0], a, b));
-        } else if (shape.type === "circle" || shape.type === "arc") {
-          const center = pointMap.get(shape.center);
-          if (!center) break;
-          residuals.push(Equations.pointOnCircle(pts[0], center, shape.radius));
-        }
-        break;
-      }
-
-      default:
-        break;
-    }
+    const res = computeResiduals(c, pointMap, shapeMap);
+    residuals.push(...res);
   }
 
   return residuals;
@@ -162,13 +113,14 @@ function computeJacobian(
     const p = points.find((pt) => pt.id === v.pointId);
     if (!p) continue;
 
+    const originalValue = v.axis === "x" ? p.x : p.y;
     if (v.axis === "x") p.x += EPS;
     else p.y += EPS;
 
     const residuals1 = computeAllResiduals(points, constraints, shapes);
 
-    if (v.axis === "x") p.x -= EPS;
-    else p.y -= EPS;
+    if (v.axis === "x") p.x = originalValue;
+    else p.y = originalValue;
 
     for (let i = 0; i < residuals0.length; i++) {
       if (!J[i]) J[i] = [];
@@ -179,7 +131,7 @@ function computeJacobian(
   return J;
 }
 
-function solveLinearSystem(J: number[][], residuals: number[]): number[] {
+function solveLinearSystemLM(J: number[][], residuals: number[], lambda: number): number[] {
   const rows = J.length;
   if (rows === 0) return [];
   const cols = J[0]?.length ?? 0;
@@ -188,6 +140,7 @@ function solveLinearSystem(J: number[][], residuals: number[]): number[] {
   const A: number[][] = Array.from({ length: cols }, () => new Array(cols).fill(0));
   const b: number[] = new Array(cols).fill(0);
 
+  // Normal equations: (J^T * J + lambda * I) * delta = J^T * residuals
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < cols; j++) {
       for (let k = 0; k < rows; k++) {
@@ -199,7 +152,10 @@ function solveLinearSystem(J: number[][], residuals: number[]): number[] {
     }
   }
 
-  for (let i = 0; i < cols; i++) A[i][i] += 1e-6;
+  for (let i = 0; i < cols; i++) {
+      A[i][i] += lambda;
+  }
+
   return gaussianElimination(A, b);
 }
 
@@ -216,7 +172,7 @@ function gaussianElimination(A: number[][], b: number[]): number[] {
     [b[i], b[max]] = [b[max], b[i]];
 
     const pivot = A[i][i];
-    if (Math.abs(pivot) < 1e-12) continue;
+    if (Math.abs(pivot) < 1e-15) continue;
 
     for (let k = i + 1; k < n; k++) {
       const factor = A[k][i] / pivot;
@@ -236,7 +192,7 @@ function gaussianElimination(A: number[][], b: number[]): number[] {
     }
 
     const pivot = A[i][i];
-    if (Math.abs(pivot) < 1e-12) {
+    if (Math.abs(pivot) < 1e-15) {
       x[i] = 0;
       continue;
     }
