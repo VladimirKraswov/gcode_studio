@@ -105,25 +105,29 @@ export function rebuildArrayGroup(
     const stepAngle = totalAngle / count;
     const directionMult = params.direction === "ccw" ? 1 : -1;
 
+    const sourcePids = sourceShapes.flatMap(s => getShapePointIds(s));
+    const sourcePts = sourcePids.map(id => document.points.find(p => p.id === id)!).filter(Boolean);
+    const bx = sourcePts.reduce((sum, p) => sum + p.x, 0) / (sourcePts.length || 1);
+    const by = sourcePts.reduce((sum, p) => sum + p.y, 0) / (sourcePts.length || 1);
+
+    const initialRadius = Math.sqrt((bx - center.x) ** 2 + (by - center.y) ** 2) || 1;
+    const targetRadius = Number(params.radius) || initialRadius;
+    const radiusScale = targetRadius / initialRadius;
+
     for (let i = 1; i < count; i++) {
       const angle = stepAngle * i * directionMult;
 
       let result;
       if (params.rotateItems) {
-        result = duplicateShapesWithRotation(sourceShapes, document.points, center, angle, groupId);
+        result = duplicateShapesWithRotation(sourceShapes, document.points, center, angle, groupId, radiusScale);
       } else {
         // Translate without rotation
         const angleRad = (angle * Math.PI) / 180;
         const s_val = Math.sin(angleRad);
         const c_val = Math.cos(angleRad);
 
-        const sourcePids = sourceShapes.flatMap(s => getShapePointIds(s));
-        const sourcePts = sourcePids.map(id => document.points.find(p => p.id === id)!).filter(Boolean);
-        const bx = sourcePts.reduce((sum, p) => sum + p.x, 0) / (sourcePts.length || 1);
-        const by = sourcePts.reduce((sum, p) => sum + p.y, 0) / (sourcePts.length || 1);
-
-        const rx = bx - center.x;
-        const ry = by - center.y;
+        const rx = (bx - center.x) * radiusScale;
+        const ry = (by - center.y) * radiusScale;
 
         const targetX = rx * c_val - ry * s_val + center.x;
         const targetY = rx * s_val + ry * c_val + center.y;
@@ -245,7 +249,8 @@ function duplicateShapesWithRotation(
   allPoints: SketchPoint[],
   center: { x: number, y: number },
   angleDeg: number,
-  groupId: string
+  groupId: string,
+  radiusScale: number = 1
 ) {
   const angleRad = (angleDeg * Math.PI) / 180;
   const pointMap = new Map<string, string>();
@@ -260,11 +265,19 @@ function duplicateShapesWithRotation(
         if (p) {
           const s_val = Math.sin(angleRad);
           const c_val = Math.cos(angleRad);
-          const x = p.x - center.x;
-          const y = p.y - center.y;
+
+          let vx = p.x - center.x;
+          let vy = p.y - center.y;
+
+          vx *= radiusScale;
+          vy *= radiusScale;
+
+          const rx = vx * c_val - vy * s_val;
+          const ry = vx * s_val + vy * c_val;
+
           const newP = createPoint(
-            x * c_val - y * s_val + center.x,
-            x * s_val + y * c_val + center.y
+            rx + center.x,
+            ry + center.y
           );
           newPoints.push(newP);
           pointMap.set(id, newP.id);

@@ -11,7 +11,7 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 
 export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ variant = "ghost", size = "md", icon, active, className = "", ...props }, ref) => {
-    const baseStyles = "inline-flex items-center justify-center shrink-0 rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed";
+    const baseStyles = "inline-flex items-center justify-center shrink-0 rounded-md transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:scale-110 active:scale-95 duration-200";
 
     const sizeStyles = {
       xs: "h-6 w-6 text-[10px]",

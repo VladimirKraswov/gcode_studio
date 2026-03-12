@@ -4,6 +4,8 @@ import { type MainTab } from "@/types/ui";
 export interface UIContextValue {
   activeTab: MainTab;
   setActiveTab: (tab: MainTab) => void;
+  hint: string;
+  setHint: (hint: string) => void;
 }
 
 export const UIContext = createContext<UIContextValue | undefined>(undefined);

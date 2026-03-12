@@ -1,6 +1,7 @@
 import type { SketchTool } from "../model/types";
 import type { SketchSolveState } from "../model/solver/diagnostics";
 import { Badge } from "@/shared/components/ui/Badge";
+import { useUI } from "@/contexts/UIContext";
 
 type BadgeVariant = "primary" | "warning" | "danger" | "ghost" | "success";
 
@@ -80,6 +81,7 @@ export function EditStatusBar({
   solveState,
   issueCount = 0,
 }: EditStatusBarProps) {
+  const { hint } = useUI();
   const interactionLabel = isTransforming
     ? "Трансформация"
     : isDragging
@@ -153,10 +155,19 @@ export function EditStatusBar({
 
         <span className="h-3 w-px bg-border" />
 
-        <span>
-          Активный инструмент:{" "}
-          <span className="text-text font-bold capitalize">{tool}</span>
-        </span>
+        {hint && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                <span className="text-primary font-bold uppercase tracking-widest">{hint}</span>
+            </div>
+        )}
+
+        {!hint && (
+            <span>
+                Активный инструмент:{" "}
+                <span className="text-text font-bold capitalize">{tool}</span>
+            </span>
+        )}
       </div>
     </div>
   );

@@ -33,6 +33,7 @@ import { getGroupById } from "../model/grouping";
 import { Badge } from "@/shared/components/ui/Badge";
 import { Input } from "@/shared/components/ui/Input";
 import { Tabs } from "@/shared/components/ui/Tabs";
+import { useUI } from "@/contexts/UIContext";
 
 type ObjectListPanelProps = {
   document: SketchDocument;
@@ -173,6 +174,7 @@ export function ObjectListPanel({
 }: ObjectListPanelProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const { setHint } = useUI();
 
   const [activeTab, setActiveTab] = useState("objects");
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
@@ -524,7 +526,9 @@ export function ObjectListPanel({
                   {isGroup ? (
                     <button
                       onClick={() => onToggleGroupCollapsed(node.id)}
-                      className="w-4 h-4 flex items-center justify-center text-text-muted hover:text-text"
+                      onMouseEnter={() => setHint(node.collapsed ? "Развернуть группу" : "Свернуть группу")}
+                      onMouseLeave={() => setHint("")}
+                      className="w-4 h-4 flex items-center justify-center text-text-muted hover:text-text hover:scale-125 transition-transform"
                     >
                       {node.collapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
                     </button>
@@ -584,7 +588,9 @@ export function ObjectListPanel({
                   {node.kind === "shape" && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onToggleVisibility(node.id); }}
-                      className={`w-6 h-6 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-opacity ${node.visible ? "text-text-muted opacity-0 group-hover:opacity-100" : "text-primary opacity-100"}`}
+                      onMouseEnter={() => setHint(node.visible ? "Скрыть объект" : "Показать объект")}
+                      onMouseLeave={() => setHint("")}
+                      className={`w-6 h-6 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/5 hover:scale-110 transition-all ${node.visible ? "text-text-muted opacity-0 group-hover:opacity-100" : "text-primary opacity-100"}`}
                     >
                       {node.visible ? <FiEye size={13} /> : <FiEyeOff size={13} />}
                     </button>

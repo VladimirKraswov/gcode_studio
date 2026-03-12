@@ -29,11 +29,14 @@ type HistoryCadState = Pick<GCodeStudioProject, "editDocument" | "selection" | "
 export function useAppState() {
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<MainTab>("view");
+  const [hint, setHint] = useState("");
 
   const ui: UIContextValue = useMemo(() => ({
     activeTab,
     setActiveTab,
-  }), [activeTab]);
+    hint,
+    setHint,
+  }), [activeTab, hint]);
 
   // --- Settings State ---
   const [settings, setSettings] = useState<UserSettings>(() => loadSettings());
