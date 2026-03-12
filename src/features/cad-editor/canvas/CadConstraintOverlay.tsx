@@ -84,6 +84,67 @@ function getConstraintAnchor(
   return { id: "anchor", x: labelX, y: labelY };
 }
 
+function DimensionArrows({
+  p1,
+  p2,
+  opacity,
+  color,
+}: {
+  p1: { x: number; y: number };
+  p2: { x: number; y: number };
+  opacity: number;
+  color: string;
+}) {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 10) return null;
+
+  const unitX = dx / len;
+  const unitY = dy / len;
+
+  const arrowSize = 8;
+  const arrowAngle = Math.PI / 6; // 30 degrees
+
+  // Arrow 1 at p1
+  const a1p1 = {
+    x: p1.x + unitX * arrowSize * Math.cos(arrowAngle) + unitY * arrowSize * Math.sin(arrowAngle),
+    y: p1.y + unitY * arrowSize * Math.cos(arrowAngle) - unitX * arrowSize * Math.sin(arrowAngle),
+  };
+  const a1p2 = {
+    x: p1.x + unitX * arrowSize * Math.cos(-arrowAngle) + unitY * arrowSize * Math.sin(-arrowAngle),
+    y: p1.y + unitY * arrowSize * Math.cos(-arrowAngle) - unitX * arrowSize * Math.sin(-arrowAngle),
+  };
+
+  // Arrow 2 at p2
+  const a2p1 = {
+    x: p2.x - unitX * arrowSize * Math.cos(arrowAngle) + unitY * arrowSize * Math.sin(arrowAngle),
+    y: p2.y - unitY * arrowSize * Math.cos(arrowAngle) - unitX * arrowSize * Math.sin(arrowAngle),
+  };
+  const a2p2 = {
+    x: p2.x - unitX * arrowSize * Math.cos(-arrowAngle) + unitY * arrowSize * Math.sin(-arrowAngle),
+    y: p2.y - unitY * arrowSize * Math.cos(-arrowAngle) - unitX * arrowSize * Math.sin(-arrowAngle),
+  };
+
+  return (
+    <g opacity={opacity} pointerEvents="none">
+      <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={color} strokeWidth="1.5" strokeDasharray="4 2" />
+      <path
+        d={`M ${p1.x} ${p1.y} L ${a1p1.x} ${a1p1.y} M ${p1.x} ${p1.y} L ${a1p2.x} ${a1p2.y}`}
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d={`M ${p2.x} ${p2.y} L ${a2p1.x} ${a2p1.y} M ${p2.x} ${p2.y} L ${a2p2.x} ${a2p2.y}`}
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </g>
+  );
+}
+
 export function CadConstraintOverlay({
   document,
   documentHeight,
@@ -175,45 +236,62 @@ export function CadConstraintOverlay({
         const anchor = getConstraintAnchor(constraint, document);
         if (!anchor) return null;
 
-        const screen = cadToScreenPoint(anchor, documentHeight, view);
+        const pointIds = getConstraintPointIds(constraint);
+        const pts = pointIds
+          .map((id) => document.points.find((p) => p.id === id))
+          .filter(Boolean) as SketchPoint[];
+
+        const screenAnchor = cadToScreenPoint(anchor, documentHeight, view);
         const displayValue =
           typeof constraint.value === "number"
             ? Number(constraint.value.toFixed(3))
             : "";
 
+        const isBeingEdited = editingConstraint?.id === constraint.id;
+
         return (
-          <g key={constraint.id} transform={`translate(${screen.x}, ${screen.y - 18})`}>
-            <g
-              onPointerDown={(event) => {
-                onPointerDown?.(event, constraint.id);
-                setEditingConstraint(constraint);
-                setDialogPos({ x: event.clientX, y: event.clientY });
-              }}
-              style={{ cursor: "text", pointerEvents: "all" }}
-            >
-              <rect
-                x="-24"
-                y="-10"
-                width="48"
-                height="20"
-                rx="5"
-                fill={theme.cad.constraintLabelFill}
-                stroke={theme.cad.constraintLabelStroke}
-                strokeWidth="1.5"
+          <g key={constraint.id}>
+            {pts.length >= 2 && (
+              <DimensionArrows
+                p1={cadToScreenPoint(pts[0], documentHeight, view)}
+                p2={cadToScreenPoint(pts[1], documentHeight, view)}
+                opacity={isBeingEdited ? 1 : 0.3}
+                color={theme.cad.selectedStroke}
               />
-              <text
-                x="0"
-                y="4"
-                fontSize="11"
-                textAnchor="middle"
-                fill={theme.cad.constraintLabelText}
-                fontWeight="bold"
-                pointerEvents="none"
-                style={{ userSelect: "none" }}
+            )}
+            <g transform={`translate(${screenAnchor.x}, ${screenAnchor.y - 18})`}>
+              <g
+                onPointerDown={(event) => {
+                  onPointerDown?.(event, constraint.id);
+                  setEditingConstraint(constraint);
+                  setDialogPos({ x: event.clientX, y: event.clientY });
+                }}
+                style={{ cursor: "text", pointerEvents: "all" }}
               >
-                {constraint.type === "diameter" ? "Ø" : ""}
-                {displayValue}
-              </text>
+                <rect
+                  x="-24"
+                  y="-10"
+                  width="48"
+                  height="20"
+                  rx="5"
+                  fill={theme.cad.constraintLabelFill}
+                  stroke={theme.cad.constraintLabelStroke}
+                  strokeWidth="1.5"
+                />
+                <text
+                  x="0"
+                  y="4"
+                  fontSize="11"
+                  textAnchor="middle"
+                  fill={theme.cad.constraintLabelText}
+                  fontWeight="bold"
+                  pointerEvents="none"
+                  style={{ userSelect: "none" }}
+                >
+                  {constraint.type === "diameter" ? "Ø" : ""}
+                  {displayValue}
+                </text>
+              </g>
             </g>
           </g>
         );
