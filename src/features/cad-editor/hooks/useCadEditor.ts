@@ -63,6 +63,8 @@ import {
   deleteSelectedEntities,
   deleteShapeCascade,
   mirrorSelectedEntities,
+  splitLineAtPoint,
+  mergePoints,
 } from "../model/editorFacade";
 import { materializeSnappedPoint } from "../model/constraintFacade";
 import {
@@ -488,5 +490,13 @@ export function useCadEditor({
     fontOptions: DEFAULT_FONT_OPTIONS, toggleConstruction, svgImport, startSvgImport, closeSvgImport, abortSvgImport, updateSvgImportDraft, confirmSvgImport, renameGroup, toggleGroupCollapsed, reorderDocumentShapes,
     startLinearArray, startCircularArray, applyArray, closeArrayTool, updateLinearArrayParams, updateCircularArrayParams, editArrayGroupById, arrayTool, arrayPreview,
     addQuickConstraint, onConstraintPointerDown, updateConstraintValue, deleteConstraintById,
+    splitLine: (lineId: string, x: number, y: number) => {
+        checkpointHistory();
+        setDocument(prev => splitLineAtPoint(prev, lineId, x, y));
+    },
+    mergePoints: (p1Id: string, p2Id: string) => {
+        checkpointHistory();
+        setDocument(prev => mergePoints(prev, p1Id, p2Id));
+    }
   };
 }

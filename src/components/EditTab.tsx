@@ -177,6 +177,8 @@ export default function EditTab(props: EditTabProps) {
               onConstraintPointerDown={editor.onConstraintPointerDown}
               onConstraintValueChange={editor.updateConstraintValue}
               onConstraintDelete={editor.deleteConstraintById}
+              onSplitLine={editor.splitLine}
+              onMergePoints={editor.mergePoints}
               isTransforming={editor.isTransforming}
             />
           </div>

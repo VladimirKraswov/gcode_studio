@@ -15,6 +15,8 @@ import {
   getConstraintShapeIds,
 } from "./constraints";
 import { getShapePointIds, collectUsedPointIdsFromShapes } from "./shapeReferences";
+import { updateGeometry } from "./solver/manager";
+import { createPoint as createPointShape } from "./shapeFactory";
 
 function isPointSelectionId(id: string): boolean {
   return id.startsWith("pt_") || id.startsWith("pt-");
@@ -318,4 +320,88 @@ export function collectDraggedPointIds(
     affectedPointIds,
     nonParametricShapeIds,
   };
+}
+
+export function splitLineAtPoint(
+  document: SketchDocument,
+  lineId: string,
+  cadX: number,
+  cadY: number
+): SketchDocument {
+  const line = document.shapes.find(s => s.id === lineId);
+  if (!line || line.type !== "line") return document;
+
+  const newPt = createPointShape(cadX, cadY);
+  const oldP2 = (line as any).p2;
+
+  const newLine = {
+    ...line,
+    id: createId("line"),
+    name: `${line.name} (Split)`,
+    p1: newPt.id,
+    p2: oldP2
+  };
+
+  const updatedLine = {
+    ...line,
+    p2: newPt.id
+  };
+
+  return {
+    ...document,
+    points: [...document.points, newPt],
+    shapes: document.shapes.map(s => {
+      if (s.id === line.id) return updatedLine as SketchShape;
+      return s;
+    }).concat(newLine as SketchShape)
+  };
+}
+
+export function mergePoints(
+    document: SketchDocument,
+    p1Id: string,
+    p2Id: string
+): SketchDocument {
+    if (p1Id === p2Id) return document;
+
+    const p1 = document.points.find(p => p.id === p1Id);
+    const p2 = document.points.find(p => p.id === p2Id);
+    if (!p1 || !p2) return document;
+
+    const targetId = p1Id;
+    const sourceId = p2Id;
+
+    const nextShapes = document.shapes.map(shape => {
+        const s = { ...shape } as any;
+        if (s.p1 === sourceId) s.p1 = targetId;
+        if (s.p2 === sourceId) s.p2 = targetId;
+        if (s.center === sourceId) s.center = targetId;
+        if (s.majorAxisPoint === sourceId) s.majorAxisPoint = targetId;
+        if (Array.isArray(s.pointIds)) {
+            s.pointIds = s.pointIds.map((id: string) => id === sourceId ? targetId : id);
+        }
+        if (Array.isArray(s.controlPointIds)) {
+            s.controlPointIds = s.controlPointIds.map((id: string) => id === sourceId ? targetId : id);
+        }
+        return s as SketchShape;
+    });
+
+    const nextConstraints = document.constraints.map(c => ({
+        ...c,
+        targets: c.targets.map(t => {
+            if (t.kind === "point" && t.pointId === sourceId) {
+                return { ...t, pointId: targetId };
+            }
+            return t;
+        })
+    }));
+
+    const nextPoints = document.points.filter(p => p.id !== sourceId);
+
+    return updateGeometry({
+        ...document,
+        points: nextPoints,
+        shapes: nextShapes,
+        constraints: nextConstraints
+    });
 }

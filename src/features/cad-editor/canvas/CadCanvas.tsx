@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { cadToScreenPoint, screenToCadPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
@@ -55,6 +57,8 @@ type CadCanvasProps = {
   onConstraintPointerDown?: (event: React.PointerEvent<SVGElement>, constraintId: string) => void;
   onConstraintValueChange?: (constraintId: string, value: number) => void;
   onConstraintDelete?: (constraintId: string) => void;
+  onSplitLine?: (lineId: string, x: number, y: number) => void;
+  onMergePoints?: (p1Id: string, p2Id: string) => void;
 };
 
 function ArrayPreviewOverlay({
@@ -121,8 +125,11 @@ export function CadCanvas({
   onConstraintPointerDown,
   onConstraintValueChange,
   onConstraintDelete,
+  onSplitLine,
+  onMergePoints,
 }: CadCanvasProps) {
   const { theme } = useTheme();
+  const [draggedPointId, setDraggedPointId] = useState<string | null>(null);
 
   const showSelection = tool === "select";
   const selectedIds = new Set(showSelection ? selection.ids : []);
@@ -130,6 +137,7 @@ export function CadCanvas({
   function resolveCanvasCursor() {
     if (isPanning) return "grabbing";
     if (tool === "text") return "text";
+    if (tool === "trim") return "no-drop";
     if (tool !== "select") return "crosshair";
     if (isDragging || isTransforming) return "grabbing";
     if (isSelectionHover) return "grab";
@@ -141,9 +149,33 @@ export function CadCanvas({
       ref={svgRef}
       width="100%"
       height="100%"
-      onPointerDown={onPointerDown}
+      onPointerDown={(e) => {
+          if (tool === "select" && e.button === 0) {
+              const hitPoint = document.points.find(p => {
+                  const screen = cadToScreenPoint(p, document.height, view);
+                  const d = Math.sqrt((screen.x - e.clientX)**2 + (screen.y - e.clientY)**2);
+                  return d < 12;
+              });
+              if (hitPoint) setDraggedPointId(hitPoint.id);
+          }
+          onPointerDown(e);
+      }}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
+      onPointerUp={(e) => {
+          if (tool === "select" && draggedPointId) {
+              const targetPoint = document.points.find(p => {
+                  if (p.id === draggedPointId) return false;
+                  const screen = cadToScreenPoint(p, document.height, view);
+                  const d = Math.sqrt((screen.x - e.clientX)**2 + (screen.y - e.clientY)**2);
+                  return d < 12;
+              });
+              if (targetPoint) {
+                  onMergePoints?.(targetPoint.id, draggedPointId);
+              }
+          }
+          setDraggedPointId(null);
+          onPointerUp(e);
+      }}
       onPointerLeave={onPointerLeave}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
@@ -175,7 +207,20 @@ export function CadCanvas({
           isSelected={selectedIds.has(shape.id)}
           textPreviewMap={textPreviewMap}
           solveState={solveState}
-          onPointerDown={onShapePointerDown}
+          onPointerDown={(e, id) => {
+              if (e.detail === 2 && shape.type === "line" && svgRef.current) {
+                  const rawCad = screenToCadPoint(
+                      e.clientX,
+                      e.clientY,
+                      svgRef.current.getBoundingClientRect(),
+                      document.height,
+                      view
+                  );
+                  if (rawCad) onSplitLine?.(id, rawCad.x, rawCad.y);
+              } else {
+                  onShapePointerDown(e, id);
+              }
+          }}
         />
       ))}
 
