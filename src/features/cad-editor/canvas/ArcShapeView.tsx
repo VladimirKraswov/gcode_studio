@@ -14,6 +14,7 @@ export type ArcShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
+  overrideStroke?: string;
 };
 
 export function ArcShapeView({
@@ -24,6 +25,7 @@ export function ArcShapeView({
   isSelected,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: ArcShapeViewProps) {
   const { theme } = useTheme();
 
@@ -52,7 +54,7 @@ export function ArcShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

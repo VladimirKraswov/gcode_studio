@@ -17,6 +17,7 @@ import {
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 import { FiPlay } from "react-icons/fi";
 import { useCad } from "@/contexts/CadContext";
+import { Draggable } from "@/shared/components/ui/Draggable";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -112,27 +113,36 @@ export default function EditTab(props: EditTabProps) {
           </div>
 
           {/* Floating Tool Parameters (Array, Text) */}
-          <div className="absolute left-16 top-4 z-30 flex flex-col gap-2 max-w-[280px]">
+          <div className="absolute left-16 top-4 z-30 flex flex-col gap-2 pointer-events-none">
             {editor.arrayTool.mode && (
-              <ArrayToolPanel
-                mode={editor.arrayTool.mode}
-                linear={editor.arrayTool.linear}
-                circular={editor.arrayTool.circular}
-                onLinearChange={editor.updateLinearArrayParams}
-                onCircularChange={editor.updateCircularArrayParams}
-                onApply={editor.applyArray}
-                onClose={editor.closeArrayTool}
-              />
+              <Draggable className="pointer-events-auto shadow-2xl rounded-xl" handleClassName="drag-handle">
+                <ArrayToolPanel
+                  mode={editor.arrayTool.mode}
+                  linear={editor.arrayTool.linear}
+                  circular={editor.arrayTool.circular}
+                  onLinearChange={editor.updateLinearArrayParams}
+                  onCircularChange={editor.updateCircularArrayParams}
+                  onApply={editor.applyArray}
+                  onClose={editor.closeArrayTool}
+                />
+              </Draggable>
             )}
 
             {editor.tool === "text" && (
-              <div className="bg-panel border border-border rounded-xl shadow-lg p-1">
-                <TextToolPanel
-                  value={editor.textTool}
-                  fontOptions={editor.fontOptions}
-                  onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
-                />
-              </div>
+              <Draggable className="pointer-events-auto shadow-2xl rounded-xl" handleClassName="drag-handle">
+                <div className="bg-panel border border-border overflow-hidden rounded-xl">
+                  <div className="bg-panel-muted p-2 flex items-center justify-between border-b border-border cursor-move drag-handle">
+                    <span className="font-bold text-xs px-1">Text Settings</span>
+                  </div>
+                  <div className="p-1">
+                    <TextToolPanel
+                        value={editor.textTool}
+                        fontOptions={editor.fontOptions}
+                        onChange={(patch) => editor.setTextTool((prev) => ({ ...prev, ...patch }))}
+                    />
+                  </div>
+                </div>
+              </Draggable>
             )}
           </div>
 

@@ -13,6 +13,7 @@ export type LineShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGLineElement>) => void;
+  overrideStroke?: string;
 };
 
 export function LineShapeView({
@@ -23,6 +24,7 @@ export function LineShapeView({
   isSelected,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: LineShapeViewProps) {
   const { theme } = useTheme();
 
@@ -36,7 +38,7 @@ export function LineShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

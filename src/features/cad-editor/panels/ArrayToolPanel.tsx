@@ -37,18 +37,20 @@ export function ArrayToolPanel({
   onClose = () => {},
 }: ArrayToolPanelProps) {
   return (
-    <div className="bg-panel border border-border rounded-xl shadow-lg p-3 flex flex-col gap-3 w-[260px]">
-      <div className="flex items-center justify-between">
+    <div className="bg-panel border border-border rounded-xl shadow-lg flex flex-col w-[260px] overflow-hidden">
+      <div className="bg-panel-muted p-2 flex items-center justify-between border-b border-border cursor-move drag-handle">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-            {mode === "linear" ? <FiCopy size={16} /> : <FiRefreshCw size={16} />}
+          <div className="w-6 h-6 rounded-md bg-primary/10 text-primary flex items-center justify-center">
+            {mode === "linear" ? <FiCopy size={14} /> : <FiRefreshCw size={14} />}
           </div>
-          <span className="font-bold text-sm">
+          <span className="font-bold text-xs">
             {mode === "linear" ? "Linear Array" : "Circular Array"}
           </span>
         </div>
         <IconButton icon={<FiX size={14} />} onClick={onClose} size="xs" />
       </div>
+
+      <div className="p-3 flex flex-col gap-3">
 
       <div className="grid grid-cols-2 gap-2">
         {mode === "linear" ? (
@@ -177,20 +179,29 @@ export function ArrayToolPanel({
                 </div>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] uppercase font-bold text-text-muted">Radius</label>
+              <label className="text-[10px] uppercase font-bold text-text-muted">Center X</label>
               <Input
                 type="number"
-                value={circular.radius}
-                onChange={(e) => onCircularChange({ radius: Number(e.target.value) })}
+                value={circular.centerX}
+                onChange={(e) => onCircularChange({ centerX: Number(e.target.value) })}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase font-bold text-text-muted">Center Y</label>
+              <Input
+                type="number"
+                value={circular.centerY}
+                onChange={(e) => onCircularChange({ centerY: Number(e.target.value) })}
               />
             </div>
           </>
         )}
       </div>
 
-      <Button size="sm" onClick={onApply} className="w-full">
+      <Button size="sm" onClick={onApply} className="w-full mt-2">
         Apply Array
       </Button>
+      </div>
     </div>
   );
 }

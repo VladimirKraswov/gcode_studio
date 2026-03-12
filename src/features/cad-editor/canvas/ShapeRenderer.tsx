@@ -1,3 +1,4 @@
+import React from "react";
 import type { CadPoint } from "@/utils/fontGeometry";
 import type { ViewTransform } from "../model/view";
 import type { SketchShape, SketchPoint } from "../model/types";
@@ -13,6 +14,7 @@ type ShapeRendererProps = {
   textPreviewMap: Record<string, CadPoint[][]>;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+  overrideStroke?: string;
 };
 
 export function ShapeRenderer({
@@ -24,6 +26,7 @@ export function ShapeRenderer({
   textPreviewMap,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: ShapeRendererProps) {
   const plugin = useShapePlugin(shape);
 
@@ -32,18 +35,20 @@ export function ShapeRenderer({
     return null;
   }
 
-  return (
-    <>
-      {plugin.render({
-        shape,
-        points,
-        documentHeight,
-        view,
-        isSelected,
-        textPreviewMap,
-        solveState,
-        onPointerDown,
-      })}
-    </>
-  );
+  const rendered = plugin.render({
+    shape,
+    points,
+    documentHeight,
+    view,
+    isSelected,
+    textPreviewMap,
+    solveState,
+    onPointerDown,
+  });
+
+  if (overrideStroke && React.isValidElement(rendered)) {
+      return React.cloneElement(rendered as React.ReactElement<any>, { stroke: overrideStroke });
+  }
+
+  return <>{rendered}</>;
 }

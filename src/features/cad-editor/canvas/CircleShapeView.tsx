@@ -13,6 +13,7 @@ export type CircleShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
+  overrideStroke?: string;
 };
 
 export function CircleShapeView({
@@ -23,6 +24,7 @@ export function CircleShapeView({
   isSelected,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: CircleShapeViewProps) {
   const { theme } = useTheme();
 
@@ -33,7 +35,7 @@ export function CircleShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

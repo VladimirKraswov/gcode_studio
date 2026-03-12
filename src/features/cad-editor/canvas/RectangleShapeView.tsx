@@ -13,6 +13,7 @@ export type RectangleShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
+  overrideStroke?: string;
 };
 
 export function RectangleShapeView({
@@ -23,6 +24,7 @@ export function RectangleShapeView({
   isSelected,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: RectangleShapeViewProps) {
   const { theme } = useTheme();
 
@@ -47,7 +49,7 @@ export function RectangleShapeView({
   const cy = p.y + rectHeight / 2;
   const rotation = shape.rotation ?? 0;
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

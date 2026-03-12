@@ -71,17 +71,18 @@ function ArrayPreviewOverlay({
   if (!preview || preview.shapes.length === 0) return null;
 
   return (
-    <g pointerEvents="none" opacity="0.5">
+    <g pointerEvents="none" stroke="#f97316" strokeDasharray="4 2" opacity="0.8">
       {preview.shapes.map((shape) => (
         <ShapeRenderer
           key={shape.id}
-          shape={shape}
+          shape={{ ...shape }}
           points={preview.points}
           documentHeight={document.height}
           view={view}
           isSelected={false}
           textPreviewMap={textPreviewMap}
           onPointerDown={() => {}}
+          overrideStroke="#f97316"
         />
       ))}
     </g>

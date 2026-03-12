@@ -101,7 +101,8 @@ export function rebuildArrayGroup(
     const center = typeof params.centerX === "number" ? { x: params.centerX, y: params.centerY as number } :
                    document.points.find(p => p.id === params.centerX) || { x: 0, y: 0 };
 
-    const stepAngle = params.totalAngle / count;
+    const totalAngle = params.totalAngle || 360;
+    const stepAngle = totalAngle / count;
     const directionMult = params.direction === "ccw" ? 1 : -1;
 
     for (let i = 1; i < count; i++) {
@@ -289,21 +290,23 @@ function getShapePointIds(s: SketchShape): string[] {
   if ("p1" in shape) ids.push(shape.p1);
   if ("p2" in shape) ids.push(shape.p2);
   if ("center" in shape) ids.push(shape.center);
-  if ("pointIds" in shape) ids.push(...shape.pointIds);
-  if ("controlPointIds" in shape) ids.push(...shape.controlPointIds);
+  if ("pointIds" in shape && Array.isArray(shape.pointIds)) ids.push(...shape.pointIds);
+  if ("controlPointIds" in shape && Array.isArray(shape.controlPointIds)) ids.push(...shape.controlPointIds);
   if ("majorAxisPoint" in shape) ids.push(shape.majorAxisPoint);
+  if ("radiusPoint" in shape) ids.push(shape.radiusPoint);
   return ids.filter(Boolean);
 }
 
 function updateShapePointIds(s: any, map: Map<string, string>) {
-  if ("p1" in s) s.p1 = map.get(s.p1);
-  if ("p2" in s) s.p2 = map.get(s.p2);
-  if ("center" in s) s.center = map.get(s.center);
+  if ("p1" in s && s.p1) s.p1 = map.get(s.p1) || s.p1;
+  if ("p2" in s && s.p2) s.p2 = map.get(s.p2) || s.p2;
+  if ("center" in s && s.center) s.center = map.get(s.center) || s.center;
   if ("pointIds" in s && Array.isArray(s.pointIds)) {
-    s.pointIds = s.pointIds.map((id: string) => map.get(id));
+    s.pointIds = s.pointIds.map((id: string) => map.get(id) || id);
   }
   if ("controlPointIds" in s && Array.isArray(s.controlPointIds)) {
-    s.controlPointIds = s.controlPointIds.map((id: string) => map.get(id));
+    s.controlPointIds = s.controlPointIds.map((id: string) => map.get(id) || id);
   }
-  if ("majorAxisPoint" in s) s.majorAxisPoint = map.get(s.majorAxisPoint);
+  if ("majorAxisPoint" in s && s.majorAxisPoint) s.majorAxisPoint = map.get(s.majorAxisPoint) || s.majorAxisPoint;
+  if ("radiusPoint" in s && s.radiusPoint) s.radiusPoint = map.get(s.radiusPoint) || s.radiusPoint;
 }

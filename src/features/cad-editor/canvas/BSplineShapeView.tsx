@@ -13,6 +13,7 @@ export type BSplineShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
+  overrideStroke?: string;
 };
 
 export function BSplineShapeView({
@@ -22,6 +23,7 @@ export function BSplineShapeView({
   view,
   isSelected,
   onPointerDown,
+  overrideStroke,
 }: BSplineShapeViewProps) {
   const { theme } = useTheme();
 
@@ -50,7 +52,7 @@ export function BSplineShapeView({
       <polyline
         points={curveSvgPoints}
         fill="none"
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={overrideStroke || (isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke)}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"

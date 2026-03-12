@@ -19,6 +19,7 @@ export type ShapeRenderProps<TShape extends SketchShape = SketchShape> = {
   textPreviewMap: Record<string, { x: number; y: number }[][]>;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
+  overrideStroke?: string;
 };
 
 export type ShapePlugin<TShape extends SketchShape = SketchShape> = {

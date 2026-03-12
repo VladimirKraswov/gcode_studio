@@ -13,6 +13,7 @@ export type EllipseShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGEllipseElement>) => void;
+  overrideStroke?: string;
 };
 
 export function EllipseShapeView({
@@ -23,6 +24,7 @@ export function EllipseShapeView({
   isSelected,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: EllipseShapeViewProps) {
   const { theme } = useTheme();
 
@@ -39,7 +41,7 @@ export function EllipseShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

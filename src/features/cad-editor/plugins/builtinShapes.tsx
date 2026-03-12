@@ -30,7 +30,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchRectangle>({
       type: "rectangle",
       getBounds: (shape: SketchRectangle, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <RectangleShapeView
           shape={shape}
           points={points}
@@ -39,6 +39,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -46,7 +47,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchCircle>({
       type: "circle",
       getBounds: (shape: SketchCircle, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <CircleShapeView
           shape={shape}
           points={points}
@@ -55,6 +56,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -62,7 +64,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchLine>({
       type: "line",
       getBounds: (shape: SketchLine, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <LineShapeView
           shape={shape}
           points={points}
@@ -71,6 +73,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -78,7 +81,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchArc>({
       type: "arc",
       getBounds: (shape: SketchArc, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <ArcShapeView
           shape={shape}
           points={points}
@@ -87,6 +90,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -94,7 +98,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchEllipse>({
       type: "ellipse",
       getBounds: (shape: SketchEllipse, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <EllipseShapeView
           shape={shape}
           points={points}
@@ -103,6 +107,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -110,7 +115,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchBSpline>({
       type: "bspline",
       getBounds: (shape: SketchBSpline, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <BSplineShapeView
           shape={shape}
           points={points}
@@ -119,6 +124,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -126,7 +132,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchPolyline>({
       type: "polyline",
       getBounds: (shape: SketchPolyline, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <PolylineShapeView
           shape={shape}
           points={points}
@@ -135,6 +141,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
