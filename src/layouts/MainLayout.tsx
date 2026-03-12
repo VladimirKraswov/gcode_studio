@@ -1,5 +1,5 @@
 // src/layouts/MainLayout.tsx
-import type { ReactNode } from "react";
+import { useState, useCallback, useEffect, type ReactNode } from "react";
 
 type MainLayoutProps = {
   header: ReactNode;
@@ -16,8 +16,38 @@ export function MainLayout({
   rightPanel,
   bottomBar,
 }: MainLayoutProps) {
+  const [leftWidth, setLeftWidth] = useState(280);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback((e: MouseEvent) => {
+    if (isResizing) {
+      const nextWidth = Math.max(200, Math.min(600, e.clientX));
+      setLeftWidth(nextWidth);
+    }
+  }, [isResizing]);
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", resize);
+      window.addEventListener("mouseup", stopResizing);
+    }
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [isResizing, resize, stopResizing]);
+
   return (
-    <div className="ui-app-shell flex flex-col h-screen overflow-hidden bg-bg text-text">
+    <div className={`ui-app-shell flex flex-col h-screen overflow-hidden bg-bg text-text ${isResizing ? "cursor-col-resize select-none" : ""}`}>
       {/* Top Header / Mode Switcher */}
       <div className="z-[100] shrink-0 relative">
         {header}
@@ -25,8 +55,15 @@ export function MainLayout({
 
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
         {/* Left Sidebar (Explorer) */}
-        <aside className="w-[280px] shrink-0 border-r border-border bg-panel-solid flex flex-col overflow-hidden">
+        <aside
+            className="shrink-0 border-r border-border bg-panel-solid flex flex-col overflow-hidden relative"
+            style={{ width: leftWidth }}
+        >
           {leftPanel}
+          <div
+            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-r border-transparent hover:border-primary/20"
+            onMouseDown={startResizing}
+          />
         </aside>
 
         {/* Main Workspace */}

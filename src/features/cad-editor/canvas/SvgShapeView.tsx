@@ -30,6 +30,7 @@ export type SvgShapeViewProps = {
   isSelected: boolean;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
+  overrideStroke?: string;
 };
 
 export function SvgShapeView({
@@ -39,6 +40,7 @@ export function SvgShapeView({
   isSelected,
   solveState,
   onPointerDown,
+  overrideStroke,
 }: Omit<SvgShapeViewProps, "points">) {
   const { theme } = useTheme();
 
@@ -52,7 +54,7 @@ export function SvgShapeView({
     y: shape.y + shape.height / 2,
   };
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

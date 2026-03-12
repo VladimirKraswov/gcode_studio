@@ -11,7 +11,6 @@ import {
   FiImage,
   FiLayers,
   FiMinus,
-  FiMoreHorizontal,
   FiMove,
   FiTrash2,
   FiType,
@@ -32,8 +31,8 @@ import type {
 } from "../model/types";
 import { getGroupById } from "../model/grouping";
 import { Badge } from "@/shared/components/ui/Badge";
-import { IconButton } from "@/shared/components/ui/IconButton";
 import { Input } from "@/shared/components/ui/Input";
+import { Tabs } from "@/shared/components/ui/Tabs";
 
 type ObjectListPanelProps = {
   document: SketchDocument;
@@ -175,6 +174,7 @@ export function ObjectListPanel({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
+  const [activeTab, setActiveTab] = useState("objects");
   const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [draggedShapeId, setDraggedShapeId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
@@ -229,86 +229,88 @@ export function ObjectListPanel({
     const nodes: TreeNode[] = [];
 
     for (const item of items) {
-      if (item.kind === "group") {
-        const group = getGroupById(document, item.groupId);
-        const collapsed = group?.collapsed ?? false;
-        const selected =
-          item.shapes.length > 0 &&
-          item.shapes.every((shape) =>
-            selection.refs.some((ref) => ref.kind === "shape" && ref.id === shape.id),
-          );
-        const visible = item.shapes.some((shape) => shape.visible !== false);
-        const arrayBadge = getArrayBadgeMeta(group?.array);
+      if (activeTab === "objects") {
+        if (item.kind === "group") {
+          const group = getGroupById(document, item.groupId);
+          const collapsed = group?.collapsed ?? false;
+          const selected =
+            item.shapes.length > 0 &&
+            item.shapes.every((shape) =>
+              selection.refs.some((ref) => ref.kind === "shape" && ref.id === shape.id),
+            );
+          const visible = item.shapes.some((shape) => shape.visible !== false);
+          const arrayBadge = getArrayBadgeMeta(group?.array);
 
-        const groupMatches = !q || (group?.name ?? "").toLowerCase().includes(q);
-        const matchedShapes = q
-          ? item.shapes.filter((shape) => shape.name.toLowerCase().includes(q))
-          : item.shapes;
+          const groupMatches = !q || (group?.name ?? "").toLowerCase().includes(q);
+          const matchedShapes = q
+            ? item.shapes.filter((shape) => shape.name.toLowerCase().includes(q))
+            : item.shapes;
 
-        if (!groupMatches && matchedShapes.length === 0) continue;
+          if (!groupMatches && matchedShapes.length === 0) continue;
 
-        nodes.push({
-          kind: "group",
-          id: item.groupId,
-          name: group?.name ?? `Группа (${item.shapes.length})`,
-          depth: 0,
-          collapsed,
-          selected,
-          visible,
-          arrayBadge,
-          shapes: item.shapes,
-        });
+          nodes.push({
+            kind: "group",
+            id: item.groupId,
+            name: group?.name ?? `Группа (${item.shapes.length})`,
+            depth: 0,
+            collapsed,
+            selected,
+            visible,
+            arrayBadge,
+            shapes: item.shapes,
+          });
 
-        if (!collapsed || q) {
-          const shapesToShow = groupMatches && !q ? item.shapes : matchedShapes;
-          for (const shape of shapesToShow) {
-            nodes.push({
-              kind: "shape",
-              id: shape.id,
-              name: shape.name,
-              depth: 1,
-              selected: selection.refs.some((ref) => ref.kind === "shape" && ref.id === shape.id),
-              visible: shape.visible !== false,
-              shape,
-              parentGroupId: item.groupId,
-            });
+          if (!collapsed || q) {
+            const shapesToShow = groupMatches && !q ? item.shapes : matchedShapes;
+            for (const shape of shapesToShow) {
+              nodes.push({
+                kind: "shape",
+                id: shape.id,
+                name: shape.name,
+                depth: 1,
+                selected: selection.refs.some((ref) => ref.kind === "shape" && ref.id === shape.id),
+                visible: shape.visible !== false,
+                shape,
+                parentGroupId: item.groupId,
+              });
+            }
           }
+          continue;
         }
-        continue;
-      }
 
-      if (item.kind === "shape") {
-        if (q && !item.shape.name.toLowerCase().includes(q)) continue;
+        if (item.kind === "shape") {
+          if (q && !item.shape.name.toLowerCase().includes(q)) continue;
 
-        nodes.push({
-          kind: "shape",
-          id: item.shape.id,
-          name: item.shape.name,
-          depth: 0,
-          selected: selection.refs.some((ref) => ref.kind === "shape" && ref.id === item.shape.id),
-          visible: item.shape.visible !== false,
-          shape: item.shape,
-          parentGroupId: null,
-        });
-        continue;
-      }
+          nodes.push({
+            kind: "shape",
+            id: item.shape.id,
+            name: item.shape.name,
+            depth: 0,
+            selected: selection.refs.some((ref) => ref.kind === "shape" && ref.id === item.shape.id),
+            visible: item.shape.visible !== false,
+            shape: item.shape,
+            parentGroupId: null,
+          });
+          continue;
+        }
+      } else {
+        if (item.kind === "constraint") {
+          const name = getConstraintLabel(item.constraint);
+          if (q && !name.toLowerCase().includes(q)) continue;
 
-      if (item.kind === "constraint") {
-        const name = getConstraintLabel(item.constraint);
-        if (q && !name.toLowerCase().includes(q)) continue;
-
-        nodes.push({
-          kind: "constraint",
-          id: item.constraint.id,
-          name,
-          depth: 0,
-          selected: selection.refs.some((ref) => ref.kind === "constraint" && ref.id === item.constraint.id),
-          constraint: item.constraint,
-        });
+          nodes.push({
+            kind: "constraint",
+            id: item.constraint.id,
+            name,
+            depth: 0,
+            selected: selection.refs.some((ref) => ref.kind === "constraint" && ref.id === item.constraint.id),
+            constraint: item.constraint,
+          });
+        }
       }
     }
     return nodes;
-  }, [document, filter, items, selection.refs]);
+  }, [document, filter, items, selection.refs, activeTab]);
 
   function moveShapeBefore(targetShapeId: string) {
     if (!draggedShapeId || draggedShapeId === targetShapeId) return;
@@ -462,34 +464,16 @@ export function ObjectListPanel({
   }
 
   return (
-    <div ref={rootRef} className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-3 border-b border-border bg-panel-muted/30">
-        <div className="flex items-center gap-2">
-          <FiLayers size={16} className="text-primary" />
-          <span className="text-[13px] font-bold text-text">Объекты</span>
-          <Badge variant="ghost" className="px-1.5 py-0 h-4 min-w-4">
-            {document.shapes.length + document.constraints.length}
-          </Badge>
-        </div>
-        <IconButton
-          icon={<FiMoreHorizontal size={14} />}
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            if (selection.primaryRef?.kind === "shape") {
-              setContextMenu({
-                x: rect.right - 100,
-                y: rect.bottom + 4,
-                target: { kind: "shape", shapeId: selection.primaryRef.id },
-              });
-            } else if (selection.primaryRef?.kind === "constraint") {
-              setContextMenu({
-                x: rect.right - 100,
-                y: rect.bottom + 4,
-                target: { kind: "constraint", constraintId: selection.primaryRef.id },
-              });
-            }
-          }}
-          className="w-7 h-7"
+    <div ref={rootRef} className="flex flex-col h-full overflow-hidden">
+      <div className="p-1 border-b border-border bg-panel-muted/10">
+        <Tabs
+            tabs={[
+                { id: "objects", label: "Объекты", icon: <FiBox size={13} /> },
+                { id: "constraints", label: "Ограничения", icon: <FiHash size={13} /> }
+            ]}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            variant="pill"
         />
       </div>
 
@@ -499,7 +483,7 @@ export function ObjectListPanel({
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Поиск объектов..."
+            placeholder="Поиск..."
             className="h-8 pl-8 text-[12px] bg-panel-muted border-transparent"
           />
         </div>

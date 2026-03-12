@@ -15,6 +15,7 @@ export type TextShapeViewProps = {
   solveState?: SketchSolveState;
   polylines: CadPoint[][];
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
+  overrideStroke?: string;
 };
 
 export function TextShapeView({
@@ -25,6 +26,7 @@ export function TextShapeView({
   solveState,
   polylines: _polylines,
   onPointerDown,
+  overrideStroke,
 }: TextShapeViewProps) {
   const { theme } = useTheme();
 
@@ -33,7 +35,7 @@ export function TextShapeView({
 
   const scale = shape.scale ?? 1;
 
-  const strokeColor = resolveShapeStrokeColor({
+  const strokeColor = overrideStroke || resolveShapeStrokeColor({
     solveState,
     isConstruction: shape.isConstruction,
     isSelected,

@@ -158,6 +158,7 @@ export const builtinShapesPlugin: CadPlugin = {
         solveState,
         onPointerDown,
         textPreviewMap,
+        overrideStroke,
       }) => (
         <TextShapeView
           shape={shape}
@@ -168,6 +169,7 @@ export const builtinShapesPlugin: CadPlugin = {
           solveState={solveState}
           polylines={textPreviewMap[shape.id] ?? []}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
@@ -175,7 +177,7 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchSvg>({
       type: "svg",
       getBounds: (shape: SketchSvg, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, documentHeight, view, isSelected, solveState, onPointerDown }) => (
+      render: ({ shape, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
         <SvgShapeView
           shape={shape}
           documentHeight={documentHeight}
@@ -183,6 +185,7 @@ export const builtinShapesPlugin: CadPlugin = {
           isSelected={isSelected}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
+          overrideStroke={overrideStroke}
         />
       ),
     }),
