@@ -16,7 +16,7 @@ import {
 } from "@/features/cad-editor";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 import { FiPlay } from "react-icons/fi";
-import { useApp } from "@/contexts/AppContext";
+import { useCad } from "@/contexts/CadContext";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -38,7 +38,7 @@ type EditTabProps = {
 };
 
 export default function EditTab(props: EditTabProps) {
-  const { setCadEditor } = useApp();
+  const { setCadEditor } = useCad();
   const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
 
   const editor = useCadEditor({
@@ -62,7 +62,7 @@ export default function EditTab(props: EditTabProps) {
   const canUngroupSelected = Boolean(primaryShape?.groupId);
   const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
 
-  // Синхронизируем методы редактора с контекстом
+  // Synchronize editor methods with context
   useEffect(() => {
     setCadEditor({
       insertControlPointToSelectedBSpline: editor.insertControlPointToSelectedBSpline,
@@ -70,7 +70,7 @@ export default function EditTab(props: EditTabProps) {
     });
 
     return () => {
-      setCadEditor(null); // очищаем при размонтировании
+      setCadEditor(null);
     };
   }, [
     editor.insertControlPointToSelectedBSpline,
@@ -111,7 +111,7 @@ export default function EditTab(props: EditTabProps) {
             />
           </div>
 
-          {/* Floating Tool Parameters (Array, Text) - positioned to avoid sidebars if possible */}
+          {/* Floating Tool Parameters (Array, Text) */}
           <div className="absolute left-16 top-4 z-30 flex flex-col gap-2 max-w-[280px]">
             {editor.arrayTool.mode && (
               <ArrayToolPanel

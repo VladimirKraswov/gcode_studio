@@ -33,6 +33,7 @@ export * from "./model/shapeFactory";
 export * from "./model/shapeTransforms";
 export * from "./model/shapeBounds";
 export * from "./model/array";
+export * from "./model/bspline";
 export { createId } from "./model/ids";
 export { createDefaultView, type ViewTransform } from "./model/view";
 

@@ -8,17 +8,20 @@ import type {
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
+import type { SketchSolveState } from "../model/solver/diagnostics";
 
 type CadConstraintOverlayProps = {
   document: SketchDocument;
   documentHeight: number;
   view: ViewTransform;
   selection: SelectionState;
+  solveState?: SketchSolveState;
+  conflictingConstraintIds?: string[];
   onPointerDown?: (event: React.PointerEvent<SVGElement>, id: string) => void;
 };
 
 function isPointSelectionId(id: string): boolean {
-  return id.startsWith("pt_");
+  return id.startsWith("pt_") || id.startsWith("pt-");
 }
 
 function getConstraintSymbol(type: string): string {

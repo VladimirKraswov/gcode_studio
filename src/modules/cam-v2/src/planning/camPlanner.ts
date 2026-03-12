@@ -1,9 +1,7 @@
 // src/planning/camPlanner.ts
 
 import type {
-  Contour,
   LeadConfig,
-  PlanOptions,
   PocketPlanInput,
   Point,
   Point3D,

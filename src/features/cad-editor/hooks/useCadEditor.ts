@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
   finishDrag,
   startArcRadiusDraft,
@@ -25,7 +25,6 @@ import {
   createCircleShape,
   createLineShape,
   createPolylineShape,
-  createRectangleShape,
   createSvgShape,
   createTextShape,
   createPoint,
@@ -39,6 +38,10 @@ import type {
   SketchPolylinePoint,
   SketchTool,
   MirrorAxis,
+  SketchPoint,
+  SketchShape,
+  SketchBSpline,
+  SketchArrayDefinition,
 } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import {
@@ -61,9 +64,9 @@ import { applyDefaultSnap } from "../geometry/snap";
 import type { ViewTransform } from "../model/view";
 import { useSvgImportFlow } from "./useSvgImportFlow";
 import {
-  renameGroup,
-  reorderShapes,
-  toggleGroupCollapsed,
+  renameGroup as modelRenameGroup,
+  reorderShapes as modelReorderShapes,
+  toggleGroupCollapsed as modelToggleGroupCollapsed,
 } from "../model/grouping";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 import {
@@ -123,7 +126,7 @@ function isSamePoint(
 }
 
 function isPointSelectionId(id: string): boolean {
-  return id.startsWith("pt_");
+  return id.startsWith("pt_") || id.startsWith("pt-");
 }
 
 function createDragState(
@@ -163,8 +166,8 @@ export function useCadEditor({
     useState<SketchPolylinePoint | null>(null);
   const [textTool, setTextTool] = useState(createDefaultTextToolState());
   const [isGenerating, setIsGenerating] = useState(false);
-  const [dragState, setDragState] = useState<DragState>(null);
-  const [panState, setPanState] = useState<PanState>(null);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [panState, setPanState] = useState<PanState | null>(null);
   const [isSelectionHover, setIsSelectionHover] = useState(false);
 
   const [arrayToolMode, setArrayToolMode] = useState<ArrayToolMode>(null);
@@ -194,24 +197,24 @@ export function useCadEditor({
   const diagnostics = useMemo(() => analyzeSketchDiagnostics(document), [document]);
   const dof = diagnostics.dof;
 
-  function setTool(nextTool: SketchTool) {
+  const setTool = useCallback((nextTool: SketchTool) => {
     setToolState(nextTool);
     if (nextTool !== "select") {
       onSelectionChangeSilently(clearSelection());
       setIsSelectionHover(false);
     }
-  }
+  }, [onSelectionChangeSilently]);
 
-  function focusCreatedShape(shapeId: string) {
+  const focusCreatedShape = useCallback((shapeId: string) => {
     setToolState("select");
     onSelectionChange(selectOnly(shapeId));
     setDraft(null);
     setPolylineDraft([]);
     setPolylineHoverPoint(null);
     setIsSelectionHover(false);
-  }
+  }, [onSelectionChange]);
 
-  function commitPolyline() {
+  const commitPolyline = useCallback(() => {
     if (polylineDraft.length < 2) {
       setPolylineDraft([]);
       setPolylineHoverPoint(null);
@@ -235,9 +238,9 @@ export function useCadEditor({
 
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
-  }
+  }, [document, polylineDraft, checkpointHistory, setDocument, focusCreatedShape]);
 
-  function commitBSpline() {
+  const commitBSpline = useCallback(() => {
     if (polylineDraft.length < 2) {
       setPolylineDraft([]);
       setPolylineHoverPoint(null);
@@ -260,32 +263,32 @@ export function useCadEditor({
 
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
-  }
+  }, [document, polylineDraft, checkpointHistory, setDocument, focusCreatedShape]);
 
-  function isPanMouseButton(button: number): boolean {
+  const isPanMouseButton = useCallback((button: number): boolean => {
     if (panButtonMode === "middle") return button === 1;
     if (panButtonMode === "right") return button === 2;
     return button === 1 || button === 2;
-  }
+  }, [panButtonMode]);
 
-  function closeArrayTool() {
+  const closeArrayTool = useCallback(() => {
     setArrayToolMode(null);
     setEditingArrayGroupId(null);
-  }
+  }, []);
 
-  function startLinearArray() {
+  const startLinearArray = useCallback(() => {
     if (selection.ids.length === 0) return;
     setEditingArrayGroupId(null);
     setArrayToolMode("linear");
-  }
+  }, [selection.ids.length]);
 
-  function startCircularArray() {
+  const startCircularArray = useCallback(() => {
     if (selection.ids.length === 0) return;
     setEditingArrayGroupId(null);
     setArrayToolMode("circular");
-  }
+  }, [selection.ids.length]);
 
-  function editArrayGroupById(groupId: string) {
+  const editArrayGroupById = useCallback((groupId: string) => {
     const group = document.groups.find((item) => item.id === groupId);
     if (!group?.array) return;
 
@@ -304,9 +307,9 @@ export function useCadEditor({
       setCircularArrayParams(group.array.params as any);
       setArrayToolMode("circular");
     }
-  }
+  }, [document.groups, document.shapes, onSelectionChange]);
 
-  function applyArray() {
+  const applyArray = useCallback(() => {
     if (selection.ids.length === 0 || !arrayToolMode) return;
     checkpointHistory();
 
@@ -318,17 +321,17 @@ export function useCadEditor({
         return;
       }
 
-      const nextDefinition: any =
+      const nextDefinition: SketchArrayDefinition =
         arrayToolMode === "linear"
           ? {
               type: "linear",
               sourceShapeIds: group.array.sourceShapeIds,
-              params: linearArrayParams,
+              params: linearArrayParams as any,
             }
           : {
               type: "circular",
               sourceShapeIds: group.array.sourceShapeIds,
-              params: circularArrayParams,
+              params: circularArrayParams as any,
             };
 
       setDocument(updateGeometry(rebuildArrayGroup(document, editingArrayGroupId, nextDefinition)));
@@ -345,7 +348,7 @@ export function useCadEditor({
     setDocument(updateGeometry(result.document));
     setEditingArrayGroupId(null);
     setArrayToolMode(null);
-  }
+  }, [selection, arrayToolMode, checkpointHistory, editingArrayGroupId, document, linearArrayParams, circularArrayParams, setDocument]);
 
   useEffect(() => {
     const handleEditArrayGroup = (event: Event) => {
@@ -356,7 +359,7 @@ export function useCadEditor({
 
     window.addEventListener(EDIT_ARRAY_GROUP_EVENT, handleEditArrayGroup);
     return () => window.removeEventListener(EDIT_ARRAY_GROUP_EVENT, handleEditArrayGroup);
-  }, [document, selection]);
+  }, [editArrayGroupById]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -387,12 +390,12 @@ export function useCadEditor({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [polylineDraft, tool]);
+  }, [polylineDraft, tool, commitPolyline, commitBSpline]);
 
-  function startPan(
+  const startPan = useCallback((
     event: React.PointerEvent<SVGElement | SVGSVGElement>,
     options?: { clearSelectionOnPointerUp?: boolean },
-  ) {
+  ) => {
     event.preventDefault();
     setIsSelectionHover(false);
     checkpointHistory();
@@ -407,7 +410,15 @@ export function useCadEditor({
       clearSelectionOnPointerUp: options?.clearSelectionOnPointerUp ?? false,
       moved: false,
     });
-  }
+  }, [view.offsetX, view.offsetY, checkpointHistory]);
+
+  const cancelCurrentDraft = useCallback(() => {
+    setDraft(null);
+    setPolylineDraft([]);
+    setPolylineHoverPoint(null);
+    setDragState(null);
+    setIsSelectionHover(false);
+  }, []);
 
   const {
     svgImport,
@@ -436,7 +447,7 @@ export function useCadEditor({
     },
   });
 
-  function getCadPoint(event: React.PointerEvent<SVGElement>) {
+  const getCadPoint = useCallback((event: React.PointerEvent<SVGElement>) => {
     if (!svgRef.current) return null;
     return screenToCadPoint(
       event.clientX,
@@ -445,9 +456,191 @@ export function useCadEditor({
       document.height,
       view,
     );
-  }
+  }, [document.height, view]);
 
-  function handleCanvasPointerDown(event: React.PointerEvent<SVGSVGElement>) {
+  const addCircle = useCallback((cx: number, cy: number, radius: number) => {
+    if (radius < 1) return;
+
+    const center = createPoint(cx, cy);
+    const nextDoc = addPoint(document, center);
+    const shape = createCircleShape(
+      `Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`,
+      center.id,
+      radius,
+    );
+
+    checkpointHistory();
+    setDocument(updateGeometry(addShape(nextDoc, shape)));
+    focusCreatedShape(shape.id);
+  }, [document, checkpointHistory, setDocument, focusCreatedShape]);
+
+  const addLine = useCallback((x1: number, y1: number, x2: number, y2: number) => {
+    if (distance({ x: x1, y: y1 }, { x: x2, y: y2 }) < 0.5) return;
+
+    const p1 = createPoint(x1, y1);
+    const p2 = createPoint(x2, y2);
+    let nextDoc = addPoint(document, p1);
+    nextDoc = addPoint(nextDoc, p2);
+
+    const dx = Math.abs(x1 - x2);
+    const dy = Math.abs(y1 - y2);
+
+    if (dy < dx * 0.05) {
+      nextDoc.constraints.push(createConstraint("horizontal", [p1.id, p2.id], [], 0));
+    } else if (dx < dy * 0.05) {
+      nextDoc.constraints.push(createConstraint("vertical", [p1.id, p2.id], [], 0));
+    }
+
+    const shape = createLineShape(
+      `Line ${document.shapes.filter((s) => s.type === "line").length + 1}`,
+      p1.id,
+      p2.id,
+    );
+
+    checkpointHistory();
+    setDocument(updateGeometry(addShape(nextDoc, shape)));
+    focusCreatedShape(shape.id);
+  }, [document, checkpointHistory, setDocument, focusCreatedShape]);
+
+  const addArc = useCallback((
+    cx: number,
+    cy: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    clockwise = false,
+  ) => {
+    if (radius < 1) return;
+
+    const center = createPoint(cx, cy);
+    const p1 = createPoint(
+      cx + radius * Math.cos((startAngle * Math.PI) / 180),
+      cy + radius * Math.sin((startAngle * Math.PI) / 180),
+    );
+    const p2 = createPoint(
+      cx + radius * Math.cos((endAngle * Math.PI) / 180),
+      cy + radius * Math.sin((endAngle * Math.PI) / 180),
+    );
+
+    let nextDoc = addPoint(document, center);
+    nextDoc = addPoint(nextDoc, p1);
+    nextDoc = addPoint(nextDoc, p2);
+
+    const shape = createArcShape({
+      name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
+      center: center.id,
+      p1: p1.id,
+      p2: p2.id,
+      clockwise,
+      radius,
+    });
+
+    checkpointHistory();
+    setDocument(updateGeometry(addShape(nextDoc, shape)));
+    focusCreatedShape(shape.id);
+  }, [document, checkpointHistory, setDocument, focusCreatedShape]);
+
+  const addRectangle = useCallback((x1: number, y1: number, x2: number, y2: number) => {
+    if (Math.abs(x1 - x2) < 0.5 || Math.abs(y1 - y2) < 0.5) return;
+
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+
+    const p1 = createPoint(minX, minY);
+    const p2 = createPoint(maxX, minY);
+    const p3 = createPoint(maxX, maxY);
+    const p4 = createPoint(minX, maxY);
+
+    const groupId = createId("group");
+    const rectIndex =
+      document.groups.filter((g) => g.name.startsWith("Rectangle")).length + 1;
+
+    const l1 = { ...createLineShape(`Rectangle ${rectIndex} - Bottom`, p1.id, p2.id), groupId };
+    const l2 = { ...createLineShape(`Rectangle ${rectIndex} - Right`, p2.id, p3.id), groupId };
+    const l3 = { ...createLineShape(`Rectangle ${rectIndex} - Top`, p3.id, p4.id), groupId };
+    const l4 = { ...createLineShape(`Rectangle ${rectIndex} - Left`, p4.id, p1.id), groupId };
+
+    const nextConstraints = [
+      createConstraint("horizontal", [p1.id, p2.id], [l1.id]),
+      createConstraint("vertical", [p2.id, p3.id], [l2.id]),
+      createConstraint("horizontal", [p3.id, p4.id], [l3.id]),
+      createConstraint("vertical", [p4.id, p1.id], [l4.id]),
+    ];
+
+    checkpointHistory();
+
+    const nextDoc = updateGeometry({
+      ...document,
+      points: [...document.points, p1, p2, p3, p4],
+      shapes: [...document.shapes, l1, l2, l3, l4],
+      groups: [
+        ...document.groups,
+        {
+          id: groupId,
+          name: `Rectangle ${rectIndex}`,
+          collapsed: false,
+        },
+      ],
+      constraints: [...document.constraints, ...nextConstraints],
+    });
+
+    setDocument(nextDoc);
+
+    setToolState("select");
+    onSelectionChange({
+      ids: [l1.id, l2.id, l3.id, l4.id],
+      primaryId: l1.id,
+    });
+
+    setDraft(null);
+    setPolylineDraft([]);
+    setPolylineHoverPoint(null);
+    setIsSelectionHover(false);
+  }, [document, checkpointHistory, setDocument, onSelectionChange]);
+
+  const addEllipse = useCallback((cx: number, cy: number, mx: number, my: number) => {
+    const center = createPoint(cx, cy);
+    const major = createPoint(mx, my);
+    const dist = distance(center, major);
+    if (dist < 1) return;
+
+    let nextDoc = addPoint(document, center);
+    nextDoc = addPoint(nextDoc, major);
+
+    const shape = createEllipseShape(
+      `Ellipse ${document.shapes.filter((s) => s.type === "ellipse").length + 1}`,
+      center.id,
+      major.id,
+      dist * 0.6,
+    );
+
+    checkpointHistory();
+    setDocument(updateGeometry(addShape(nextDoc, shape)));
+    focusCreatedShape(shape.id);
+  }, [document, checkpointHistory, setDocument, focusCreatedShape]);
+
+  const addText = useCallback((x: number, y: number) => {
+    const value = textTool.text.trim();
+    if (!value) return;
+
+    const shape = createTextShape(
+      `Text ${document.shapes.filter((s) => s.type === "text").length + 1}`,
+      x,
+      y,
+      value,
+      Math.max(2, textTool.height),
+      Math.max(0, textTool.letterSpacing),
+      textTool.fontFile,
+    );
+
+    checkpointHistory();
+    setDocument(addShape(document, shape));
+    focusCreatedShape(shape.id);
+  }, [document, textTool, checkpointHistory, setDocument, focusCreatedShape]);
+
+  const handleCanvasPointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (event.button === 2 && (draft || polylineDraft.length > 0)) {
       event.preventDefault();
       cancelCurrentDraft();
@@ -527,7 +720,6 @@ export function useCadEditor({
       if (draft.type === "arc" && draft.stage === "sweep") {
         const committed = getArcFromDraft({ ...draft, endX: cad.x, endY: cad.y });
         if (committed) {
-          checkpointHistory();
           addArc(
             committed.cx,
             committed.cy,
@@ -553,7 +745,6 @@ export function useCadEditor({
     }
 
     if (tool === "text") {
-      checkpointHistory();
       addText(cad.x, cad.y);
       return;
     }
@@ -574,9 +765,9 @@ export function useCadEditor({
     if (tool === "select") {
       onSelectionChangeSilently(clearSelection());
     }
-  }
+  }, [tool, draft, polylineDraft, isPanMouseButton, startPan, getCadPoint, document, addText, addArc, cancelCurrentDraft, checkpointHistory, setDocument, onSelectionChangeSilently, selection.ids.length]);
 
-  function handleCanvasPointerMove(event: React.PointerEvent<SVGSVGElement>) {
+  const handleCanvasPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (panState && panState.pointerId === event.pointerId) {
       const moved =
         Math.abs(event.clientX - panState.startClientX) > 2 ||
@@ -680,9 +871,9 @@ export function useCadEditor({
 
       setDragState(next.next);
     }
-  }
+  }, [panState, dragState, tool, draft, getCadPoint, document, onViewChangeSilently, setDocumentSilently]);
 
-  function handleCanvasPointerUp(event: React.PointerEvent<SVGSVGElement>) {
+  const handleCanvasPointerUp = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (draft?.type === "rectangle") {
       addRectangle(draft.startX, draft.startY, draft.endX, draft.endY);
       setDraft(null);
@@ -712,191 +903,9 @@ export function useCadEditor({
     }
 
     setDragState(finishDrag());
-  }
+  }, [draft, tool, panState, addRectangle, addCircle, addEllipse, addLine, onSelectionChangeSilently]);
 
-  function addRectangle(x1: number, y1: number, x2: number, y2: number) {
-    if (Math.abs(x1 - x2) < 0.5 || Math.abs(y1 - y2) < 0.5) return;
-
-    const minX = Math.min(x1, x2);
-    const maxX = Math.max(x1, x2);
-    const minY = Math.min(y1, y2);
-    const maxY = Math.max(y1, y2);
-
-    const p1 = createPoint(minX, minY);
-    const p2 = createPoint(maxX, minY);
-    const p3 = createPoint(maxX, maxY);
-    const p4 = createPoint(minX, maxY);
-
-    const groupId = createId("group");
-    const rectIndex =
-      document.groups.filter((g) => g.name.startsWith("Rectangle")).length + 1;
-
-    const l1 = { ...createLineShape(`Rectangle ${rectIndex} - Bottom`, p1.id, p2.id), groupId };
-    const l2 = { ...createLineShape(`Rectangle ${rectIndex} - Right`, p2.id, p3.id), groupId };
-    const l3 = { ...createLineShape(`Rectangle ${rectIndex} - Top`, p3.id, p4.id), groupId };
-    const l4 = { ...createLineShape(`Rectangle ${rectIndex} - Left`, p4.id, p1.id), groupId };
-
-    const nextConstraints = [
-      createConstraint("horizontal", [p1.id, p2.id], [l1.id]),
-      createConstraint("vertical", [p2.id, p3.id], [l2.id]),
-      createConstraint("horizontal", [p3.id, p4.id], [l3.id]),
-      createConstraint("vertical", [p4.id, p1.id], [l4.id]),
-    ];
-
-    checkpointHistory();
-
-    const nextDoc = updateGeometry({
-      ...document,
-      points: [...document.points, p1, p2, p3, p4],
-      shapes: [...document.shapes, l1, l2, l3, l4],
-      groups: [
-        ...document.groups,
-        {
-          id: groupId,
-          name: `Rectangle ${rectIndex}`,
-          collapsed: false,
-        },
-      ],
-      constraints: [...document.constraints, ...nextConstraints],
-    });
-
-    setDocument(nextDoc);
-
-    setToolState("select");
-    onSelectionChange({
-      ids: [l1.id, l2.id, l3.id, l4.id],
-      primaryId: l1.id,
-    });
-
-    setDraft(null);
-    setPolylineDraft([]);
-    setPolylineHoverPoint(null);
-    setIsSelectionHover(false);
-  }
-
-  function addCircle(cx: number, cy: number, radius: number) {
-    if (radius < 1) return;
-
-    const center = createPoint(cx, cy);
-    const nextDoc = addPoint(document, center);
-    const shape = createCircleShape(
-      `Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`,
-      center.id,
-      radius,
-    );
-
-    checkpointHistory();
-    setDocument(updateGeometry(addShape(nextDoc, shape)));
-    focusCreatedShape(shape.id);
-  }
-
-  function addLine(x1: number, y1: number, x2: number, y2: number) {
-    if (distance({ x: x1, y: y1 }, { x: x2, y: y2 }) < 0.5) return;
-
-    const p1 = createPoint(x1, y1);
-    const p2 = createPoint(x2, y2);
-    let nextDoc = addPoint(document, p1);
-    nextDoc = addPoint(nextDoc, p2);
-
-    const dx = Math.abs(x1 - x2);
-    const dy = Math.abs(y1 - y2);
-
-    if (dy < dx * 0.05) {
-      nextDoc.constraints.push(createConstraint("horizontal", [p1.id, p2.id], [], 0));
-    } else if (dx < dy * 0.05) {
-      nextDoc.constraints.push(createConstraint("vertical", [p1.id, p2.id], [], 0));
-    }
-
-    const shape = createLineShape(
-      `Line ${document.shapes.filter((s) => s.type === "line").length + 1}`,
-      p1.id,
-      p2.id,
-    );
-
-    checkpointHistory();
-    setDocument(updateGeometry(addShape(nextDoc, shape)));
-    focusCreatedShape(shape.id);
-  }
-
-  function addArc(
-    cx: number,
-    cy: number,
-    radius: number,
-    startAngle: number,
-    endAngle: number,
-    clockwise = false,
-  ) {
-    if (radius < 1) return;
-
-    const center = createPoint(cx, cy);
-    const p1 = createPoint(
-      cx + radius * Math.cos((startAngle * Math.PI) / 180),
-      cy + radius * Math.sin((startAngle * Math.PI) / 180),
-    );
-    const p2 = createPoint(
-      cx + radius * Math.cos((endAngle * Math.PI) / 180),
-      cy + radius * Math.sin((endAngle * Math.PI) / 180),
-    );
-
-    let nextDoc = addPoint(document, center);
-    nextDoc = addPoint(nextDoc, p1);
-    nextDoc = addPoint(nextDoc, p2);
-
-    const shape = createArcShape({
-      name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
-      center: center.id,
-      p1: p1.id,
-      p2: p2.id,
-      clockwise,
-      radius,
-    });
-
-    checkpointHistory();
-    setDocument(updateGeometry(addShape(nextDoc, shape)));
-    focusCreatedShape(shape.id);
-  }
-
-  function addEllipse(cx: number, cy: number, mx: number, my: number) {
-    const center = createPoint(cx, cy);
-    const major = createPoint(mx, my);
-    const dist = distance(center, major);
-    if (dist < 1) return;
-
-    let nextDoc = addPoint(document, center);
-    nextDoc = addPoint(nextDoc, major);
-
-    const shape = createEllipseShape(
-      `Ellipse ${document.shapes.filter((s) => s.type === "ellipse").length + 1}`,
-      center.id,
-      major.id,
-      dist * 0.6,
-    );
-
-    checkpointHistory();
-    setDocument(updateGeometry(addShape(nextDoc, shape)));
-    focusCreatedShape(shape.id);
-  }
-
-  function addText(x: number, y: number) {
-    const value = textTool.text.trim();
-    if (!value) return;
-
-    const shape = createTextShape(
-      `Text ${document.shapes.filter((s) => s.type === "text").length + 1}`,
-      x,
-      y,
-      value,
-      Math.max(2, textTool.height),
-      Math.max(0, textTool.letterSpacing),
-      textTool.fontFile,
-    );
-
-    checkpointHistory();
-    setDocument(addShape(document, shape));
-    focusCreatedShape(shape.id);
-  }
-
-  function bindSelectStart(event: React.PointerEvent<SVGElement>, rawId: string) {
+  const bindSelectStart = useCallback((event: React.PointerEvent<SVGElement>, rawId: string) => {
     if (tool !== "select") return;
 
     if (isPanMouseButton(event.button)) {
@@ -947,9 +956,9 @@ export function useCadEditor({
         ),
       );
     }
-  }
+  }, [tool, isPanMouseButton, startPan, getCadPoint, document, selection, onSelectionChangeSilently, checkpointHistory]);
 
-  function bindSelectionDragStart(event: React.PointerEvent<SVGRectElement>) {
+  const bindSelectionDragStart = useCallback((event: React.PointerEvent<SVGRectElement>) => {
     if (isPanMouseButton(event.button)) {
       startPan(event);
       return;
@@ -973,23 +982,16 @@ export function useCadEditor({
         getDragShapeIds(document, selection.primaryId, selection),
       ),
     );
-  }
+  }, [isPanMouseButton, startPan, tool, selection, getCadPoint, document, checkpointHistory]);
 
-  function cancelCurrentDraft() {
-    setDraft(null);
-    setPolylineDraft([]);
-    setPolylineHoverPoint(null);
-    setDragState(null);
-    setIsSelectionHover(false);
-  }
-
-    function setSelectedBSplineDegree(nextDegree: number) {
+  const setSelectedBSplineDegree = useCallback((nextDegree: number) => {
     if (!selection.primaryId) return;
 
     const shape = document.shapes.find((s) => s.id === selection.primaryId);
     if (!shape || shape.type !== "bspline") return;
+    const bspline = shape as SketchBSpline;
 
-    const maxDegree = Math.max(1, shape.controlPointIds.length - 1);
+    const maxDegree = Math.max(1, bspline.controlPointIds.length - 1);
     const degree = Math.max(1, Math.min(maxDegree, Math.round(nextDegree || 1)));
 
     checkpointHistory();
@@ -997,13 +999,13 @@ export function useCadEditor({
       ...prev,
       shapes: prev.shapes.map((item) =>
         item.id === shape.id
-          ? { ...item, degree }
+          ? ({ ...item, degree } as SketchBSpline)
           : item,
       ),
     }));
-  }
+  }, [selection.primaryId, document.shapes, checkpointHistory, setDocument]);
 
-  function setSelectedBSplinePeriodic(periodic: boolean) {
+  const setSelectedBSplinePeriodic = useCallback((periodic: boolean) => {
     if (!selection.primaryId) return;
 
     const shape = document.shapes.find((s) => s.id === selection.primaryId);
@@ -1014,13 +1016,13 @@ export function useCadEditor({
       ...prev,
       shapes: prev.shapes.map((item) =>
         item.id === shape.id
-          ? { ...item, periodic }
+          ? ({ ...item, periodic } as SketchBSpline)
           : item,
       ),
     }));
-  }
+  }, [selection.primaryId, document.shapes, checkpointHistory, setDocument]);
 
-    function insertControlPointToSelectedBSpline(x: number, y: number) {
+  const insertControlPointToSelectedBSpline = useCallback((x: number, y: number) => {
     if (!selection.primaryId) return;
 
     const shape = document.shapes.find((s) => s.id === selection.primaryId);
@@ -1036,17 +1038,17 @@ export function useCadEditor({
       points: [...prev.points, result.point],
       shapes: prev.shapes.map((item) =>
         item.id === shape.id
-          ? {
+          ? ({
               ...item,
               controlPointIds: result.nextControlPointIds,
-              degree: Math.max(1, Math.min(item.degree, result.nextControlPointIds.length - 1)),
-            }
+              degree: Math.max(1, Math.min((item as SketchBSpline).degree, result.nextControlPointIds.length - 1)),
+            } as SketchBSpline)
           : item,
       ),
     }));
-  }
+  }, [selection.primaryId, document.shapes, document.points, checkpointHistory, setDocument]);
 
-  function removeSelectedPointFromBSpline() {
+  const removeSelectedPointFromBSpline = useCallback(() => {
     if (!selection.primaryId) return;
     if (!selection.primaryId.startsWith("pt-")) return;
 
@@ -1054,7 +1056,7 @@ export function useCadEditor({
     const ownerSpline = document.shapes.find(
       (shape) =>
         shape.type === "bspline" &&
-        shape.controlPointIds.includes(selectedPointId),
+        (shape as SketchBSpline).controlPointIds.includes(selectedPointId),
     );
 
     if (!ownerSpline || ownerSpline.type !== "bspline") return;
@@ -1067,11 +1069,11 @@ export function useCadEditor({
     setDocument((prev) => {
       const nextShapes = prev.shapes.map((shape) =>
         shape.id === ownerSpline.id
-          ? {
+          ? ({
               ...shape,
               controlPointIds: result.nextControlPointIds,
               degree: result.nextDegree,
-            }
+            } as SketchBSpline)
           : shape,
       );
 
@@ -1097,7 +1099,438 @@ export function useCadEditor({
       ids: [ownerSpline.id],
       primaryId: ownerSpline.id,
     });
-  }
+  }, [selection.primaryId, document.shapes, checkpointHistory, setDocument, onSelectionChangeSilently]);
+
+  const resetView = useCallback(() => {
+    onViewChange({ scale: 1, offsetX: 0, offsetY: 0 });
+    setIsSelectionHover(false);
+  }, [onViewChange]);
+
+  const cloneSelected = useCallback(() => {
+    checkpointHistory();
+
+    const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
+    if (selectedShapes.length === 0) return;
+
+    const pointMap = new Map<string, string>();
+    const clonedPoints: SketchPoint[] = [];
+    const clonedShapes: SketchShape[] = [];
+    const clonedConstraints: any[] = [];
+
+    selectedShapes.forEach((s) => {
+      const shape = s as any;
+      const pids: string[] = [];
+      if (shape.p1) pids.push(shape.p1);
+      if (shape.p2) pids.push(shape.p2);
+      if (shape.center) pids.push(shape.center);
+      if (shape.pointIds) pids.push(...shape.pointIds);
+      if (shape.controlPointIds) pids.push(...shape.controlPointIds);
+      if (shape.majorAxisPoint) pids.push(shape.majorAxisPoint);
+
+      pids.forEach((pid) => {
+        if (!pointMap.has(pid)) {
+          const original = document.points.find((p) => p.id === pid);
+          if (original) {
+            const cp = createPoint(original.x + 10, original.y + 10);
+            pointMap.set(pid, cp.id);
+            clonedPoints.push(cp);
+          }
+        }
+      });
+    });
+
+    selectedShapes.forEach((s) => {
+      const cloned = { ...s, id: createId(s.type) };
+      const cs = cloned as any;
+      if (cs.p1) cs.p1 = pointMap.get(cs.p1);
+      if (cs.p2) cs.p2 = pointMap.get(cs.p2);
+      if (cs.center) cs.center = pointMap.get(cs.center);
+      if (cs.pointIds) cs.pointIds = cs.pointIds.map((pid: string) => pointMap.get(pid));
+      if (cs.controlPointIds) cs.controlPointIds = cs.controlPointIds.map((pid: string) => pointMap.get(pid));
+      if (cs.majorAxisPoint) cs.majorAxisPoint = pointMap.get(cs.majorAxisPoint);
+      clonedShapes.push(cloned as SketchShape);
+    });
+
+    document.constraints.forEach((c) => {
+      if (c.pointIds.every((pid) => pointMap.has(pid))) {
+        clonedConstraints.push({
+          ...c,
+          id: createId("const"),
+          pointIds: c.pointIds.map((pid) => pointMap.get(pid)!),
+          shapeIds: clonedShapes.map((s) => s.id),
+        });
+      }
+    });
+
+    const nextDoc = {
+      ...document,
+      points: [...document.points, ...clonedPoints],
+      shapes: [...document.shapes, ...clonedShapes],
+      constraints: [...document.constraints, ...clonedConstraints],
+    };
+
+    setDocument(nextDoc);
+    onSelectionChange({
+      ids: clonedShapes.map((s) => s.id),
+      primaryId: clonedShapes[0]?.id || null,
+    });
+  }, [document, selection, checkpointHistory, setDocument, onSelectionChange]);
+
+  const mirrorSelected = useCallback((axis: MirrorAxis) => {
+    checkpointHistory();
+
+    const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
+    if (selectedShapes.length === 0) return;
+
+    const affectedPointIds = new Set<string>();
+    selectedShapes.forEach((s) => {
+      const shape = s as any;
+      if (shape.p1) affectedPointIds.add(shape.p1);
+      if (shape.p2) affectedPointIds.add(shape.p2);
+      if (shape.center) affectedPointIds.add(shape.center);
+      if (shape.pointIds) shape.pointIds.forEach((pid: string) => affectedPointIds.add(pid));
+      if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => affectedPointIds.add(pid));
+      if (shape.majorAxisPoint) affectedPointIds.add(shape.majorAxisPoint);
+    });
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    affectedPointIds.forEach((pid) => {
+      const p = document.points.find((pt) => pt.id === pid);
+      if (p) {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      }
+    });
+
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+
+    setDocument((prev) => ({
+      ...prev,
+      points: prev.points.map((p) => {
+        if (affectedPointIds.has(p.id)) {
+          if (axis === "x") return { ...p, y: cy - (p.y - cy) };
+          if (axis === "y") return { ...p, x: cx - (p.x - cx) };
+        }
+        return p;
+      }),
+    }));
+  }, [document, selection, checkpointHistory, setDocument]);
+
+  const deleteSelected = useCallback(() => {
+    checkpointHistory();
+
+    const selectedItemIds = new Set(selection.ids);
+
+    const remainingShapes = document.shapes.filter((s) => !selectedItemIds.has(s.id));
+    const remainingPoints = document.points.filter((p) => !selectedItemIds.has(p.id));
+
+    const usedPointIds = new Set<string>();
+    remainingShapes.forEach((s) => {
+      const shape = s as any;
+      if (shape.p1) usedPointIds.add(shape.p1);
+      if (shape.p2) usedPointIds.add(shape.p2);
+      if (shape.center) usedPointIds.add(shape.center);
+      if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
+      if (shape.controlPointIds) shape.controlPointIds.forEach((id: string) => usedPointIds.add(id));
+      if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
+    });
+
+    const nextPoints = remainingPoints.filter((p) => usedPointIds.has(p.id));
+    const nextConstraints = document.constraints.filter(
+      (c) =>
+        c.pointIds.every((pid) => usedPointIds.has(pid)) &&
+        !c.shapeIds.some((sid) => selectedItemIds.has(sid)),
+    );
+
+    const nextDocument = {
+      ...document,
+      points: nextPoints,
+      shapes: remainingShapes,
+      constraints: nextConstraints,
+    };
+
+    setDocument(nextDocument);
+    onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
+  }, [document, selection, checkpointHistory, setDocument, onSelectionChange]);
+
+  const deleteShape = useCallback((id: string) =>
+    setDocument((d) => {
+      const remainingShapes = d.shapes.filter((s) => s.id !== id);
+      const usedPointIds = new Set<string>();
+
+      remainingShapes.forEach((s) => {
+        const shape = s as any;
+        if (shape.p1) usedPointIds.add(shape.p1);
+        if (shape.p2) usedPointIds.add(shape.p2);
+        if (shape.center) usedPointIds.add(shape.center);
+        if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
+        if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => usedPointIds.add(pid));
+        if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
+      });
+
+      return {
+        ...d,
+        shapes: remainingShapes,
+        points: d.points.filter((p) => usedPointIds.has(p.id)),
+        constraints: d.constraints.filter((c) => !c.shapeIds.includes(id)),
+      };
+    }), [setDocument]);
+
+  const renameShape = useCallback((id: string, name: string) =>
+    setDocument((d) => ({
+      ...d,
+      shapes: d.shapes.map((s) => (s.id === id ? { ...s, name } : s)),
+    })), [setDocument]);
+
+  const toggleShapeVisibility = useCallback((id: string) =>
+    setDocument((d) => ({
+      ...d,
+      shapes: d.shapes.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)),
+    })), [setDocument]);
+
+  const groupSelected = useCallback(() => setDocument((d) => groupSelectedShapes(d, selection)), [setDocument, selection]);
+  const ungroupSelected = useCallback(() => setDocument((d) => ungroupSelectedShapes(d, selection)), [setDocument, selection]);
+
+  const handleGenerateClick = useCallback(async () => {
+    setIsGenerating(true);
+    try {
+      const gcode = await generateSketchGCode(document);
+      onGenerateGCode(gcode);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [document, onGenerateGCode]);
+
+  const handleCanvasPointerLeave = useCallback(() => {
+    setDragState(finishDrag());
+    setPanState(null);
+  }, []);
+
+  const handleCanvasContextMenu = useCallback((e: React.MouseEvent) => e.preventDefault(), []);
+
+  const handleCanvasDoubleClick = useCallback((e: React.MouseEvent) => {
+    if (tool === "polyline" || tool === "bspline") {
+      e.preventDefault();
+      if (tool === "polyline") commitPolyline();
+      else commitBSpline();
+    }
+  }, [tool, commitPolyline, commitBSpline]);
+
+  const handleCanvasWheel = useCallback((event: React.WheelEvent<SVGSVGElement>) => {
+    event.preventDefault();
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const anchorX = event.clientX - rect.left;
+    const anchorY = event.clientY - rect.top;
+    const direction = event.deltaY < 0 ? 1 : -1;
+
+    onViewChange((prev) => {
+      const nextScale = clamp(prev.scale * (1 + direction * 0.06), 0.25, 20);
+      const ratio = nextScale / prev.scale;
+
+      return {
+        scale: nextScale,
+        offsetX: anchorX - (anchorX - prev.offsetX) * ratio,
+        offsetY: anchorY - (anchorY - prev.offsetY) * ratio,
+      };
+    });
+  }, [onViewChange]);
+
+  const bindScaleHandleStart = useCallback((_e: any, _handle: any) => {
+    if (selection.primaryId) {
+      const shape = document.shapes.find((s) => s.id === selection.primaryId);
+      if (shape?.type === "text" || shape?.type === "svg") {
+        // TODO: Implement direct scaling for text/svg
+      }
+    }
+  }, [selection.primaryId, document.shapes]);
+
+  const bindRotateHandleStart = useCallback((_e: any) => {
+    if (selection.primaryId) {
+      const shape = document.shapes.find((s) => s.id === selection.primaryId);
+      if (shape?.type === "text" || shape?.type === "svg") {
+        // TODO: Implement direct rotation for text/svg
+      }
+    }
+  }, [selection.primaryId, document.shapes]);
+
+  const bindConstraintEdgeHandleStart = useCallback(() => {}, []);
+  const bindConstraintLabelDragStart = useCallback(() => {}, []);
+
+  const toggleConstruction = useCallback(() => {
+    if (selection.ids.length === 0) return;
+    checkpointHistory();
+
+    setDocument((prev) => ({
+      ...prev,
+      shapes: prev.shapes.map((s) =>
+        selection.ids.includes(s.id)
+          ? { ...s, isConstruction: !s.isConstruction }
+          : s,
+      ),
+    }));
+  }, [selection.ids, checkpointHistory, setDocument]);
+
+  const renameGroup = useCallback((id: string, name: string) =>
+    setDocument((d) => modelRenameGroup(d, id, name)), [setDocument]);
+
+  const toggleGroupCollapsed = useCallback((id: string) =>
+    setDocument((d) => modelToggleGroupCollapsed(d, id)), [setDocument]);
+
+  const reorderDocumentShapes = useCallback((ids: string[]) =>
+    setDocument((d) => modelReorderShapes(d, ids)), [setDocument]);
+
+  const updateLinearArrayParams = useCallback((p: any) =>
+    setLinearArrayParams((prev) => ({ ...prev, ...p })), []);
+
+  const updateCircularArrayParams = useCallback((p: any) =>
+    setCircularArrayParams((prev) => ({ ...prev, ...p })), []);
+
+  const arrayTool = useMemo(() => ({
+    mode: arrayToolMode,
+    linear: linearArrayParams,
+    circular: circularArrayParams,
+    editingGroupId: editingArrayGroupId,
+  }), [arrayToolMode, linearArrayParams, circularArrayParams, editingArrayGroupId]);
+
+  const arrayPreviewShapes = useMemo(() => {
+    if (!arrayToolMode || selection.ids.length === 0) return [];
+
+    const groupId = "preview-array";
+    const definition: SketchArrayDefinition =
+      arrayToolMode === "linear"
+        ? {
+            type: "linear",
+            sourceShapeIds: selection.ids,
+            params: linearArrayParams as any,
+          }
+        : {
+            type: "circular",
+            sourceShapeIds: selection.ids,
+            params: circularArrayParams as any,
+          };
+
+    const previewDoc = rebuildArrayGroup(
+      { ...document, shapes: [...document.shapes] },
+      groupId,
+      definition,
+    );
+
+    return previewDoc.shapes.filter((s) => s.groupId === groupId);
+  }, [arrayToolMode, selection.ids, document, linearArrayParams, circularArrayParams]);
+
+  const addQuickConstraint = useCallback((type: string) => {
+    checkpointHistory();
+
+    let pids: string[] = [];
+    const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
+
+    selectedShapes.forEach((s) => {
+      const shape = s as any;
+
+      if (s.type === "line" || s.type === "rectangle" || s.type === "arc") {
+        if (shape.p1) pids.push(shape.p1);
+        if (shape.p2) pids.push(shape.p2);
+        if (shape.center) pids.push(shape.center);
+      } else if (s.type === "circle") {
+        if (shape.center) pids.push(shape.center);
+      } else if (s.type === "polyline" || s.type === "bspline") {
+        if (shape.pointIds) pids.push(...shape.pointIds);
+        if (shape.controlPointIds) pids.push(...shape.controlPointIds);
+      }
+    });
+
+    let finalPids = pids;
+
+    if (type === "parallel" || type === "perpendicular") {
+      const lines = selectedShapes.filter((s) => s.type === "line");
+      if (lines.length >= 2) {
+        finalPids = [
+          (lines[0] as any).p1,
+          (lines[0] as any).p2,
+          (lines[1] as any).p1,
+          (lines[1] as any).p2,
+        ];
+      } else {
+        console.warn(`${type} constraint requires 2 lines`);
+        return;
+      }
+    } else if (type === "coincident" || type === "distance") {
+      finalPids = pids.slice(0, 2);
+    } else {
+      finalPids = pids.slice(0, 2);
+    }
+
+    if (type === "lock") {
+      setDocument((prev) => ({
+        ...prev,
+        points: prev.points.map((p) =>
+          finalPids.includes(p.id) ? { ...p, isFixed: true } : p,
+        ),
+      }));
+      return;
+    }
+
+    const constraint = createConstraint(
+      type as any,
+      finalPids,
+      selection.ids,
+      ["distance", "angle", "radius", "diameter"].includes(type) ? 50 : undefined,
+    );
+
+    setDocument(updateGeometry(addConstraint(document, constraint)));
+  }, [document, selection.ids, checkpointHistory, setDocument]);
+
+  const onConstraintPointerDown = useCallback((e: React.PointerEvent, id: string) => {
+    e.stopPropagation();
+
+    if (id.startsWith("point:")) {
+      const pointId = id.split(":")[1];
+      bindSelectStart(e as any, pointId);
+      return;
+    }
+
+    const constraint = document.constraints.find((c) => c.id === id);
+    if (
+      !constraint ||
+      !["distance", "distance-x", "distance-y", "radius", "diameter", "angle"].includes(constraint.type)
+    ) {
+      return;
+    }
+
+    const newValStr = window.prompt(
+      `Enter new value for ${constraint.type} constraint:`,
+      String(constraint.value || 0),
+    );
+    if (newValStr === null) return;
+
+    if (newValStr.trim().toLowerCase() === "delete") {
+      checkpointHistory();
+      setDocument((prev) => ({
+        ...prev,
+        constraints: prev.constraints.filter((c) => c.id !== id),
+      }));
+      return;
+    }
+
+    const newVal = parseFloat(newValStr);
+    if (isNaN(newVal)) return;
+
+    checkpointHistory();
+    setDocument((prev) => {
+      const nextConstraints = prev.constraints.map((c) =>
+        c.id === id ? { ...c, value: newVal } : c,
+      );
+      return updateGeometry({ ...prev, constraints: nextConstraints });
+    });
+  }, [document.constraints, bindSelectStart, checkpointHistory, setDocument]);
 
   return {
     svgRef,
@@ -1129,292 +1562,37 @@ export function useCadEditor({
     constraintIssues: diagnostics.issues,
     conflictingConstraintIds: diagnostics.conflictingConstraintIds,
 
-    resetView: () => {
-      onViewChange({ scale: 1, offsetX: 0, offsetY: 0 });
-      setIsSelectionHover(false);
-    },
-
+    resetView,
     commitPolyline,
     cancelCurrentDraft,
+    cloneSelected,
+    mirrorSelected,
+    deleteSelected,
+    deleteShape,
+    renameShape,
+    toggleShapeVisibility,
+    groupSelected,
+    ungroupSelected,
 
-    cloneSelected: () => {
-      checkpointHistory();
-
-      const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
-      if (selectedShapes.length === 0) return;
-
-      const pointMap = new Map<string, string>();
-      const clonedPoints: any[] = [];
-      const clonedShapes: any[] = [];
-      const clonedConstraints: any[] = [];
-
-      selectedShapes.forEach((s) => {
-        const shape = s as any;
-        const pids: string[] = [];
-        if (shape.p1) pids.push(shape.p1);
-        if (shape.p2) pids.push(shape.p2);
-        if (shape.center) pids.push(shape.center);
-        if (shape.pointIds) pids.push(...shape.pointIds);
-        if (shape.controlPointIds) pids.push(...shape.controlPointIds);
-        if (shape.majorAxisPoint) pids.push(shape.majorAxisPoint);
-
-        pids.forEach((pid) => {
-          if (!pointMap.has(pid)) {
-            const original = document.points.find((p) => p.id === pid);
-            if (original) {
-              const cp = createPoint(original.x + 10, original.y + 10);
-              pointMap.set(pid, cp.id);
-              clonedPoints.push(cp);
-            }
-          }
-        });
-      });
-
-      selectedShapes.forEach((s) => {
-        const cloned = { ...s, id: createId(s.type) };
-        const cs = cloned as any;
-        if (cs.p1) cs.p1 = pointMap.get(cs.p1);
-        if (cs.p2) cs.p2 = pointMap.get(cs.p2);
-        if (cs.center) cs.center = pointMap.get(cs.center);
-        if (cs.pointIds) cs.pointIds = cs.pointIds.map((pid: string) => pointMap.get(pid));
-        if (cs.controlPointIds) cs.controlPointIds = cs.controlPointIds.map((pid: string) => pointMap.get(pid));
-        if (cs.majorAxisPoint) cs.majorAxisPoint = pointMap.get(cs.majorAxisPoint);
-        clonedShapes.push(cloned);
-      });
-
-      document.constraints.forEach((c) => {
-        if (c.pointIds.every((pid) => pointMap.has(pid))) {
-          clonedConstraints.push({
-            ...c,
-            id: createId("const"),
-            pointIds: c.pointIds.map((pid) => pointMap.get(pid)!),
-            shapeIds: clonedShapes.map((s) => s.id),
-          });
-        }
-      });
-
-      const nextDoc = {
-        ...document,
-        points: [...document.points, ...clonedPoints],
-        shapes: [...document.shapes, ...clonedShapes],
-        constraints: [...document.constraints, ...clonedConstraints],
-      };
-
-      setDocument(nextDoc);
-      onSelectionChange({
-        ids: clonedShapes.map((s) => s.id),
-        primaryId: clonedShapes[0]?.id || null,
-      });
-    },
-
-    mirrorSelected: (axis: MirrorAxis) => {
-      checkpointHistory();
-
-      const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
-      if (selectedShapes.length === 0) return;
-
-      const affectedPointIds = new Set<string>();
-      selectedShapes.forEach((s) => {
-        const shape = s as any;
-        if (shape.p1) affectedPointIds.add(shape.p1);
-        if (shape.p2) affectedPointIds.add(shape.p2);
-        if (shape.center) affectedPointIds.add(shape.center);
-        if (shape.pointIds) shape.pointIds.forEach((pid: string) => affectedPointIds.add(pid));
-        if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => affectedPointIds.add(pid));
-        if (shape.majorAxisPoint) affectedPointIds.add(shape.majorAxisPoint);
-      });
-
-      let minX = Infinity;
-      let maxX = -Infinity;
-      let minY = Infinity;
-      let maxY = -Infinity;
-
-      affectedPointIds.forEach((pid) => {
-        const p = document.points.find((pt) => pt.id === pid);
-        if (p) {
-          minX = Math.min(minX, p.x);
-          maxX = Math.max(maxX, p.x);
-          minY = Math.min(minY, p.y);
-          maxY = Math.max(maxY, p.y);
-        }
-      });
-
-      const cx = (minX + maxX) / 2;
-      const cy = (minY + maxY) / 2;
-
-      setDocument((prev) => ({
-        ...prev,
-        points: prev.points.map((p) => {
-          if (affectedPointIds.has(p.id)) {
-            if (axis === "x") return { ...p, y: cy - (p.y - cy) };
-            if (axis === "y") return { ...p, x: cx - (p.x - cx) };
-          }
-          return p;
-        }),
-      }));
-    },
-
-    deleteSelected: () => {
-      checkpointHistory();
-
-      const selectedItemIds = new Set(selection.ids);
-
-      const remainingShapes = document.shapes.filter((s) => !selectedItemIds.has(s.id));
-      const remainingPoints = document.points.filter((p) => !selectedItemIds.has(p.id));
-
-      const usedPointIds = new Set<string>();
-      remainingShapes.forEach((s) => {
-        const shape = s as any;
-        if (shape.p1) usedPointIds.add(shape.p1);
-        if (shape.p2) usedPointIds.add(shape.p2);
-        if (shape.center) usedPointIds.add(shape.center);
-        if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
-        if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => usedPointIds.add(pid));
-        if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
-      });
-
-      const nextPoints = remainingPoints.filter((p) => usedPointIds.has(p.id));
-      const nextConstraints = document.constraints.filter(
-        (c) =>
-          c.pointIds.every((pid) => usedPointIds.has(pid)) &&
-          !c.shapeIds.some((sid) => selectedItemIds.has(sid)),
-      );
-
-      const nextDocument = {
-        ...document,
-        points: nextPoints,
-        shapes: remainingShapes,
-        constraints: nextConstraints,
-      };
-
-      setDocument(nextDocument);
-      onSelectionChange(normalizeSelectionAfterDelete(nextDocument, clearSelection()));
-    },
-
-    deleteShape: (id: string) =>
-      setDocument((d) => {
-        const remainingShapes = d.shapes.filter((s) => s.id !== id);
-        const usedPointIds = new Set<string>();
-
-        remainingShapes.forEach((s) => {
-          const shape = s as any;
-          if (shape.p1) usedPointIds.add(shape.p1);
-          if (shape.p2) usedPointIds.add(shape.p2);
-          if (shape.center) usedPointIds.add(shape.center);
-          if (shape.pointIds) shape.pointIds.forEach((pid: string) => usedPointIds.add(pid));
-          if (shape.controlPointIds) shape.controlPointIds.forEach((pid: string) => usedPointIds.add(pid));
-          if (shape.majorAxisPoint) usedPointIds.add(shape.majorAxisPoint);
-        });
-
-        return {
-          ...d,
-          shapes: remainingShapes,
-          points: d.points.filter((p) => usedPointIds.has(p.id)),
-          constraints: d.constraints.filter((c) => !c.shapeIds.includes(id)),
-        };
-      }),
-
-    renameShape: (id: string, name: string) =>
-      setDocument((d) => ({
-        ...d,
-        shapes: d.shapes.map((s) => (s.id === id ? { ...s, name } : s)),
-      })),
-
-    toggleShapeVisibility: (id: string) =>
-      setDocument((d) => ({
-        ...d,
-        shapes: d.shapes.map((s) => (s.id === id ? { ...s, visible: !s.visible } : s)),
-      })),
-
-    groupSelected: () => setDocument((d) => groupSelectedShapes(d, selection)),
-    ungroupSelected: () => setDocument((d) => ungroupSelectedShapes(d, selection)),
-
-    handleGenerateClick: async () => {
-      setIsGenerating(true);
-      try {
-        const gcode = await generateSketchGCode(document);
-        onGenerateGCode(gcode);
-      } finally {
-        setIsGenerating(false);
-      }
-    },
+    handleGenerateClick,
 
     handleCanvasPointerDown,
     handleCanvasPointerMove,
     handleCanvasPointerUp,
-    handleCanvasPointerLeave: () => {
-      setDragState(finishDrag());
-      setPanState(null);
-    },
-    handleCanvasContextMenu: (e: any) => e.preventDefault(),
-
-    handleCanvasDoubleClick: (e: any) => {
-      if (tool === "polyline" || tool === "bspline") {
-        e.preventDefault();
-        if (tool === "polyline") commitPolyline();
-        else commitBSpline();
-      }
-    },
-
-    handleCanvasWheel: (event: React.WheelEvent<SVGSVGElement>) => {
-      event.preventDefault();
-
-      const rect = event.currentTarget.getBoundingClientRect();
-      const anchorX = event.clientX - rect.left;
-      const anchorY = event.clientY - rect.top;
-      const direction = event.deltaY < 0 ? 1 : -1;
-
-      onViewChange((prev) => {
-        const nextScale = clamp(prev.scale * (1 + direction * 0.06), 0.25, 20);
-        const ratio = nextScale / prev.scale;
-
-        return {
-          scale: nextScale,
-          offsetX: anchorX - (anchorX - prev.offsetX) * ratio,
-          offsetY: anchorY - (anchorY - prev.offsetY) * ratio,
-        };
-      });
-    },
+    handleCanvasPointerLeave,
+    handleCanvasContextMenu,
+    handleCanvasDoubleClick,
+    handleCanvasWheel,
 
     bindSelectStart,
-
     bindSelectionDragStart,
-
-    bindScaleHandleStart: (_e: any, _handle: any) => {
-      if (selection.primaryId) {
-        const shape = document.shapes.find((s) => s.id === selection.primaryId);
-        if (shape?.type === "text" || shape?.type === "svg") {
-          // TODO: Implement direct scaling for text/svg
-        }
-      }
-    },
-
-    bindRotateHandleStart: (_e: any) => {
-      if (selection.primaryId) {
-        const shape = document.shapes.find((s) => s.id === selection.primaryId);
-        if (shape?.type === "text" || shape?.type === "svg") {
-          // TODO: Implement direct rotation for text/svg
-        }
-      }
-    },
-
-    bindConstraintEdgeHandleStart: () => {},
-    bindConstraintLabelDragStart: () => {},
+    bindScaleHandleStart,
+    bindRotateHandleStart,
+    bindConstraintEdgeHandleStart,
+    bindConstraintLabelDragStart,
     fontOptions: DEFAULT_FONT_OPTIONS,
 
-    toggleConstruction: () => {
-      if (selection.ids.length === 0) return;
-      checkpointHistory();
-
-      setDocument((prev) => ({
-        ...prev,
-        shapes: prev.shapes.map((s) =>
-          selection.ids.includes(s.id)
-            ? { ...s, isConstruction: !s.isConstruction }
-            : s,
-        ),
-      }));
-    },
+    toggleConstruction,
 
     svgImport,
     startSvgImport,
@@ -1423,166 +1601,24 @@ export function useCadEditor({
     updateSvgImportDraft,
     confirmSvgImport,
 
-    renameGroup: (id: string, name: string) =>
-      setDocument((d) => renameGroup(d, id, name)),
-
-    toggleGroupCollapsed: (id: string) =>
-      setDocument((d) => toggleGroupCollapsed(d, id)),
-
-    reorderDocumentShapes: (ids: string[]) =>
-      setDocument((d) => reorderShapes(d, ids)),
+    renameGroup,
+    toggleGroupCollapsed,
+    reorderDocumentShapes,
 
     startLinearArray,
     startCircularArray,
     applyArray,
     closeArrayTool,
 
-    updateLinearArrayParams: (p: any) =>
-      setLinearArrayParams((prev) => ({ ...prev, ...p })),
-
-    updateCircularArrayParams: (p: any) =>
-      setCircularArrayParams((prev) => ({ ...prev, ...p })),
+    updateLinearArrayParams,
+    updateCircularArrayParams,
 
     editArrayGroupById,
 
-    arrayTool: {
-      mode: arrayToolMode,
-      linear: linearArrayParams,
-      circular: circularArrayParams,
-      editingGroupId: editingArrayGroupId,
-    },
+    arrayTool,
+    arrayPreviewShapes,
 
-    arrayPreviewShapes: (() => {
-      if (!arrayToolMode || selection.ids.length === 0) return [];
-
-      const groupId = "preview-array";
-      const definition: any =
-        arrayToolMode === "linear"
-          ? {
-              type: "linear",
-              sourceShapeIds: selection.ids,
-              params: linearArrayParams,
-            }
-          : {
-              type: "circular",
-              sourceShapeIds: selection.ids,
-              params: circularArrayParams,
-            };
-
-      const previewDoc = rebuildArrayGroup(
-        { ...document, shapes: [...document.shapes] },
-        groupId,
-        definition,
-      );
-
-      return previewDoc.shapes.filter((s) => s.groupId === groupId);
-    })(),
-
-    addQuickConstraint: (type: any) => {
-      checkpointHistory();
-
-      let pids: string[] = [];
-      const selectedShapes = document.shapes.filter((s) => selection.ids.includes(s.id));
-
-      selectedShapes.forEach((s) => {
-        const shape = s as any;
-
-        if (s.type === "line" || s.type === "rectangle" || s.type === "arc") {
-          if (shape.p1) pids.push(shape.p1);
-          if (shape.p2) pids.push(shape.p2);
-          if (shape.center) pids.push(shape.center);
-        } else if (s.type === "circle") {
-          if (shape.center) pids.push(shape.center);
-        } else if (s.type === "polyline" || s.type === "bspline") {
-          if (shape.pointIds) pids.push(...shape.pointIds);
-          if (shape.controlPointIds) pids.push(...shape.controlPointIds);
-        }
-      });
-
-      let finalPids = pids;
-
-      if (type === "parallel" || type === "perpendicular") {
-        const lines = selectedShapes.filter((s) => s.type === "line");
-        if (lines.length >= 2) {
-          finalPids = [
-            (lines[0] as any).p1,
-            (lines[0] as any).p2,
-            (lines[1] as any).p1,
-            (lines[1] as any).p2,
-          ];
-        } else {
-          console.warn(`${type} constraint requires 2 lines`);
-          return;
-        }
-      } else if (type === "coincident" || type === "distance") {
-        finalPids = pids.slice(0, 2);
-      } else {
-        finalPids = pids.slice(0, 2);
-      }
-
-      if (type === "lock") {
-        checkpointHistory();
-        setDocument((prev) => ({
-          ...prev,
-          points: prev.points.map((p) =>
-            finalPids.includes(p.id) ? { ...p, isFixed: true } : p,
-          ),
-        }));
-        return;
-      }
-
-      const constraint = createConstraint(
-        type,
-        finalPids,
-        selection.ids,
-        ["distance", "angle", "radius", "diameter"].includes(type) ? 50 : undefined,
-      );
-
-      setDocument(updateGeometry(addConstraint(document, constraint)));
-    },
-
-    onConstraintPointerDown: (e: any, id: string) => {
-      e.stopPropagation();
-
-      if (id.startsWith("point:")) {
-        const pointId = id.split(":")[1];
-        bindSelectStart(e, pointId);
-        return;
-      }
-
-      const constraint = document.constraints.find((c) => c.id === id);
-      if (
-        !constraint ||
-        !["distance", "distance-x", "distance-y", "radius", "diameter", "angle"].includes(constraint.type)
-      ) {
-        return;
-      }
-
-      const newValStr = window.prompt(
-        `Enter new value for ${constraint.type} constraint:`,
-        String(constraint.value || 0),
-      );
-      if (newValStr === null) return;
-
-      if (newValStr.trim().toLowerCase() === "delete") {
-        checkpointHistory();
-        setDocument((prev) => ({
-          ...prev,
-          constraints: prev.constraints.filter((c) => c.id !== id),
-        }));
-        return;
-      }
-
-      const newVal = parseFloat(newValStr);
-      if (isNaN(newVal)) return;
-
-      checkpointHistory();
-      setDocument((prev) => {
-        const nextConstraints = prev.constraints.map((c) =>
-          c.id === id ? { ...c, value: newVal } : c,
-        );
-        return updateGeometry({ ...prev, constraints: nextConstraints });
-      });
-    },
+    addQuickConstraint,
+    onConstraintPointerDown,
   };
 }

@@ -1,7 +1,10 @@
 // src/contexts/AppContext.tsx
-import { createContext, useContext } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { useAppState } from '@/hooks/useAppState';
-import type { ReactNode } from 'react';
+import { SettingsProvider } from './SettingsContext';
+import { UIProvider } from './UIContext';
+import { GCodeProvider } from './GCodeContext';
+import { CadProvider } from './CadContext';
 
 type AppContextType = ReturnType<typeof useAppState>;
 
@@ -9,7 +12,19 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const state = useAppState();
-  return <AppContext.Provider value={state}>{children}</AppContext.Provider>;
+  const { ui, settings, gcode, cad } = state;
+
+  return (
+    <UIProvider value={ui}>
+      <SettingsProvider value={settings}>
+        <GCodeProvider value={gcode}>
+          <CadProvider value={cad}>
+            <AppContext.Provider value={state}>{children}</AppContext.Provider>
+          </CadProvider>
+        </GCodeProvider>
+      </SettingsProvider>
+    </UIProvider>
+  );
 }
 
 export function useApp() {

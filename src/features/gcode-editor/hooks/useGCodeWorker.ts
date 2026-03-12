@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ParsedGCode } from "@/types/gcode";
 
+export type { ParsedGCode };
+
 type WorkerRequest = {
   requestId: number;
   gcodeText: string;

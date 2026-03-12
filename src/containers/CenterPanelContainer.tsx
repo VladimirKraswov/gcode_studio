@@ -1,5 +1,8 @@
 import React, { Suspense } from "react";
-import { useApp } from "@/contexts/AppContext";
+import { useGCode } from "@/contexts/GCodeContext";
+import { useUI } from "@/contexts/UIContext";
+import { useCad } from "@/contexts/CadContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { PathScene } from "@/features/preview/components/PathScene";
 
 const GCodeEditorPanel = React.lazy(() => import("@/features/gcode-editor/components/GCodeEditorPanel"));
@@ -14,20 +17,23 @@ function Loader() {
 }
 
 export function CenterPanelContainer() {
+  const { activeTab } = useUI();
   const {
-    activeTab,
     parsed,
     currentState,
     progress,
-    cameraResetKey,
     stock,
     showMaterialRemoval,
     placementMode,
     detailLevel,
-    editDocument,
     source,
     setSource,
     fileName,
+    applyGeneratedGCode,
+  } = useGCode();
+  const {
+    cameraResetKey,
+    editDocument,
     setEditDocument,
     setEditDocumentSilently,
     selection,
@@ -41,10 +47,9 @@ export function CenterPanelContainer() {
     redo,
     canUndo,
     canRedo,
-    settings,
     setCameraInfo,
-    applyGeneratedGCode,
-  } = useApp();
+  } = useCad();
+  const { settings } = useSettings();
 
   return (
     <div className="flex flex-1 min-h-0 min-w-0 bg-panel-solid">
