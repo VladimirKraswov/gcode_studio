@@ -62,9 +62,11 @@ export function CenterPanelContainer() {
 
           <div className="flex-1 min-h-0 overflow-hidden rounded-xl border border-border bg-panel-muted">
             <PathScene
+              progress={progress}
+              showToolpath={showToolpath}
+              showRapids={showRapids}
               parsed={parsed!}
               currentState={currentState}
-              progress={progress}
               cameraResetKey={cameraResetKey}
               stock={stock}
               showMaterialRemoval={showMaterialRemoval}

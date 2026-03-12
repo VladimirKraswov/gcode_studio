@@ -15,15 +15,21 @@ export function WorkArea({ bounds, stock, placementMode }: WorkAreaProps) {
   const placement = getStockPlacement(bounds, stock, placementMode);
   const center = toSceneCoords(placement.centerGcode);
 
-  const colors = useMemo(() => ({
-    grid: new THREE.Color(theme.cad.gridMajor),
-    lines: new THREE.Color(theme.cad.gridMinor),
-  }), [theme]);
+  const colors = useMemo(
+    () => ({
+      grid: new THREE.Color(theme.cad.gridMajor),
+      lines: new THREE.Color(theme.cad.gridMinor),
+    }),
+    [theme],
+  );
+
+  const size = Math.max(stock.width, stock.height, 100) + 80;
+  const divisions = Math.max(20, Math.round(size / 10));
 
   return (
     <group>
       <gridHelper
-        args={[Math.max(stock.width + 20, stock.height + 20), 20, colors.grid, colors.lines]}
+        args={[size, divisions, colors.grid, colors.lines]}
         position={[center.x, -stock.thickness, center.z]}
       />
     </group>

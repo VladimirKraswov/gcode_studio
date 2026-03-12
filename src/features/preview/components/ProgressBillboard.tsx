@@ -4,7 +4,7 @@ import { toSceneCoords } from "@/shared/utils/common";
 
 type ProgressBillboardProps = {
   position: Point3;
-  progress: number;
+  progress: number; // 0..100
 };
 
 export function ProgressBillboard({ position, progress }: ProgressBillboardProps) {

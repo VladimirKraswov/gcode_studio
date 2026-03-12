@@ -23,10 +23,12 @@ import { useTheme } from "@/shared/hooks/useTheme";
 type PathSceneProps = {
   parsed: ParsedGCode;
   currentState: CurrentState;
-  progress: number;
+  progress: number; // 0..100
   cameraResetKey: number;
   stock: StockDimensions;
   showMaterialRemoval: boolean;
+  showToolpath: boolean;
+  showRapids?: boolean;
   totalLength: number;
   placementMode: PlacementMode;
   detailLevel: number;
@@ -79,6 +81,8 @@ export function PathScene({
   cameraResetKey,
   stock,
   showMaterialRemoval,
+  showToolpath,
+  showRapids = true,
   totalLength,
   placementMode,
   detailLevel,
@@ -93,16 +97,18 @@ export function PathScene({
     gridMajor: theme.cad.gridMajor,
     axisX: theme.cad.axisX,
     axisY: theme.cad.axisY,
-    axisZ: isDark ? "#f59e0b" : "#b45309",
+    axisZ: isDark ? "#fbbf24" : "#b45309",
     text: theme.text,
-    bg: theme.bgSoft,
-    border: theme.border,
+    bg: theme.cad.canvasBg ?? theme.bgSoft,
+    border: theme.borderStrong,
     primary: theme.primary,
-    primarySoft: isDark ? "rgba(245, 158, 11, 0.15)" : theme.primarySoft,
+    primarySoft: isDark ? "rgba(245, 158, 11, 0.22)" : "rgba(217, 119, 6, 0.18)",
     primaryText: theme.primaryText,
     success: theme.success,
     danger: theme.danger,
-    lineMuted: isDark ? "#44403c" : "#e2e8f0",
+    lineMuted: isDark ? "#78716c" : "#cbd5e1",
+    cutLine: isDark ? "#f5f5f4" : "#334155",
+    rapidLine: isDark ? "#f59e0b" : "#d97706",
   }), [theme, isDark]);
 
   const placement = useMemo(
@@ -149,13 +155,8 @@ export function PathScene({
     const zPos = toScenePoint({ x: 0, y: 0, z: length });
 
     const xTicks: React.ReactNode[] = [];
-    for (
-      let value = -Math.floor(length / tickStep) * tickStep;
-      value <= length;
-      value += tickStep
-    ) {
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
       if (value === 0) continue;
-
       const from = toScenePoint({ x: value, y: 0, z: -tickHalf });
       const to = toScenePoint({ x: value, y: 0, z: tickHalf });
       const labelPos = toScenePoint({ x: value, y: 0, z: -labelOffset });
@@ -171,13 +172,8 @@ export function PathScene({
     }
 
     const yTicks: React.ReactNode[] = [];
-    for (
-      let value = -Math.floor(length / tickStep) * tickStep;
-      value <= length;
-      value += tickStep
-    ) {
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
       if (value === 0) continue;
-
       const from = toScenePoint({ x: -tickHalf, y: value, z: 0 });
       const to = toScenePoint({ x: tickHalf, y: value, z: 0 });
       const labelPos = toScenePoint({ x: -labelOffset, y: value, z: 0 });
@@ -193,13 +189,8 @@ export function PathScene({
     }
 
     const zTicks: React.ReactNode[] = [];
-    for (
-      let value = -Math.floor(length / tickStep) * tickStep;
-      value <= length;
-      value += tickStep
-    ) {
+    for (let value = -Math.floor(length / tickStep) * tickStep; value <= length; value += tickStep) {
       if (value === 0) continue;
-
       const from = toScenePoint({ x: -tickHalf, y: 0, z: value });
       const to = toScenePoint({ x: tickHalf, y: 0, z: value });
       const labelPos = toScenePoint({ x: labelOffset, y: 0, z: value });
@@ -329,9 +320,7 @@ export function PathScene({
 
     return edges
       .map(([start, end], idx) => {
-        if (start.distanceTo(end) < 0.001) {
-          return null;
-        }
+        if (start.distanceTo(end) < 0.001) return null;
 
         return (
           <Line
@@ -350,21 +339,45 @@ export function PathScene({
   }, [parsed.bounds, colors]);
 
   const renderSegments = parsed.renderSegments;
-  const renderedDoneCount = Math.floor((progress / 100) * renderSegments.length);
-  const doneSegments = renderSegments.slice(0, Math.max(renderedDoneCount, 0));
+
+  const renderedDoneCount = useMemo(
+    () => Math.floor((progress / 100) * renderSegments.length),
+    [progress, renderSegments.length],
+  );
+
+  const doneSegments = useMemo(
+    () => renderSegments.slice(0, Math.max(renderedDoneCount, 0)),
+    [renderSegments, renderedDoneCount],
+  );
+
+  const backgroundSegments = useMemo(() => {
+    if (!showToolpath) return [];
+    return renderSegments.filter((seg) => showRapids || seg.mode !== "G0");
+  }, [renderSegments, showRapids, showToolpath]);
+
+  const doneVisibleSegments = useMemo(() => {
+    if (!showToolpath) return [];
+    return doneSegments.filter((seg) => showRapids || seg.mode !== "G0");
+  }, [doneSegments, showRapids, showToolpath]);
 
   return (
-    <Canvas camera={{ position: [0, 300, 0], fov: 50 }} shadows={{ type: THREE.PCFShadowMap }}>
+    <Canvas
+      dpr={[1, 1.5]}
+      camera={{ position: [0, 300, 0], fov: 50, near: 0.5, far: 5000 }}
+      gl={{
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance",
+      }}
+      shadows={false}
+    >
       <color attach="background" args={[colors.bg]} />
-      <ambientLight intensity={isDark ? 0.4 : 0.85} />
-      <hemisphereLight intensity={0.45} groundColor={colors.border} />
+
+      <ambientLight intensity={isDark ? 0.55 : 0.9} />
+      <hemisphereLight intensity={isDark ? 0.5 : 0.6} groundColor={colors.border} />
       <directionalLight
-        position={[80, 110, 60]}
-        intensity={isDark ? 0.8 : 1.25}
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-mapType={THREE.PCFShadowMap}
+        position={[100, 140, 80]}
+        intensity={isDark ? 1.15 : 1.3}
       />
 
       <AutoFitCamera
@@ -380,13 +393,14 @@ export function PathScene({
       {rulers}
 
       {showMaterialRemoval && (
-        <mesh position={[stockCenter.x, stockCenter.y, stockCenter.z]} receiveShadow renderOrder={1}>
+        <mesh position={[stockCenter.x, stockCenter.y, stockCenter.z]} renderOrder={1}>
           <boxGeometry args={[stock.width, stock.thickness, stock.height]} />
           <meshStandardMaterial
-            color={isDark ? "#78350f" : "#c89d67"}
+            color={isDark ? "#8b5a2b" : "#d4a373"}
             transparent
-            opacity={0.7}
-            roughness={0.6}
+            opacity={0.45}
+            roughness={0.8}
+            metalness={0}
             depthWrite={false}
             polygonOffset
             polygonOffsetFactor={2}
@@ -407,33 +421,33 @@ export function PathScene({
         />
       ) : (
         <>
-          {renderSegments.map((seg) => (
+          {backgroundSegments.map((seg) => (
             <SimpleLine
               key={`bg-${seg.id}`}
               start={seg.start}
               end={seg.end}
               color={seg.mode === "G0" ? colors.primarySoft : colors.lineMuted}
-              opacity={0.55}
+              opacity={0.45}
             />
           ))}
 
-          {doneSegments.map((seg) => (
+          {doneVisibleSegments.map((seg) => (
             <SimpleLine
               key={`done-${seg.id}`}
               start={seg.start}
               end={seg.end}
               color={
                 seg.mode === "G0"
-                  ? colors.primary
+                  ? colors.rapidLine
                   : seg.isCutting
-                    ? colors.text
+                    ? colors.cutLine
                     : colors.primaryText
               }
               opacity={1}
             />
           ))}
 
-          {currentState.segment && (
+          {showToolpath && currentState.segment && (showRapids || currentState.segment.mode !== "G0") && (
             <>
               <SimpleLine
                 start={currentState.segment.start}

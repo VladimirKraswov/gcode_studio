@@ -7,7 +7,7 @@ import { useTheme } from "@/shared/hooks/useTheme";
 type MaterialRemovalMeshProps = {
   parsed: ParsedGCode;
   stock: StockDimensions;
-  progress: number;
+  progress: number; // 0..100
   totalLength: number;
   placementMode: PlacementMode;
   detailLevel?: number;
@@ -38,9 +38,16 @@ export function MaterialRemovalMesh({
   const level = clamp(detailLevel, 1, 10);
   const t = (level - 1) / 9;
 
-  const gridX = Math.floor(150 + t * 650);
-  const gridY = Math.floor(150 + t * 650);
-  const stepDensity = 2 + t * 18;
+  // Чуть мягче рост, чтобы не убивать FPS
+  const gridX = Math.floor(120 + t * 420);
+  const gridY = Math.floor(120 + t * 420);
+  const stepDensity = 2 + t * 10;
+
+  // Квантуем прогресс, чтобы не пересчитывать меш на каждый кадр
+  const progressBucket = useMemo(() => {
+    const p = clamp(progress, 0, 100);
+    return Math.round(p * 2) / 2; // шаг 0.5%
+  }, [progress]);
 
   const placement = useMemo(
     () => getStockPlacement(bounds, stock, placementMode),
@@ -68,7 +75,7 @@ export function MaterialRemovalMesh({
     () =>
       new THREE.MeshLambertMaterial({
         side: THREE.FrontSide,
-        flatShading: true,
+        flatShading: false,
         vertexColors: true,
         polygonOffset: true,
         polygonOffsetFactor: -2,
@@ -85,20 +92,20 @@ export function MaterialRemovalMesh({
     return new THREE.Color(
       isDark
         ? readCssVar("--color-panel-muted", "#44403c")
-        : "#d8b17b",
+        : "#ddb98b",
     );
   }, [isDark]);
 
   const cutWoodColor = useMemo(() => {
     return new THREE.Color(
       isDark
-        ? readCssVar("--color-border-strong", "#57534e")
-        : "#5a3e2a",
+        ? readCssVar("--color-border-strong", "#78716c")
+        : "#6b4428",
     );
   }, [isDark]);
 
   useEffect(() => {
-    const targetLength = (progress / 100) * totalLength;
+    const targetLength = (progressBucket / 100) * totalLength;
     heights.fill(0);
     shade.fill(0);
 
@@ -109,18 +116,14 @@ export function MaterialRemovalMesh({
     const cellSizeY = depth / Math.max(1, gridY - 1);
 
     const cellDiagonal = Math.sqrt(cellSizeX * cellSizeX + cellSizeY * cellSizeY);
-    const effectiveRadius = toolRadius + cellDiagonal * 0.5;
+    const effectiveRadius = toolRadius + cellDiagonal * 0.45;
     const effectiveRadiusSq = effectiveRadius * effectiveRadius;
 
     const carveAt = (localX: number, localY: number, z: number) => {
       if (localX < -effectiveRadius || localX > width + effectiveRadius) return;
       if (localY < -effectiveRadius || localY > depth + effectiveRadius) return;
 
-      let centerX = localX;
-      if (mirrorX) {
-        centerX = width - localX;
-      }
-
+      let centerX = mirrorX ? width - localX : localX;
       centerX = Math.min(width + effectiveRadius, Math.max(-effectiveRadius, centerX));
 
       const minGX = Math.floor((centerX - effectiveRadius) / cellSizeX);
@@ -153,7 +156,7 @@ export function MaterialRemovalMesh({
 
             const distance01 = Math.min(1, Math.sqrt(distSq) / Math.max(effectiveRadius, 0.0001));
             const influence = 1 - distance01;
-            shade[index] = Math.max(shade[index], 0.1 + influence * 0.9);
+            shade[index] = Math.max(shade[index], 0.15 + influence * 0.85);
           }
         }
       }
@@ -183,7 +186,7 @@ export function MaterialRemovalMesh({
 
       if (limitT < 0) break;
 
-      const maxStepLen = Math.max(Math.min(cellSizeX, cellSizeY) * 0.75, 0.05);
+      const maxStepLen = Math.max(Math.min(cellSizeX, cellSizeY) * 0.9, 0.08);
       const stepsByDensity = Math.ceil(distance * stepDensity);
       const stepsByGrid = Math.ceil(distance / maxStepLen);
       const steps = Math.max(2, stepsByDensity, stepsByGrid);
@@ -235,10 +238,10 @@ export function MaterialRemovalMesh({
     gridX,
     gridY,
     heights,
+    mirrorX,
     placement.bottom,
     placement.left,
-    mirrorX,
-    progress,
+    progressBucket,
     segments,
     shade,
     stepDensity,

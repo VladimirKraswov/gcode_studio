@@ -20,7 +20,7 @@ export function AutoFitCamera({
   cameraResetKey,
   controlsRef,
 }: AutoFitCameraProps) {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
 
   const placement = useMemo(
     () => getStockPlacement(bounds, stock, placementMode),
@@ -36,22 +36,29 @@ export function AutoFitCamera({
       1,
     );
 
-    const maxHorizontalSize = Math.max(sizeX, sizeY);
-    const maxSize = Math.max(sizeX, sizeY, sizeZ);
-
     const targetScene = toScenePoint(placement.centerGcode);
-    const distance = Math.max(maxHorizontalSize * 1.6, maxSize * 2.0, 120);
+
+    const fitWidth = Math.max(sizeX, sizeY);
+    const fitHeight = Math.max(sizeZ, stock.thickness, 1);
+
+    const perspectiveCamera = camera as THREE.PerspectiveCamera;
+    const fov = THREE.MathUtils.degToRad(perspectiveCamera.fov || 50);
+    const aspect = Math.max(size.width / Math.max(size.height, 1), 1);
+
+    const distanceByHeight = fitHeight / (2 * Math.tan(fov / 2));
+    const distanceByWidth = fitWidth / (2 * Math.tan(fov / 2)) / aspect;
+    const distance = Math.max(distanceByHeight, distanceByWidth, 120) * 1.55;
 
     const cameraPosition = new THREE.Vector3(
-      targetScene.x,
+      targetScene.x + distance * 0.18,
       targetScene.y + distance,
-      targetScene.z - distance * 0.22,
+      targetScene.z - distance * 0.28,
     );
 
     camera.position.copy(cameraPosition);
     camera.up.set(0, 0, 1);
-    camera.near = 0.1;
-    camera.far = Math.max(4000, distance * 10);
+    camera.near = 0.5;
+    camera.far = Math.max(5000, distance * 12);
     camera.lookAt(targetScene);
     camera.updateProjectionMatrix();
 
@@ -59,7 +66,7 @@ export function AutoFitCamera({
       controlsRef.current.target.copy(targetScene);
       controlsRef.current.update();
     }
-  }, [bounds, camera, cameraResetKey, controlsRef, placement, stock]);
+  }, [bounds, camera, cameraResetKey, controlsRef, placement, size.height, size.width, stock]);
 
   return null;
 }
