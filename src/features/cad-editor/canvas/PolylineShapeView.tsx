@@ -1,5 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { SketchPolyline, SketchPoint } from "../model/types";
 
@@ -9,6 +11,7 @@ export type PolylineShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
 };
 
@@ -18,11 +21,12 @@ export function PolylineShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
 }: PolylineShapeViewProps) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(allPoints.map(p => [p.id, p]));
+  const pointMap = new Map(allPoints.map((p) => [p.id, p]));
   const polyPoints = shape.pointIds
     .map((id) => {
       const p_cad = pointMap.get(id) || { x: 0, y: 0 };
@@ -34,12 +38,22 @@ export function PolylineShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
+
   return (
     <>
       <polyline
         points={polyPoints}
         fill="none"
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"

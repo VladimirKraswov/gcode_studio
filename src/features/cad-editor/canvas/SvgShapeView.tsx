@@ -1,5 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { SketchSvg, SketchPoint } from "../model/types";
 
@@ -26,6 +28,7 @@ export type SvgShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
 };
 
@@ -34,8 +37,9 @@ export function SvgShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
-}: Omit<SvgShapeViewProps, 'points'>) {
+}: Omit<SvgShapeViewProps, "points">) {
   const { theme } = useTheme();
 
   const scaleX = (shape.width / Math.max(shape.sourceWidth, 0.0001)) * (shape.scale ?? 1);
@@ -48,12 +52,22 @@ export function SvgShapeView({
     y: shape.y + shape.height / 2,
   };
 
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
+
   return (
     <g onPointerDown={onPointerDown}>
       {shape.contours.map((contour, index) => {
         const points = contour
           .map((pointStr) => {
-            const [px, py] = pointStr.split(',').map(Number);
+            const [px, py] = pointStr.split(",").map(Number);
             const cadPoint = {
               x: shape.x + px * scaleX,
               y: shape.y + py * scaleY,
@@ -73,7 +87,7 @@ export function SvgShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+              stroke={strokeColor}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"

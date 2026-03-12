@@ -14,6 +14,7 @@ import type {
 } from "../model/types";
 import { getTextPolylines } from "./textGeometry";
 import { rotateCadPoint, sampleArcPoints } from "./geometryEngine";
+import { sampleBSpline } from "@/features/cad-editor/geometry/bspline";
 
 export type GeometryContour = {
   points: { x: number; y: number }[];
@@ -161,16 +162,14 @@ function ellipseToContours(
   return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
 }
 
-function bsplineToContours(shape: SketchBSpline, points: SketchPoint[]): GeometryContour[] {
-  const pointMap = new Map(points.map((p) => [p.id, p]));
-  const ctrlPoints = shape.controlPointIds.map((id) => pointMap.get(id) || { x: 0, y: 0 });
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 120): GeometryContour[] {
+  const sampled = sampleBSpline(shape, points, segments);
 
-  if (ctrlPoints.length < 2) return [];
+  if (sampled.length < 2) return [];
 
-  const contourPoints = ctrlPoints.map((p) => ({ x: p.x, y: p.y }));
   return [
     {
-      points: shape.periodic ? ensureClosed(contourPoints) : contourPoints,
+      points: shape.periodic ? ensureClosed(sampled) : sampled,
       closed: shape.periodic,
     },
   ];

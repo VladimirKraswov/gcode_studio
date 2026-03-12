@@ -1,6 +1,8 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { sampleArcPoints } from "@/features/cad-editor/geometry/geometryEngine";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { SketchArc, SketchPoint } from "../model/types";
 
@@ -10,6 +12,7 @@ export type ArcShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
 };
 
@@ -19,11 +22,12 @@ export function ArcShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
 }: ArcShapeViewProps) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(allPoints.map(p => [p.id, p]));
+  const pointMap = new Map(allPoints.map((p) => [p.id, p]));
   const center = pointMap.get(shape.center) || { x: 0, y: 0 };
   const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
   const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
@@ -48,12 +52,22 @@ export function ArcShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
+
   return (
     <>
       <polyline
         points={polyPoints}
         fill="none"
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         strokeLinecap="round"
         strokeLinejoin="round"

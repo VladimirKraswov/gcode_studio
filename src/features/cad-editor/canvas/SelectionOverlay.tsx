@@ -1,6 +1,6 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
-import { groupBounds, selectionBounds } from "../model/shapeBounds";
+import { selectionBounds } from "../model/shapeBounds";
 import type { SketchDocument } from "../model/types";
 import type { SelectionState } from "../model/selection";
 import type { ViewTransform } from "../model/view";
@@ -23,6 +23,10 @@ type SelectionOverlayProps = {
   onHoverChange?: (value: boolean) => void;
 };
 
+function isPointSelectionId(id: string): boolean {
+  return id.startsWith("pt_");
+}
+
 export function SelectionOverlay({
   document,
   selection,
@@ -37,17 +41,20 @@ export function SelectionOverlay({
 
   if (selection.ids.length === 0) return null;
 
-  const isParametricOnly = selection.ids.every(id => {
-    if (id.startsWith("pt-")) return true;
-    const s = document.shapes.find(shape => shape.id === id);
-    return s && s.type !== "text" && s.type !== "svg";
-  });
+  const selectedShapeIds = selection.ids.filter((id) => !isPointSelectionId(id));
+  const selectedShapes = document.shapes.filter((shape) => selectedShapeIds.includes(shape.id));
 
-  // If only parametric shapes are selected, we hide the bounding box
-  // to avoid cluttering and allow direct interaction with vertices/edges
+  if (selectedShapes.length === 0) {
+    return null;
+  }
+
+  const isParametricOnly = selectedShapes.every(
+    (shape) => shape.type !== "text" && shape.type !== "svg",
+  );
+
   if (isParametricOnly) return null;
 
-  const bounds = selectionBounds(document.shapes.filter((shape) => selection.ids.includes(shape.id)), document.points);
+  const bounds = selectionBounds(selectedShapes, document.points);
 
   const topLeft = cadToScreenPoint(
     { x: bounds.minX, y: bounds.maxY },
@@ -70,7 +77,6 @@ export function SelectionOverlay({
         fill: theme.cad.selectionDragFill,
         dash: "10 6",
         width: 2,
-        handleCursor: "grabbing" as const,
       }
     : isHover
       ? {
@@ -78,14 +84,12 @@ export function SelectionOverlay({
           fill: theme.cad.selectionHoverFill,
           dash: "8 4",
           width: 1.75,
-          handleCursor: "grab" as const,
         }
       : {
           stroke: theme.cad.selectionStroke,
           fill: theme.cad.selectionFill,
           dash: "6 4",
           width: 1.5,
-          handleCursor: "grab" as const,
         };
 
   const corners: Array<{
@@ -101,7 +105,7 @@ export function SelectionOverlay({
   ];
 
   return (
-    <g style={{ pointerEvents: 'none' }}>
+    <g style={{ pointerEvents: "none" }}>
       <rect
         x={x}
         y={y}
@@ -114,41 +118,37 @@ export function SelectionOverlay({
         rx={10}
       />
 
-      {!isParametricOnly && (
-        <>
-          <line
-            x1={cx}
-            y1={y}
-            x2={cx}
-            y2={rotateLineTop}
-            stroke={palette.stroke}
-            strokeWidth={1.5}
-            pointerEvents="none"
-          />
+      <line
+        x1={cx}
+        y1={y}
+        x2={cx}
+        y2={rotateLineTop}
+        stroke={palette.stroke}
+        strokeWidth={1.5}
+        pointerEvents="none"
+      />
 
-          <circle
-            cx={cx}
-            cy={rotateHandleY}
-            r={11}
-            fill="transparent"
-            stroke="transparent"
-            onPointerDown={onRotateHandlePointerDown}
-            style={{ cursor: "alias", pointerEvents: "all" }}
-          />
+      <circle
+        cx={cx}
+        cy={rotateHandleY}
+        r={11}
+        fill="transparent"
+        stroke="transparent"
+        onPointerDown={onRotateHandlePointerDown}
+        style={{ cursor: "alias", pointerEvents: "all" }}
+      />
 
-          <circle
-            cx={cx}
-            cy={rotateHandleY}
-            r={5.5}
-            fill={theme.cad.constraintLabelFill}
-            stroke={palette.stroke}
-            strokeWidth={1.5}
-            pointerEvents="none"
-          />
-        </>
-      )}
+      <circle
+        cx={cx}
+        cy={rotateHandleY}
+        r={5.5}
+        fill={theme.cad.constraintLabelFill}
+        stroke={palette.stroke}
+        strokeWidth={1.5}
+        pointerEvents="none"
+      />
 
-      {!isDragging && (!isParametricOnly) &&
+      {!isDragging &&
         corners.map((corner) => (
           <g key={corner.key}>
             <circle

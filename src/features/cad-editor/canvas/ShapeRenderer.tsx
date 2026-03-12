@@ -1,6 +1,7 @@
 import type { CadPoint } from "@/utils/fontGeometry";
 import type { ViewTransform } from "../model/view";
 import type { SketchShape, SketchPoint } from "../model/types";
+import type { SketchSolveState } from "../model/solver/diagnostics";
 import { useShapePlugin } from "../plugins/registry";
 
 type ShapeRendererProps = {
@@ -10,6 +11,7 @@ type ShapeRendererProps = {
   view: ViewTransform;
   isSelected: boolean;
   textPreviewMap: Record<string, CadPoint[][]>;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
 };
 
@@ -20,6 +22,7 @@ export function ShapeRenderer({
   view,
   isSelected,
   textPreviewMap,
+  solveState,
   onPointerDown,
 }: ShapeRendererProps) {
   const plugin = useShapePlugin(shape);
@@ -38,6 +41,7 @@ export function ShapeRenderer({
         view,
         isSelected,
         textPreviewMap,
+        solveState,
         onPointerDown,
       })}
     </>

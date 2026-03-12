@@ -1,5 +1,6 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import { sampleBSpline, getBSplineControlPoints } from "../geometry/bspline";
 import type { ViewTransform } from "../model/view";
 import type { SketchBSpline, SketchPoint } from "../model/types";
 
@@ -22,13 +23,19 @@ export function BSplineShapeView({
 }: BSplineShapeViewProps) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(allPoints.map(p => [p.id, p]));
+  const splinePoints = sampleBSpline(shape, allPoints, 120);
+  const controlPoints = getBSplineControlPoints(shape, allPoints);
 
-  // For now, we render the control points as a polyline (simplified spline visualization)
-  const polyPoints = shape.controlPointIds
-    .map((id) => {
-      const p_cad = pointMap.get(id) || { x: 0, y: 0 };
-      const p = cadToScreenPoint(p_cad, documentHeight, view);
+  const curveSvgPoints = splinePoints
+    .map((point) => {
+      const p = cadToScreenPoint(point, documentHeight, view);
+      return `${p.x},${p.y}`;
+    })
+    .join(" ");
+
+  const controlSvgPoints = controlPoints
+    .map((point) => {
+      const p = cadToScreenPoint(point, documentHeight, view);
       return `${p.x},${p.y}`;
     })
     .join(" ");
@@ -38,9 +45,8 @@ export function BSplineShapeView({
 
   return (
     <>
-      {/* Spline Curve (Simplified as polyline through control points) */}
       <polyline
-        points={polyPoints}
+        points={curveSvgPoints}
         fill="none"
         stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
@@ -50,7 +56,7 @@ export function BSplineShapeView({
       />
 
       <polyline
-        points={polyPoints}
+        points={curveSvgPoints}
         fill="none"
         stroke="transparent"
         strokeWidth={hitStrokeWidth}
@@ -59,10 +65,9 @@ export function BSplineShapeView({
         onPointerDown={onPointerDown}
       />
 
-      {/* Control Polygon */}
-      {isSelected && (
+      {isSelected && controlPoints.length > 1 && (
         <polyline
-          points={polyPoints}
+          points={controlSvgPoints}
           fill="none"
           stroke={theme.cad.draftGuide}
           strokeWidth={1}

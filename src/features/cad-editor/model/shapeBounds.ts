@@ -3,6 +3,7 @@ import {
   sampleArcPoints,
 } from "@/features/cad-editor/geometry/geometryEngine";
 import type { SketchDocument, SketchShape, SketchPoint } from "./types";
+import { sampleBSpline } from "@/features/cad-editor/geometry/bspline";
 
 export type Bounds2D = {
   minX: number;
@@ -91,8 +92,10 @@ export function shapeBounds(shape: SketchShape, points: SketchPoint[]): Bounds2D
     case "polyline":
       return boundsFromPoints(shape.pointIds.map(getPoint));
 
-    case "bspline":
-      return boundsFromPoints(shape.controlPointIds.map(getPoint));
+    case "bspline": {
+      const sampled = sampleBSpline(shape, points, 120);
+      return boundsFromPoints(sampled.length > 0 ? sampled : shape.controlPointIds.map(getPoint));
+    }
 
     case "text":
       return {

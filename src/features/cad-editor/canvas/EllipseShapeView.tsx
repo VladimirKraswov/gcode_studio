@@ -1,5 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { SketchEllipse, SketchPoint } from "../model/types";
 
@@ -9,6 +11,7 @@ export type EllipseShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGEllipseElement>) => void;
 };
 
@@ -18,11 +21,12 @@ export function EllipseShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
 }: EllipseShapeViewProps) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const center_cad = pointMap.get(shape.center) || { x: 0, y: 0 };
   const major_cad = pointMap.get(shape.majorAxisPoint) || { x: center_cad.x + 10, y: center_cad.y };
 
@@ -35,6 +39,16 @@ export function EllipseShapeView({
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
+
   return (
     <>
       <ellipse
@@ -43,7 +57,7 @@ export function EllipseShapeView({
         rx={majorRadius * view.scale}
         ry={shape.minorAxisRadius * view.scale}
         fill="none"
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         transform={`rotate(${-angle} ${p.x} ${p.y})`}
         pointerEvents="none"

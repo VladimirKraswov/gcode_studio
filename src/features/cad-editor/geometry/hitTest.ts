@@ -5,6 +5,7 @@ import {
   pointToSegmentDistance,
 } from "@/features/cad-editor/geometry/geometryEngine";
 import { shapeBounds } from "../model/shapeBounds";
+import { sampleBSpline } from "../geometry/bspline";
 
 export function hitTestShape(
   point: SketchPolylinePoint,
@@ -19,16 +20,28 @@ export function hitTestShape(
     case "rectangle": {
       const p1 = getPoint(shape.p1);
       const p2 = getPoint(shape.p2);
+
       const minX = Math.min(p1.x, p2.x);
       const maxX = Math.max(p1.x, p2.x);
       const minY = Math.min(p1.y, p2.y);
       const maxY = Math.max(p1.y, p2.y);
-      return (
-        point.x >= minX - tolerance &&
-        point.x <= maxX + tolerance &&
-        point.y >= minY - tolerance &&
-        point.y <= maxY + tolerance
-      );
+
+      const corners = [
+        { x: minX, y: minY },
+        { x: maxX, y: minY },
+        { x: maxX, y: maxY },
+        { x: minX, y: maxY },
+      ];
+
+      for (let i = 0; i < 4; i += 1) {
+        const a = corners[i];
+        const b = corners[(i + 1) % 4];
+        if (pointToSegmentDistance(point, a, b) <= tolerance) {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     case "circle": {
@@ -90,6 +103,16 @@ export function hitTestShape(
         point.y >= bounds.minY - tolerance &&
         point.y <= bounds.maxY + tolerance
       );
+    }
+
+    case "bspline": {
+      const splinePoints = sampleBSpline(shape, allPoints, 120);
+      for (let i = 1; i < splinePoints.length; i += 1) {
+        if (pointToSegmentDistance(point, splinePoints[i - 1], splinePoints[i]) <= tolerance) {
+          return true;
+        }
+      }
+      return false;
     }
 
     default:

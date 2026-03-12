@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { SvgImportModal } from "./SvgImportModal";
 import {
   CadCanvas,
@@ -16,6 +16,7 @@ import {
 } from "@/features/cad-editor";
 import type { CadPanButtonMode } from "@/shared/utils/settings";
 import { FiPlay } from "react-icons/fi";
+import { useApp } from "@/contexts/AppContext";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -37,6 +38,7 @@ type EditTabProps = {
 };
 
 export default function EditTab(props: EditTabProps) {
+  const { setCadEditor } = useApp();
   const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
 
   const editor = useCadEditor({
@@ -59,6 +61,22 @@ export default function EditTab(props: EditTabProps) {
   const canGroupSelected = props.selection.ids.length > 1;
   const canUngroupSelected = Boolean(primaryShape?.groupId);
   const hasDraft = Boolean(editor.draft) || editor.polylineDraft.length > 0;
+
+  // Синхронизируем методы редактора с контекстом
+  useEffect(() => {
+    setCadEditor({
+      insertControlPointToSelectedBSpline: editor.insertControlPointToSelectedBSpline,
+      removeSelectedPointFromBSpline: editor.removeSelectedPointFromBSpline,
+    });
+
+    return () => {
+      setCadEditor(null); // очищаем при размонтировании
+    };
+  }, [
+    editor.insertControlPointToSelectedBSpline,
+    editor.removeSelectedPointFromBSpline,
+    setCadEditor
+  ]);
 
   return (
     <CadRegistryProvider registry={cadRegistry}>

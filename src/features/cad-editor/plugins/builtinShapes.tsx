@@ -30,13 +30,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchRectangle>({
       type: "rectangle",
       getBounds: (shape: SketchRectangle, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <RectangleShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -45,13 +46,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchCircle>({
       type: "circle",
       getBounds: (shape: SketchCircle, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <CircleShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -60,13 +62,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchLine>({
       type: "line",
       getBounds: (shape: SketchLine, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <LineShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -75,13 +78,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchArc>({
       type: "arc",
       getBounds: (shape: SketchArc, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <ArcShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -90,13 +94,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchEllipse>({
       type: "ellipse",
       getBounds: (shape: SketchEllipse, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <EllipseShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -105,13 +110,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchBSpline>({
       type: "bspline",
       getBounds: (shape: SketchBSpline, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <BSplineShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -120,13 +126,14 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchPolyline>({
       type: "polyline",
       getBounds: (shape: SketchPolyline, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, points, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <PolylineShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),
@@ -141,6 +148,7 @@ export const builtinShapesPlugin: CadPlugin = {
         documentHeight,
         view,
         isSelected,
+        solveState,
         onPointerDown,
         textPreviewMap,
       }) => (
@@ -150,6 +158,7 @@ export const builtinShapesPlugin: CadPlugin = {
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           polylines={textPreviewMap[shape.id] ?? []}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
@@ -159,12 +168,13 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchSvg>({
       type: "svg",
       getBounds: (shape: SketchSvg, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, documentHeight, view, isSelected, onPointerDown }) => (
+      render: ({ shape, documentHeight, view, isSelected, solveState, onPointerDown }) => (
         <SvgShapeView
           shape={shape}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
         />
       ),

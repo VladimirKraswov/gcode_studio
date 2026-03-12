@@ -31,6 +31,10 @@ export function useAppState() {
   const [detailLevel, setDetailLevel] = useState(5);
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [settings, setSettings] = useState(() => loadSettings());
+  const [cadEditor, setCadEditor] = useState<{
+    insertControlPointToSelectedBSpline: (x: number, y: number) => void;
+    removeSelectedPointFromBSpline: () => void;
+  } | null>(null);
 
   const updateSettings = (update: typeof settings | ((prev: typeof settings) => typeof settings)) => {
     setSettings(prev => {
@@ -39,6 +43,7 @@ export function useAppState() {
       return next;
     });
   };
+  
 
   const {
     cameraResetKey,
@@ -129,5 +134,8 @@ export function useAppState() {
 
     applyGeneratedGCode,
     handleFileChange,
+
+    cadEditor,
+    setCadEditor,
   };
 }

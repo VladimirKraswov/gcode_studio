@@ -1,5 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { SketchCircle, SketchPoint } from "../model/types";
 
@@ -9,6 +11,7 @@ export type CircleShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
 };
 
@@ -18,20 +21,27 @@ export function CircleShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
 }: CircleShapeViewProps) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const center = pointMap.get(shape.center) || { x: 0, y: 0 };
 
   const p = cadToScreenPoint(center, documentHeight, view);
   const strokeWidth = Math.max(1, (shape.strokeWidth ?? 1) * view.scale);
   const hitStrokeWidth = Math.max(14, strokeWidth + 12);
 
-  const strokeColor = shape.isConstruction
-    ? (isSelected ? "#60a5fa" : "#3b82f6")
-    : (isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke);
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
 
   return (
     <>

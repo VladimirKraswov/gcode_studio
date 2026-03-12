@@ -1,5 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { SketchRectangle, SketchPoint } from "../model/types";
 
@@ -9,6 +11,7 @@ export type RectangleShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
 };
 
@@ -18,11 +21,12 @@ export function RectangleShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   onPointerDown,
 }: RectangleShapeViewProps) {
   const { theme } = useTheme();
 
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const p1_cad = pointMap.get(shape.p1) || { x: 0, y: 0 };
   const p2_cad = pointMap.get(shape.p2) || { x: 0, y: 0 };
 
@@ -43,6 +47,16 @@ export function RectangleShapeView({
   const cy = p.y + rectHeight / 2;
   const rotation = shape.rotation ?? 0;
 
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
+
   return (
     <>
       <rect
@@ -51,7 +65,7 @@ export function RectangleShapeView({
         width={rectWidth}
         height={rectHeight}
         fill="none"
-        stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+        stroke={strokeColor}
         strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
         opacity={0.95}
         pointerEvents="none"

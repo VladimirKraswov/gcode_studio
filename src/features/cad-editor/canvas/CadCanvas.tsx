@@ -18,6 +18,7 @@ import type { SelectionState } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
 import { shapeBounds } from "../model/shapeBounds";
 import type { CadPoint } from "../geometry/textGeometry";
+import type { SketchSolveState } from "../model/solver/diagnostics";
 
 type ScaleHandle = "nw" | "ne" | "sw" | "se";
 
@@ -36,6 +37,8 @@ type CadCanvasProps = {
   isSelectionHover: boolean;
   isTransforming: boolean;
   arrayPreviewShapes: SketchShape[];
+  solveState?: SketchSolveState;
+  conflictingConstraintIds?: string[];
   onSelectionHoverChange: (value: boolean) => void;
   onPointerDown: (event: React.PointerEvent<SVGSVGElement>) => void;
   onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => void;
@@ -115,6 +118,8 @@ export function CadCanvas({
   isSelectionHover,
   isTransforming,
   arrayPreviewShapes,
+  solveState,
+  conflictingConstraintIds = [],
   onSelectionHoverChange,
   onPointerDown,
   onPointerMove,
@@ -181,6 +186,7 @@ export function CadCanvas({
           view={view}
           isSelected={selectedIds.has(shape.id)}
           textPreviewMap={textPreviewMap}
+          solveState={solveState}
           onPointerDown={onShapePointerDown}
         />
       ))}
@@ -192,14 +198,16 @@ export function CadCanvas({
       />
 
       {tool === "select" && (
-          <CadConstraintOverlay
-            document={document}
-            documentHeight={document.height}
-            view={view}
-            selection={selection}
-            onPointerDown={onConstraintPointerDown}
-          />
-        )}
+        <CadConstraintOverlay
+          document={document}
+          documentHeight={document.height}
+          view={view}
+          selection={selection}
+          solveState={solveState}
+          conflictingConstraintIds={conflictingConstraintIds}
+          onPointerDown={onConstraintPointerDown}
+        />
+      )}
 
       {showSelection && (
         <SelectionOverlay

@@ -1,5 +1,7 @@
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
+import type { SketchSolveState } from "../model/solver/diagnostics";
+import { resolveShapeStrokeColor } from "./sketchStateColors";
 import type { ViewTransform } from "../model/view";
 import type { CadPoint } from "@/utils/fontGeometry";
 import type { SketchText, SketchPoint } from "../model/types";
@@ -10,6 +12,7 @@ export type TextShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  solveState?: SketchSolveState;
   polylines: CadPoint[][];
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
 };
@@ -19,6 +22,7 @@ export function TextShapeView({
   documentHeight,
   view,
   isSelected,
+  solveState,
   polylines: _polylines,
   onPointerDown,
 }: TextShapeViewProps) {
@@ -28,6 +32,16 @@ export function TextShapeView({
   const hitStrokeWidth = Math.max(16, strokeWidth + 14);
 
   const scale = shape.scale ?? 1;
+
+  const strokeColor = resolveShapeStrokeColor({
+    solveState,
+    isConstruction: shape.isConstruction,
+    isSelected,
+    fallbackStroke: theme.cad.shapeStroke,
+    fallbackSelectedStroke: theme.cad.selectedStroke,
+    fallbackConstructionStroke: "#3b82f6",
+    fallbackConstructionSelectedStroke: "#60a5fa",
+  });
 
   return (
     <g onPointerDown={onPointerDown}>
@@ -48,7 +62,7 @@ export function TextShapeView({
             <polyline
               points={points}
               fill="none"
-              stroke={isSelected ? theme.cad.selectedStroke : theme.cad.shapeStroke}
+              stroke={strokeColor}
               strokeWidth={isSelected ? Math.max(1.5, strokeWidth) : strokeWidth}
               strokeLinecap="round"
               strokeLinejoin="round"
