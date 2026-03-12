@@ -151,7 +151,7 @@ export default function EditTab(props: EditTabProps) {
               isDragging={editor.isDragging}
               isPanning={editor.isPanning}
               isSelectionHover={editor.isSelectionHover}
-              arrayPreviewShapes={editor.arrayPreviewShapes}
+              arrayPreview={editor.arrayPreview}
               onSelectionHoverChange={editor.setIsSelectionHover}
               onPointerDown={editor.handleCanvasPointerDown}
               onPointerMove={editor.handleCanvasPointerMove}

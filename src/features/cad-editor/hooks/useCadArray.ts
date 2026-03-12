@@ -107,8 +107,8 @@ export function useCadArray(
     editingGroupId: editingArrayGroupId,
   }), [arrayToolMode, linearArrayParams, circularArrayParams, editingArrayGroupId]);
 
-  const arrayPreviewShapes = useMemo(() => {
-    if (!arrayToolMode || selection.ids.length === 0) return [];
+  const arrayPreview = useMemo(() => {
+    if (!arrayToolMode || selection.ids.length === 0) return null;
 
     const groupId = "preview-array";
     const definition: SketchArrayDefinition =
@@ -130,12 +130,15 @@ export function useCadArray(
       definition,
     );
 
-    return previewDoc.shapes.filter((shape) => shape.groupId === groupId);
+    return {
+        shapes: previewDoc.shapes.filter((shape) => shape.groupId === groupId),
+        points: previewDoc.points
+    };
   }, [arrayToolMode, selection.ids, document, linearArrayParams, circularArrayParams]);
 
   return {
     arrayTool,
-    arrayPreviewShapes,
+    arrayPreview,
     setArrayToolMode,
     setEditingArrayGroupId,
     updateLinearArrayParams,

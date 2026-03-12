@@ -145,7 +145,7 @@ export function useCadEditor({
   });
 
   const {
-    arrayTool, arrayPreviewShapes, setArrayToolMode, setEditingArrayGroupId,
+    arrayTool, arrayPreview, setArrayToolMode, setEditingArrayGroupId,
     updateLinearArrayParams, updateCircularArrayParams, setLinearArrayParamsState, setCircularArrayParamsState,
     startLinearArray, startCircularArray, applyArray, closeArrayTool
   } = useCadArray(document, setDocument, selection, onSelectionChange, checkpointHistory);
@@ -486,7 +486,7 @@ export function useCadEditor({
     handleGenerateClick, handleCanvasPointerDown, handleCanvasPointerMove, handleCanvasPointerUp, handleCanvasPointerLeave, handleCanvasContextMenu, handleCanvasDoubleClick, handleCanvasWheel,
     bindSelectStart, bindSelectionDragStart, bindScaleHandleStart: () => {}, bindRotateHandleStart: () => {}, bindConstraintEdgeHandleStart: () => {}, bindConstraintLabelDragStart: () => {},
     fontOptions: DEFAULT_FONT_OPTIONS, toggleConstruction, svgImport, startSvgImport, closeSvgImport, abortSvgImport, updateSvgImportDraft, confirmSvgImport, renameGroup, toggleGroupCollapsed, reorderDocumentShapes,
-    startLinearArray, startCircularArray, applyArray, closeArrayTool, updateLinearArrayParams, updateCircularArrayParams, editArrayGroupById, arrayTool, arrayPreviewShapes,
+    startLinearArray, startCircularArray, applyArray, closeArrayTool, updateLinearArrayParams, updateCircularArrayParams, editArrayGroupById, arrayTool, arrayPreview,
     addQuickConstraint, onConstraintPointerDown, updateConstraintValue, deleteConstraintById,
   };
 }

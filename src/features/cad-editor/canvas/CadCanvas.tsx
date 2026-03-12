@@ -1,4 +1,3 @@
-import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { CadGrid } from "./CadGrid";
 import { CadOriginMarker } from "./CadOriginMarker";
@@ -16,7 +15,6 @@ import type {
 import type { ViewTransform } from "../model/view";
 import { type SelectionState } from "../model/selection";
 import { collectVisibleShapes } from "../model/grouping";
-import { shapeBounds } from "../model/shapeBounds";
 import type { CadPoint } from "../geometry/textGeometry";
 import type { SketchSolveState } from "../model/solver/diagnostics";
 
@@ -36,7 +34,7 @@ type CadCanvasProps = {
   isPanning: boolean;
   isSelectionHover: boolean;
   isTransforming: boolean;
-  arrayPreviewShapes: SketchShape[];
+  arrayPreview: { shapes: SketchShape[]; points: any[] } | null;
   solveState?: SketchSolveState;
   conflictingConstraintIds?: string[];
   onSelectionHoverChange: (value: boolean) => void;
@@ -60,47 +58,32 @@ type CadCanvasProps = {
 };
 
 function ArrayPreviewOverlay({
-  shapes,
+  preview,
   document,
   view,
+  textPreviewMap,
 }: {
-  shapes: SketchShape[];
+  preview: { shapes: SketchShape[]; points: any[] } | null;
   document: SketchDocument;
   view: ViewTransform;
+  textPreviewMap: any;
 }) {
-  const { theme } = useTheme();
-
-  if (shapes.length === 0) return null;
+  if (!preview || preview.shapes.length === 0) return null;
 
   return (
-    <g pointerEvents="none">
-      {shapes.map((shape) => {
-        const bounds = shapeBounds(shape, document.points);
-        const topLeft = cadToScreenPoint(
-          { x: bounds.minX, y: bounds.maxY },
-          document.height,
-          view,
-        );
-
-        const width = Math.max(1, (bounds.maxX - bounds.minX) * view.scale);
-        const height = Math.max(1, (bounds.maxY - bounds.minY) * view.scale);
-
-        return (
-          <g key={`array-preview-${shape.id}`}>
-            <rect
-              x={topLeft.x}
-              y={topLeft.y}
-              width={width}
-              height={height}
-              rx={4}
-              fill={theme.cad.arrayPreviewFill}
-              stroke={theme.cad.arrayPreviewStroke}
-              strokeWidth={1.5}
-              strokeDasharray="8 4"
-            />
-          </g>
-        );
-      })}
+    <g pointerEvents="none" opacity="0.5">
+      {preview.shapes.map((shape) => (
+        <ShapeRenderer
+          key={shape.id}
+          shape={shape}
+          points={preview.points}
+          documentHeight={document.height}
+          view={view}
+          isSelected={false}
+          textPreviewMap={textPreviewMap}
+          onPointerDown={() => {}}
+        />
+      ))}
     </g>
   );
 }
@@ -119,7 +102,7 @@ export function CadCanvas({
   isPanning,
   isSelectionHover,
   isTransforming,
-  arrayPreviewShapes,
+  arrayPreview,
   solveState,
   conflictingConstraintIds = [],
   onSelectionHoverChange,
@@ -196,9 +179,10 @@ export function CadCanvas({
       ))}
 
       <ArrayPreviewOverlay
-        shapes={arrayPreviewShapes}
+        preview={arrayPreview}
         document={document}
         view={view}
+        textPreviewMap={textPreviewMap}
       />
 
       {tool === "select" && (
