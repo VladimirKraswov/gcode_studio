@@ -11,9 +11,9 @@ import type {
   SketchEllipse,
   SketchEllipseArc,
   SketchBSpline,
-} from "@/features/cad-editor/model/types";
-import { getTextPolylines } from "@/features/cad-editor/geometry/textGeometry";
-import { rotateCadPoint, sampleArcPoints } from "@/features/cad-editor/geometry/geometryEngine";
+} from "../model/types";
+import { getTextPolylines } from "./textGeometry";
+import { rotateCadPoint, sampleArcPoints } from "./geometryEngine";
 
 export type GeometryContour = {
   points: { x: number; y: number }[];
@@ -27,7 +27,7 @@ function round(value: number): number {
 function rotatePoint(
   point: { x: number; y: number },
   origin: { x: number; y: number },
-  angleDeg: number
+  angleDeg: number,
 ) {
   return rotateCadPoint(point, origin, angleDeg);
 }
@@ -43,7 +43,7 @@ function ensureClosed(points: { x: number; y: number }[]): { x: number; y: numbe
 }
 
 function rectangleToContours(shape: SketchRectangle, points: SketchPoint[]): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
   const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
 
@@ -71,7 +71,7 @@ function rectangleToContours(shape: SketchRectangle, points: SketchPoint[]): Geo
 }
 
 function circleToContours(shape: SketchCircle, points: SketchPoint[], segments = 96): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const center = pointMap.get(shape.center) || { x: 0, y: 0 };
 
   const contourPoints: { x: number; y: number }[] = [];
@@ -87,7 +87,7 @@ function circleToContours(shape: SketchCircle, points: SketchPoint[], segments =
 }
 
 function lineToContours(shape: SketchLine, points: SketchPoint[]): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
   const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
 
@@ -103,7 +103,7 @@ function lineToContours(shape: SketchLine, points: SketchPoint[]): GeometryConto
 }
 
 function arcToContours(shape: SketchArc, points: SketchPoint[], segments = 72): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const center = pointMap.get(shape.center) || { x: 0, y: 0 };
   const p1 = pointMap.get(shape.p1) || { x: 0, y: 0 };
   const p2 = pointMap.get(shape.p2) || { x: 0, y: 0 };
@@ -119,15 +119,19 @@ function arcToContours(shape: SketchArc, points: SketchPoint[], segments = 72): 
         startAngle,
         endAngle,
         shape.clockwise,
-        segments
+        segments,
       ),
       closed: false,
     },
   ];
 }
 
-function ellipseToContours(shape: SketchEllipse | SketchEllipseArc, points: SketchPoint[], segments = 96): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
+function ellipseToContours(
+  shape: SketchEllipse | SketchEllipseArc,
+  points: SketchPoint[],
+  segments = 96,
+): GeometryContour[] {
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const center = pointMap.get(shape.center) || { x: 0, y: 0 };
   const majorPoint = pointMap.get(shape.majorAxisPoint) || { x: center.x + 10, y: center.y };
 
@@ -138,8 +142,8 @@ function ellipseToContours(shape: SketchEllipse | SketchEllipseArc, points: Sket
   const minorRadius = shape.minorAxisRadius;
 
   const isArc = shape.type === "ellipse-arc";
-  const startT = isArc ? (shape as SketchEllipseArc).startAngle * Math.PI / 180 : 0;
-  const endT = isArc ? (shape as SketchEllipseArc).endAngle * Math.PI / 180 : Math.PI * 2;
+  const startT = isArc ? ((shape as SketchEllipseArc).startAngle * Math.PI) / 180 : 0;
+  const endT = isArc ? ((shape as SketchEllipseArc).endAngle * Math.PI) / 180 : Math.PI * 2;
   const sweep = endT - startT;
 
   const contourPoints: { x: number; y: number }[] = [];
@@ -157,22 +161,23 @@ function ellipseToContours(shape: SketchEllipse | SketchEllipseArc, points: Sket
   return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
 }
 
-function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], _segments = 100): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
-  const ctrlPoints = shape.controlPointIds.map(id => pointMap.get(id) || { x: 0, y: 0 });
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[]): GeometryContour[] {
+  const pointMap = new Map(points.map((p) => [p.id, p]));
+  const ctrlPoints = shape.controlPointIds.map((id) => pointMap.get(id) || { x: 0, y: 0 });
 
   if (ctrlPoints.length < 2) return [];
 
-  // Very simplified linear interpolation for BSpline for now
-  const contourPoints = ctrlPoints.map(p => ({ x: p.x, y: p.y }));
-  return [{
-    points: shape.periodic ? ensureClosed(contourPoints) : contourPoints,
-    closed: shape.periodic
-  }];
+  const contourPoints = ctrlPoints.map((p) => ({ x: p.x, y: p.y }));
+  return [
+    {
+      points: shape.periodic ? ensureClosed(contourPoints) : contourPoints,
+      closed: shape.periodic,
+    },
+  ];
 }
 
 function polylineToContours(shape: SketchPolyline, points: SketchPoint[]): GeometryContour[] {
-  const pointMap = new Map(points.map(p => [p.id, p]));
+  const pointMap = new Map(points.map((p) => [p.id, p]));
   const contourPoints = shape.pointIds.map((id) => {
     const p = pointMap.get(id) || { x: 0, y: 0 };
     return { x: p.x, y: p.y };
@@ -194,7 +199,7 @@ async function textToContours(shape: SketchText, points: SketchPoint[]): Promise
   }));
 }
 
-function svgToContours(shape: SketchSvg, _points: SketchPoint[]): GeometryContour[] {
+function svgToContours(shape: SketchSvg): GeometryContour[] {
   const scaleX = (shape.width / Math.max(shape.sourceWidth, 0.0001)) * (shape.scale ?? 1);
   const scaleY = (shape.height / Math.max(shape.sourceHeight, 0.0001)) * (shape.scale ?? 1);
   const rotation = shape.rotation ?? 0;
@@ -203,7 +208,7 @@ function svgToContours(shape: SketchSvg, _points: SketchPoint[]): GeometryContou
   return shape.contours
     .map((contour) => {
       const contourPoints = contour.map((pointStr) => {
-        const [px, py] = pointStr.split(',').map(Number);
+        const [px, py] = pointStr.split(",").map(Number);
         const next = {
           x: round(shape.x + px * scaleX),
           y: round(shape.y + py * scaleY),
@@ -215,7 +220,7 @@ function svgToContours(shape: SketchSvg, _points: SketchPoint[]): GeometryContou
         contourPoints.length >= 3 &&
         Math.hypot(
           contourPoints[0].x - contourPoints[contourPoints.length - 1].x,
-          contourPoints[0].y - contourPoints[contourPoints.length - 1].y
+          contourPoints[0].y - contourPoints[contourPoints.length - 1].y,
         ) <= 0.001;
 
       return {
@@ -226,7 +231,10 @@ function svgToContours(shape: SketchSvg, _points: SketchPoint[]): GeometryContou
     .filter((c) => c.points.length >= 2);
 }
 
-export async function extractShapeContours(shape: SketchShape, points: SketchPoint[]): Promise<GeometryContour[]> {
+export async function extractShapeContours(
+  shape: SketchShape,
+  points: SketchPoint[],
+): Promise<GeometryContour[]> {
   switch (shape.type) {
     case "rectangle":
       return rectangleToContours(shape, points);
@@ -246,7 +254,7 @@ export async function extractShapeContours(shape: SketchShape, points: SketchPoi
     case "text":
       return textToContours(shape, points);
     case "svg":
-      return svgToContours(shape, points);
+      return svgToContours(shape);
     default:
       return [];
   }

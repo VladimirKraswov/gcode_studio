@@ -53,7 +53,7 @@ import {
   normalizeSelectionAfterDelete,
   ungroupSelectedShapes,
 } from "../model/grouping";
-import { generateSketchGCode } from "@/modules/cam/gcode/generator";
+import { generateSketchGCode } from "../cam/generateSketchGCode";
 import { screenToCadPoint } from "@/utils/coordinates";
 import { clamp } from "@/shared/utils/common";
 import { useTextPreviewMap } from "./useTextPreviewMap";
