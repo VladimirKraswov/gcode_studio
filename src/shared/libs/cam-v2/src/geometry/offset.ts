@@ -141,13 +141,6 @@ function segmentIntersection(
   return { point: hit.point, ta: hit.t, tb: hit.u };
 }
 
-function pointLineDistance(p: Point, a: Point, b: Point): number {
-  const ab = sub(b, a);
-  const ap = sub(p, a);
-  const L = len(ab);
-  if (L <= EPS) return dist(p, a);
-  return Math.abs(cross(ap, ab)) / L;
-}
 
 function appendPoint(out: Point[], p: Point): void {
   const q = rp(p);
@@ -410,7 +403,11 @@ function simplifyCollinear(points: Point[]): Point[] {
     const prev = open[(i - 1 + open.length) % open.length];
     const curr = open[i];
     const next = open[(i + 1) % open.length];
-    if (pointLineDistance(curr, prev, next) <= EPS) continue;
+
+    const d1 = normalize(sub(curr, prev));
+    const d2 = normalize(sub(next, curr));
+
+    if (Math.abs(cross(d1, d2)) <= 1e-4) continue;
     out.push(curr);
   }
 

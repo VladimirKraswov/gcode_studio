@@ -126,25 +126,16 @@ export function buildPocketOffsets(
   if (base.length < 3 || toolRadius <= EPS || stepover <= EPS) return [];
 
   const paths: Point[][] = [];
-  let currentLoops = buildOffset(base, -toolRadius, "round", 4);
+  let currentOffset = toolRadius;
+  const maxSafetyIter = 100;
 
-  while (currentLoops.length > 0) {
-    const validLoops = currentLoops.filter((l) => l.length >= 4);
+  for (let i = 0; i < maxSafetyIter; i++) {
+    const loops = buildOffset(base, -currentOffset, "round", 4);
+    const validLoops = loops.filter((l) => l.length >= 4);
     if (validLoops.length === 0) break;
 
-    for (const loop of validLoops) {
-      paths.push(loop);
-    }
-
-    // Generate next set of offsets from ALL current valid loops
-    const nextLoops: Point[][] = [];
-    for (const loop of validLoops) {
-      const next = buildOffset(loop.slice(0, -1), -stepover, "round", 4);
-      nextLoops.push(...next);
-    }
-
-    if (nextLoops.length === 0) break;
-    currentLoops = nextLoops;
+    paths.push(...validLoops);
+    currentOffset += stepover;
   }
 
   if (keepCenterCleanup) {

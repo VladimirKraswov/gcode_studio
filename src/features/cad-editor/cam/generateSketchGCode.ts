@@ -239,7 +239,9 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
     const cam = resolveCam(shape, doc);
 
     if (cam.operation === "pocket") {
-      rawToolpaths.push(...buildPocketToolpaths(shape, doc, contours));
+      const pocketPaths = buildPocketToolpaths(shape, doc, contours);
+      logger.debug("CAM", `Generated ${pocketPaths.length} pocket paths for ${shape.name}`);
+      rawToolpaths.push(...pocketPaths);
       continue;
     }
 

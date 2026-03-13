@@ -188,14 +188,14 @@ export function planPocket(input: PocketPlanInput): Toolpath[] {
   else paths = generateBestPocket(contours, toolRadius, step, angle);
 
   const oriented = optimizeTravel(
-    paths.map((points) => ({ points, closed: false })),
+    paths.map((points) => ({ points, closed: true })),
     { x: 0, y: 0 }
   );
 
   return oriented.map((path, index) => ({
     name: makeName(name, "Pocket", index),
     points: to3D(wantConventional ? [...path.points].reverse() : path.points),
-    closed: false,
+    closed: true,
     cutZ,
     kind: "pocket",
     stepdown: tool.passDepth,
