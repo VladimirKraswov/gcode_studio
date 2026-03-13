@@ -167,10 +167,12 @@ function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments
 
   if (sampled.length < 2) return [];
 
+  const closed = isShapeClosed(shape, points);
+
   return [
     {
-      points: shape.periodic ? ensureClosed(sampled) : sampled,
-      closed: shape.periodic,
+      points: closed ? ensureClosed(sampled) : sampled,
+      closed,
     },
   ];
 }
@@ -182,10 +184,12 @@ function polylineToContours(shape: SketchPolyline, points: SketchPoint[]): Geome
     return { x: p.x, y: p.y };
   });
 
+  const closed = isShapeClosed(shape, points);
+
   return [
     {
-      points: shape.closed ? ensureClosed(contourPoints) : contourPoints,
-      closed: shape.closed,
+      points: closed ? ensureClosed(contourPoints) : contourPoints,
+      closed,
     },
   ];
 }
@@ -230,7 +234,7 @@ function svgToContours(shape: SketchSvg): GeometryContour[] {
     .filter((c) => c.points.length >= 2);
 }
 
-export function isShapeClosed(shape: SketchShape): boolean {
+export function isShapeClosed(shape: SketchShape, points: SketchPoint[]): boolean {
   switch (shape.type) {
     case "rectangle":
     case "circle":
@@ -238,10 +242,26 @@ export function isShapeClosed(shape: SketchShape): boolean {
     case "text":
     case "svg":
       return true;
-    case "polyline":
-      return (shape as SketchPolyline).closed;
-    case "bspline":
-      return (shape as SketchBSpline).periodic;
+    case "polyline": {
+      const poly = shape as SketchPolyline;
+      if (poly.closed) return true;
+      if (poly.pointIds.length < 3) return false;
+      const pointMap = new Map(points.map((p) => [p.id, p]));
+      const p1 = pointMap.get(poly.pointIds[0]);
+      const p2 = pointMap.get(poly.pointIds[poly.pointIds.length - 1]);
+      if (!p1 || !p2) return false;
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y) < 0.001;
+    }
+    case "bspline": {
+      const bspline = shape as SketchBSpline;
+      if (bspline.periodic) return true;
+      if (bspline.controlPointIds.length < 3) return false;
+      const pointMap = new Map(points.map((p) => [p.id, p]));
+      const p1 = pointMap.get(bspline.controlPointIds[0]);
+      const p2 = pointMap.get(bspline.controlPointIds[bspline.controlPointIds.length - 1]);
+      if (!p1 || !p2) return false;
+      return Math.hypot(p1.x - p2.x, p1.y - p2.y) < 0.001;
+    }
     default:
       return false;
   }

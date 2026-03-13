@@ -123,9 +123,9 @@ export function IndividualCamPanel({
             className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="follow-path">{t("cad.properties.op_follow")}</option>
-            <option value="profile-inside" disabled={!isShapeClosed(selectedShape)}>{t("cad.properties.op_inside")}</option>
-            <option value="profile-outside" disabled={!isShapeClosed(selectedShape)}>{t("cad.properties.op_outside")}</option>
-            <option value="pocket" disabled={!isShapeClosed(selectedShape)}>{t("cad.properties.op_pocket")}</option>
+            <option value="profile-inside" disabled={!isShapeClosed(selectedShape, document.points)}>{t("cad.properties.op_inside")}</option>
+            <option value="profile-outside" disabled={!isShapeClosed(selectedShape, document.points)}>{t("cad.properties.op_outside")}</option>
+            <option value="pocket" disabled={!isShapeClosed(selectedShape, document.points)}>{t("cad.properties.op_pocket")}</option>
           </select>
         </div>
 

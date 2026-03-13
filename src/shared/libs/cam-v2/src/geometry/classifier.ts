@@ -52,7 +52,7 @@ function contourSamplePoint(contour: Point[]): Point {
   return contour[0] ?? { x: 0, y: 0 };
 }
 
-export function pointInPolygon(point: Point, polygon: Point[]): boolean {
+function pointInPolygonClassifier(point: Point, polygon: Point[]): boolean {
   if (polygon.length < 3) return false;
   let inside = false;
 
@@ -95,7 +95,7 @@ export function classifyContours(polylines: Point[][]): ClassifiedContours {
       if (candidate === child) continue;
       if (areas[candidate] <= areas[child] + EPS) continue;
       if (!boundsContains(bounds[candidate], bounds[child])) continue;
-      if (!pointInPolygon(probe, polylines[candidate])) continue;
+      if (!pointInPolygonClassifier(probe, polylines[candidate])) continue;
 
       if (areas[candidate] < bestParentArea) {
         bestParentArea = areas[candidate];
