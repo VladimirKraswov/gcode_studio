@@ -47,7 +47,7 @@ export function ConsolePanel() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-panel-solid text-[13px] font-mono">
+    <div className="flex flex-col h-full w-full bg-panel-solid text-[13px] font-mono">
       {/* Toolbar */}
       <div className="flex items-center gap-2 p-2 border-b border-border bg-panel-muted shrink-0">
         <div className="relative flex-1">
