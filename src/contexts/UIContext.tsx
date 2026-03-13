@@ -6,6 +6,8 @@ export interface UIContextValue {
   setActiveTab: (tab: MainTab) => void;
   hint: string;
   setHint: (hint: string) => void;
+  isSettingsOpen: boolean;
+  setIsSettingsOpen: (open: boolean) => void;
 }
 
 export const UIContext = createContext<UIContextValue | undefined>(undefined);

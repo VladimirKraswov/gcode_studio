@@ -1,4 +1,4 @@
-import { FiCode, FiEye, FiLoader, FiTool } from "react-icons/fi";
+import { FiCode, FiEye, FiLoader, FiTool, FiTerminal } from "react-icons/fi";
 import { AppProvider } from "@/contexts/AppContext";
 import { useGCode } from "@/contexts/GCodeContext";
 import { useUI } from "@/contexts/UIContext";
@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { LeftPanelContainer } from "@/containers/LeftPanelContainer";
 import { CenterPanelContainer } from "@/containers/CenterPanelContainer";
 import { RightPanelContainer } from "@/containers/RightPanelContainer";
+import { SettingsModal } from "@/components/SettingsModal";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { NotificationToast } from "@/components/NotificationToast";
 import { ThemeProvider } from "@/shared/hooks/useTheme";
@@ -29,6 +30,11 @@ const TAB_META = {
     subtitle: "Создание геометрии и генерация G-code",
     icon: <FiTool size={18} />,
   },
+  console: {
+    title: "Консоль",
+    subtitle: "Логирование и диагностика системы",
+    icon: <FiTerminal size={18} />,
+  },
 };
 
 function AppContent() {
@@ -46,13 +52,12 @@ function AppContent() {
     setSpeed,
   } = useGCode();
 
-  const { activeTab, setActiveTab } = useUI();
+  const { activeTab, setActiveTab, isSettingsOpen, setIsSettingsOpen } = useUI();
   const { settings, updateSettings } = useSettings();
 
   const tabMeta = TAB_META[activeTab as keyof typeof TAB_META];
 
   const showToolpath = settings.preview.showToolpath;
-  const showRapids = settings.preview.showRapids;
 
   if (!parsed || isParsing) {
     return (
@@ -85,7 +90,10 @@ function AppContent() {
     );
   }
 
+  const isConsole = activeTab === "console";
+
   return (
+    <>
     <MainLayout
       header={
         <AppHeader
@@ -95,9 +103,9 @@ function AppContent() {
           tabMeta={tabMeta}
         />
       }
-      leftPanel={<LeftPanelContainer />}
+      leftPanel={!isConsole && <LeftPanelContainer />}
       centerPanel={<CenterPanelContainer />}
-      rightPanel={<RightPanelContainer />}
+      rightPanel={!isConsole && <RightPanelContainer />}
       bottomBar={
         activeTab === "view" ? (
           <PlaybackFooter
@@ -122,6 +130,8 @@ function AppContent() {
         ) : undefined
       }
     />
+    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    </>
   );
 }
 

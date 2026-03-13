@@ -146,6 +146,7 @@ function parseGCode(text: string): ParsedGCode {
     state = next;
   }
 
+
   let minX = points[0]?.x ?? 0;
   let maxX = points[0]?.x ?? 0;
   let minY = points[0]?.y ?? 0;
@@ -168,6 +169,10 @@ function parseGCode(text: string): ParsedGCode {
     totalLength += lengthBetween(segment.start, segment.end);
     return totalLength;
   });
+
+  if (workMoves > 0 && cuttingMoves === 0) {
+     console.warn("[PARSER] G1 commands found but none identified as cutting (Z <= 0)");
+  }
 
   const renderStep = Math.max(1, Math.ceil(segments.length / MAX_RENDER_SEGMENTS));
   const renderSegments =

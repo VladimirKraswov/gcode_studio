@@ -12,6 +12,7 @@ import {
 import { fmt } from "./format";
 import { generateRampingPass } from "../toolpath/ramping";
 import { buildBridgeSpans, contourLength, isInsideAnyBridge, pointAtLength } from "../toolpath/bridges";
+import { logger } from "@/shared/utils/logger";
 
 const EPS = 1e-6;
 
@@ -43,9 +44,13 @@ function emitLinearPath(points: Point3D[], feed: number): string[] {
   const lines: string[] = [];
   for (let i = 1; i < points.length; i++) {
     const point = points[i];
+    const prev = points[i - 1];
     const xPart = `X${fmt(point.x)}`;
     const yPart = `Y${fmt(point.y)}`;
-    const zPart = typeof point.z === "number" ? ` Z${fmt(point.z)}` : "";
+    // Only emit Z if it changed from the previous point in this segments sequence
+    const zChanged =
+      typeof point.z === "number" && (typeof prev.z !== "number" || Math.abs(point.z - prev.z) > EPS);
+    const zPart = zChanged ? ` Z${fmt(point.z)}` : "";
     lines.push(`G1 ${xPart} ${yPart}${zPart} F${fmt(feed)}`.replace(/\s+/g, " ").trim());
   }
   return lines;
@@ -112,12 +117,19 @@ function emitContourPass(
   if (toolpath.tabs?.enabled && toolpath.closed) {
     lines.push(...emitClosedPathWithTabs(toolpath, passZ, toolpath.cutZ, machine.feedPlunge, machine.feedCut));
   } else {
-    lines.push(...emitLinearPath(path, machine.feedCut));
+    // IMPORTANT: We must use passZ for all points in this contour pass.
+    // toolpath.points often contains Z=0 (from planning), which would
+    // cause G1 to move back to the surface if used directly.
+    const pathAtZ = base2D.map((p) => ({ ...p, z: passZ }));
+    lines.push(...emitLinearPath(pathAtZ, machine.feedCut));
+
     if (toolpath.closed && path.length >= 2) {
       const first = path[0];
       const last = path[path.length - 1];
       const alreadyClosed = Math.abs(first.x - last.x) <= EPS && Math.abs(first.y - last.y) <= EPS;
-      if (!alreadyClosed) lines.push(`G1 X${fmt(first.x)} Y${fmt(first.y)} F${fmt(machine.feedCut)}`);
+      if (!alreadyClosed) {
+        lines.push(`G1 X${fmt(first.x)} Y${fmt(first.y)} Z${fmt(passZ)} F${fmt(machine.feedCut)}`);
+      }
     }
   }
 
@@ -132,6 +144,8 @@ function emitPrebuilt3DPath(machine: GCodeGeneratorInput["machine"], toolpath: T
 
   lines.push(...emitMoveTo(points[0].x, points[0].y));
   lines.push(...emitToolStart(machine));
+  // Plunge to the first point's Z before starting linear segments
+  lines.push(`G1 Z${fmt(points[0].z)} F${fmt(machine.feedPlunge)}`);
   lines.push(...emitLinearPath(points, machine.feedCut));
   lines.push(...emitToolEnd(machine));
   return lines;
@@ -140,6 +154,8 @@ function emitPrebuilt3DPath(machine: GCodeGeneratorInput["machine"], toolpath: T
 export function generateGCode(input: GCodeGeneratorInput): string {
   const { toolpaths, machine } = input;
   const lines: string[] = [...emitProgramPreamble(machine)];
+
+  let hasNegativeZ = false;
 
   for (const toolpath of toolpaths) {
     if (!toolpath || toolpath.points.length < 2) continue;
@@ -150,6 +166,8 @@ export function generateGCode(input: GCodeGeneratorInput): string {
     }
 
     const cutZ = toolpath.cutZ;
+    if (cutZ < 0) hasNegativeZ = true;
+
     const passDepth = Math.max(0.001, Math.abs(toolpath.stepdown ?? 1));
     const passes = buildDepthPasses(cutZ, passDepth);
 
@@ -159,6 +177,17 @@ export function generateGCode(input: GCodeGeneratorInput): string {
       previousZ = passZ;
     }
   }
+
+  if (!hasNegativeZ && machine.units !== "inch") {
+    // Basic heuristic: for most jobs we expect some cutting below surface (Z < 0)
+    logger.warn("GCODE", "No negative Z values found in toolpaths. Tool will not cut material surface.");
+  }
+
+  logger.info("GCODE", "G-code generation summary", {
+    lines: lines.length,
+    toolpaths: toolpaths.length,
+    hasNegativeZ
+  });
 
   lines.push(...emitProgramPostamble(machine));
   return lines.join("\n") + "\n";

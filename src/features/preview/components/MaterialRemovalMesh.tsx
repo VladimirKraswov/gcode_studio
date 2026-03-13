@@ -1,8 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { ParsedGCode, PlacementMode, StockDimensions } from "@/types/gcode";
 import { clamp, getStockPlacement, toSceneCoords } from "@/shared/utils/common";
 import { useTheme } from "@/shared/hooks/useTheme";
+import { logger } from "@/shared/utils/logger";
 
 type MaterialRemovalMeshProps = {
   parsed: ParsedGCode;
@@ -87,6 +88,8 @@ export function MaterialRemovalMesh({
   useEffect(() => {
     return () => material.dispose();
   }, [material]);
+
+  const lastRemovalStats = useRef<{ progress: number; carved: number }>({ progress: -1, carved: 0 });
 
   const baseWoodColor = useMemo(() => {
     return new THREE.Color(
@@ -218,6 +221,29 @@ export function MaterialRemovalMesh({
 
     const colorAttr = geometry.attributes.color as THREE.BufferAttribute;
     const colors = colorAttr.array as Float32Array;
+
+    let carvedCount = 0;
+    let minZ = 0;
+
+    for (let i = 0; i < heights.length; i++) {
+      if (heights[i] < 0) {
+        carvedCount++;
+        if (heights[i] < minZ) minZ = heights[i];
+      }
+    }
+
+    if (progressBucket > 0 && Math.abs(progressBucket - lastRemovalStats.current.progress) > 5) {
+      const hasCuttingInSource = segments.some(s => s.isCutting && s.mode === 'G1');
+
+      if (hasCuttingInSource && progressBucket > 10 && carvedCount === 0) {
+        logger.warn("MATERIAL", "No material was removed. Check placement and stock dimensions.", {
+            placement: { left: placement.left, bottom: placement.bottom },
+            stock: { width, depth, thickness },
+        });
+      }
+
+      lastRemovalStats.current = { progress: progressBucket, carved: carvedCount };
+    }
 
     for (let i = 0; i < shade.length; i++) {
       const k = clamp(shade[i], 0, 1);
