@@ -146,6 +146,23 @@ function parseGCode(text: string): ParsedGCode {
     state = next;
   }
 
+  // Diagnostics for Z handling
+  const cuttingMovesBelowZeroOnly = segments.filter(s => s.isCutting && s.start.z < 0 && s.end.z < 0).length;
+  const surfaceMovesAtZ0 = segments.filter(s => s.isCutting && s.start.z === 0 && s.end.z === 0).length;
+  const segmentsCrossingZero = segments.filter(s => s.isCutting && (s.start.z * s.end.z < 0 || (s.start.z === 0 && s.end.z < 0) || (s.start.z < 0 && s.end.z === 0))).length;
+  const plungeMoves = segments.filter(s => s.mode === 'G1' && s.end.z < s.start.z).length;
+  const retractMoves = segments.filter(s => s.end.z > s.start.z).length;
+
+  console.log("[PARSER] Z-Diagnostics", {
+    totalSegments: segments.length,
+    cuttingMoves,
+    cuttingMovesBelowZeroOnly,
+    surfaceMovesAtZ0,
+    segmentsCrossingZero,
+    plungeMoves,
+    retractMoves
+  });
+
   let minX = points[0]?.x ?? 0;
   let maxX = points[0]?.x ?? 0;
   let minY = points[0]?.y ?? 0;

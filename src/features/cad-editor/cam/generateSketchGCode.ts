@@ -268,13 +268,40 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
 
   const reordered = oriented.map((item) => {
     const source = rawToolpaths[item.index];
+
+    logger.debug("CAM", `Toolpath ${item.index} Z-diagnostic`, {
+      name: source.name,
+      cutZ: source.cutZ,
+      pointsCount: source.points.length,
+      zRange: {
+        min: Math.min(...source.points.map(p => p.z)),
+        max: Math.max(...source.points.map(p => p.z))
+      }
+    });
+
+    // Determine if the points were reversed by optimizeTravel
+    const firstPoint = item.points[0];
+    const sourceFirst = source.points[0];
+    const sourceLast = source.points[source.points.length - 1];
+
+    const distToFirst = Math.hypot(firstPoint.x - sourceFirst.x, firstPoint.y - sourceFirst.y);
+    const distToLast = Math.hypot(firstPoint.x - sourceLast.x, firstPoint.y - sourceLast.y);
+
+    const isReversed = distToLast < distToFirst;
+
     return {
       ...source,
-      points: item.points.map((p) => ({
-        x: p.x,
-        y: p.y,
-        z: 0,
-      })),
+      points: item.points.map((p, pIndex) => {
+        // Map back to the original Z if possible
+        const originalIndex = isReversed ? (source.points.length - 1 - pIndex) : pIndex;
+        const originalZ = source.points[originalIndex]?.z ?? 0;
+
+        return {
+          x: p.x,
+          y: p.y,
+          z: originalZ,
+        };
+      }),
     };
   });
 

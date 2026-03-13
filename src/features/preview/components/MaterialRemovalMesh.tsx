@@ -139,7 +139,10 @@ export function MaterialRemovalMesh({
       const gyStart = Math.max(0, minGY);
       const gyEnd = Math.min(gridY - 1, maxGY);
 
-      const nextZ = Math.max(-thickness, Math.min(0, z));
+      // Heuristic: if Z is exactly 0, and we are in a cutting segment,
+      // treat it as a tiny cut to ensure visibility on the surface
+      const effectiveZ = z === 0 ? -0.01 : z;
+      const nextZ = Math.max(-thickness, Math.min(0, effectiveZ));
 
       for (let gy = gyStart; gy <= gyEnd; gy++) {
         for (let gx = gxStart; gx <= gxEnd; gx++) {
@@ -235,17 +238,30 @@ export function MaterialRemovalMesh({
     if (progressBucket > 0 && Math.abs(progressBucket - lastRemovalStats.current.progress) > 5) {
       const hasCuttingInSource = segments.some(s => s.isCutting && s.mode === 'G1');
 
+      const segmentsBelowZeroOnly = segments.filter(s => s.isCutting && s.start.z < 0 && s.end.z < 0).length;
+      const segmentsAtSurfaceZ0 = segments.filter(s => s.isCutting && s.start.z === 0 && s.end.z === 0).length;
+      const segmentsCrossingZero = segments.filter(s => s.isCutting && (s.start.z * s.end.z < 0 || (s.start.z === 0 && s.end.z < 0) || (s.start.z < 0 && s.end.z === 0))).length;
+
       logger.debug("MATERIAL", "Material removal updated", {
         progress: progressBucket,
         carvedPoints: carvedCount,
         maxDepth: minZ,
-        totalPoints: heights.length
+        totalPoints: heights.length,
+        placement: { left: placement.left, bottom: placement.bottom },
+        stock: { width, depth, thickness },
+        segmentStats: {
+          belowZero: segmentsBelowZeroOnly,
+          atSurface: segmentsAtSurfaceZ0,
+          crossingZero: segmentsCrossingZero
+        }
       });
 
       if (hasCuttingInSource && progressBucket > 10 && carvedCount === 0) {
-        logger.warn("MATERIAL", "Cutting path exists but no material was removed. Check placement and stock dimensions.");
-      } else if (hasCuttingInSource && progressBucket > 50 && carvedCount < lastRemovalStats.current.carved && lastRemovalStats.current.carved > 0) {
-         // Should not happen as heights only decrease, but good for diagnostics
+        logger.warn("MATERIAL", "No material was removed. Check placement and stock dimensions.", {
+            placement: { left: placement.left, bottom: placement.bottom },
+            stock: { width, depth, thickness },
+            segmentsAtSurfaceZ0
+        });
       }
 
       lastRemovalStats.current = { progress: progressBucket, carved: carvedCount };
