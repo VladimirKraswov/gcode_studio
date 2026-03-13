@@ -1,5 +1,14 @@
 export type CadPanButtonMode = "middle" | "right" | "both";
 
+export type MachineTool = {
+  id: string;
+  name: string;
+  type: string;
+  diameter: number;
+  feed: number;
+  rpm: number;
+};
+
 export type UserSettings = {
   cad: {
     panButton: CadPanButtonMode;
@@ -7,6 +16,10 @@ export type UserSettings = {
   preview: {
     showToolpath: boolean;
     showRapids: boolean;
+  };
+  cnc: {
+    defaultCutDepth: number;
+    toolLibrary: MachineTool[];
   };
 };
 
@@ -19,6 +32,19 @@ const DEFAULT_SETTINGS: UserSettings = {
   preview: {
     showToolpath: true,
     showRapids: true,
+  },
+  cnc: {
+    defaultCutDepth: 5,
+    toolLibrary: [
+      {
+        id: "corn-mill-preset",
+        name: "Фреза кукуруза",
+        type: "endmill",
+        diameter: 3.175,
+        feed: 1000,
+        rpm: 12000,
+      },
+    ],
   },
 };
 
@@ -52,6 +78,7 @@ export function loadSettings(): UserSettings {
 
     const cad = isObject(parsed.cad) ? parsed.cad : {};
     const preview = isObject(parsed.preview) ? parsed.preview : {};
+    const cnc = isObject(parsed.cnc) ? parsed.cnc : {};
 
     const panButton = isPanButtonMode(cad.panButton)
       ? cad.panButton
@@ -65,6 +92,15 @@ export function loadSettings(): UserSettings {
       ? preview.showRapids
       : DEFAULT_SETTINGS.preview.showRapids;
 
+    const defaultCutDepth =
+      typeof cnc.defaultCutDepth === "number"
+        ? cnc.defaultCutDepth
+        : DEFAULT_SETTINGS.cnc.defaultCutDepth;
+
+    const toolLibrary = Array.isArray(cnc.toolLibrary)
+      ? cnc.toolLibrary
+      : DEFAULT_SETTINGS.cnc.toolLibrary;
+
     return {
       cad: {
         panButton,
@@ -72,6 +108,10 @@ export function loadSettings(): UserSettings {
       preview: {
         showToolpath,
         showRapids,
+      },
+      cnc: {
+        defaultCutDepth,
+        toolLibrary,
       },
     };
   } catch {

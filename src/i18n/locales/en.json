@@ -79,6 +79,17 @@
     "pan_right": "Right (RMB)",
     "pan_middle": "Middle (Wheel)",
     "pan_both": "Both",
+    "cnc_section": "CNC & Tools",
+    "default_cut_depth": "Default cut depth",
+    "default_cut_depth_desc": "Cutting depth (mm) used for new objects",
+    "tool_library": "Tool Library",
+    "tool_name": "Name",
+    "tool_type": "Type",
+    "tool_diameter": "Diameter (mm)",
+    "tool_feed": "Feed (mm/min)",
+    "tool_rpm": "RPM",
+    "add_tool": "Add Tool",
+    "delete_tool": "Delete",
     "language": "Language"
   },
   "preview": {
