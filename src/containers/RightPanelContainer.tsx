@@ -17,28 +17,39 @@ type CadTab = "cad" | "cam" | "doc";
 
 export function RightPanelContainer() {
   const { t } = useTranslation();
-  const { activeTab } = useUI();
+  const { activeTab, selectionMode } = useUI();
   const { parsed, currentState, stock } = useGCode();
   const { cameraInfo, editDocument, setEditDocument, selection, cadEditor } = useCad();
 
+  const isCamMode = selectionMode === "object";
   const [cadTab, setCadTab] = useState<CadTab>("cad");
 
   if (activeTab === "edit") {
+    const tabs = isCamMode
+      ? [
+          { id: "cam", label: "CAM", icon: <FiTool size={14} /> },
+          { id: "doc", label: "Doc", icon: <FiFileText size={14} /> },
+        ]
+      : [
+          { id: "cad", label: "CAD", icon: <FiEdit size={14} /> },
+          { id: "doc", label: "Doc", icon: <FiFileText size={14} /> },
+        ];
+
+    const currentTab = isCamMode
+      ? (cadTab === "cad" ? "cam" : cadTab)
+      : (cadTab === "cam" ? "cad" : cadTab);
+
     return (
       <RightPanel>
         <Tabs
-          tabs={[
-            { id: "cad", label: "CAD", icon: <FiEdit size={14} /> },
-            { id: "cam", label: "CAM", icon: <FiTool size={14} /> },
-            { id: "doc", label: "Doc", icon: <FiFileText size={14} /> },
-          ]}
-          activeTab={cadTab}
+          tabs={tabs}
+          activeTab={currentTab}
           onChange={(id) => setCadTab(id as CadTab)}
           className="mb-2"
         />
 
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          {cadTab === "cad" && (
+          {currentTab === "cad" && (
             <CadPropertiesSection
               editDocument={editDocument}
               setEditDocument={setEditDocument}
@@ -46,14 +57,14 @@ export function RightPanelContainer() {
               cadEditor={cadEditor}
             />
           )}
-          {cadTab === "cam" && (
+          {currentTab === "cam" && (
             <IndividualCamPropertiesSection
               editDocument={editDocument}
               setEditDocument={setEditDocument}
               selection={selection}
             />
           )}
-          {cadTab === "doc" && (
+          {currentTab === "doc" && (
             <CamPropertiesSection
               editDocument={editDocument}
               setEditDocument={setEditDocument}

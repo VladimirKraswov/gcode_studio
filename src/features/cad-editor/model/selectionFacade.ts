@@ -39,7 +39,7 @@ export function resolveSelectionOnPointerDown(params: {
   // In 'object' mode, if we select a shape that belongs to a group, select the entire group
   if (selectionMode === "object" && ref.kind === "shape") {
     const shape = document.shapes.find((s) => s.id === ref.id);
-    if (shape?.groupId) {
+    if (shape?.groupId && !shape.isConstruction) {
       const groupShapes = document.shapes.filter((s) => s.groupId === shape.groupId);
       if (groupShapes.length > 0) {
         const groupSelection = buildGroupShapeSelection(groupShapes);

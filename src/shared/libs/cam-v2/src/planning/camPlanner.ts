@@ -179,12 +179,13 @@ export function planPocket(input: PocketPlanInput): Toolpath[] {
   } = input;
 
   const step = Math.max(0.05, tool.diameter * Math.max(0.05, Math.min(1, tool.stepover)));
+  const toolRadius = Math.max(0.001, tool.diameter / 2);
   const wantConventional = direction === "conventional";
 
   let paths: Point[][] = [];
-  if (strategy === "offset") paths = generateOffsetPocketWithHoles(contours, step);
-  else if (strategy === "parallel") paths = generateParallelPocketWithHoles(contours, step, angle);
-  else paths = generateBestPocket(contours, step, angle);
+  if (strategy === "offset") paths = generateOffsetPocketWithHoles(contours, toolRadius, step);
+  else if (strategy === "parallel") paths = generateParallelPocketWithHoles(contours, toolRadius, step, angle);
+  else paths = generateBestPocket(contours, toolRadius, step, angle);
 
   const oriented = optimizeTravel(
     paths.map((points) => ({ points, closed: false })),

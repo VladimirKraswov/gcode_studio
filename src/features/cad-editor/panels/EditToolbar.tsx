@@ -68,7 +68,7 @@ export function EditToolbar({
   const { t } = useTranslation();
   const svgInputRef = useRef<HTMLInputElement>(null);
   const tools = useToolPlugins();
-  const { setHint } = useUI();
+  const { setHint, selectionMode } = useUI();
 
   const handleMouseEnter = useCallback((hint: string) => {
     setHint(hint);
@@ -78,23 +78,27 @@ export function EditToolbar({
     setHint("");
   }, [setHint]);
 
+  const isCamMode = selectionMode === "object";
+
   return (
     <div className="flex flex-col gap-2 p-1 bg-panel border border-border rounded-xl shadow-lg pointer-events-auto">
-      <div className="flex flex-col gap-1">
-        {tools.map((item) => (
-          <IconButton
-            key={item.id}
-            icon={item.icon}
-            active={tool === item.id}
-            onClick={() => onToolChange(item.id)}
-            title={`${item.label} (${item.hint})`}
-            onMouseEnter={() => handleMouseEnter(item.label)}
-            onMouseLeave={handleMouseLeave}
-          />
-        ))}
-      </div>
+      {!isCamMode && (
+        <div className="flex flex-col gap-1">
+          {tools.map((item) => (
+            <IconButton
+              key={item.id}
+              icon={item.icon}
+              active={tool === item.id}
+              onClick={() => onToolChange(item.id)}
+              title={`${item.label} (${item.hint})`}
+              onMouseEnter={() => handleMouseEnter(item.label)}
+              onMouseLeave={handleMouseLeave}
+            />
+          ))}
+        </div>
+      )}
 
-      <div className="h-px bg-border mx-1" />
+      {!isCamMode && <div className="h-px bg-border mx-1" />}
 
       <div className="flex flex-col gap-1">
         <IconButton
@@ -149,47 +153,51 @@ export function EditToolbar({
         <>
           <div className="h-px bg-border mx-1" />
           <div className="flex flex-col gap-1">
-            <IconButton
-              icon={<FiCopy size={16} />}
-              onClick={onCloneSelected}
-              title={t("cad.actions.clone")}
-              onMouseEnter={() => handleMouseEnter(t("cad.actions.clone"))}
-              onMouseLeave={handleMouseLeave}
-            />
-             <IconButton
-              icon={<FiRepeat size={16} />}
-              onClick={onStartLinearArray}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                onStartCircularArray();
-              }}
-              title={t("cad.actions.array")}
-              onMouseEnter={() => handleMouseEnter(t("cad.actions.array"))}
-              onMouseLeave={handleMouseLeave}
-            />
-             <IconButton
-              icon={<FiRefreshCw size={16} />}
-              onClick={() => onMirrorSelected("x")}
-              title={t("cad.actions.mirror")}
-              onMouseEnter={() => handleMouseEnter(t("cad.actions.mirror"))}
-              onMouseLeave={handleMouseLeave}
-            />
-            <IconButton
-              icon={<FiLayers size={16} />}
-              disabled={!canGroupSelected}
-              onClick={onGroupSelected}
-              title={t("cad.actions.group")}
-              onMouseEnter={() => handleMouseEnter(t("cad.actions.group"))}
-              onMouseLeave={handleMouseLeave}
-            />
-            <IconButton
-              icon={<FiX size={16} />}
-              disabled={!canUngroupSelected}
-              onClick={onUngroupSelected}
-              title={t("cad.actions.ungroup")}
-              onMouseEnter={() => handleMouseEnter(t("cad.actions.ungroup"))}
-              onMouseLeave={handleMouseLeave}
-            />
+            {!isCamMode && (
+              <>
+                <IconButton
+                  icon={<FiCopy size={16} />}
+                  onClick={onCloneSelected}
+                  title={t("cad.actions.clone")}
+                  onMouseEnter={() => handleMouseEnter(t("cad.actions.clone"))}
+                  onMouseLeave={handleMouseLeave}
+                />
+                 <IconButton
+                  icon={<FiRepeat size={16} />}
+                  onClick={onStartLinearArray}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onStartCircularArray();
+                  }}
+                  title={t("cad.actions.array")}
+                  onMouseEnter={() => handleMouseEnter(t("cad.actions.array"))}
+                  onMouseLeave={handleMouseLeave}
+                />
+                 <IconButton
+                  icon={<FiRefreshCw size={16} />}
+                  onClick={() => onMirrorSelected("x")}
+                  title={t("cad.actions.mirror")}
+                  onMouseEnter={() => handleMouseEnter(t("cad.actions.mirror"))}
+                  onMouseLeave={handleMouseLeave}
+                />
+                <IconButton
+                  icon={<FiLayers size={16} />}
+                  disabled={!canGroupSelected}
+                  onClick={onGroupSelected}
+                  title={t("cad.actions.group")}
+                  onMouseEnter={() => handleMouseEnter(t("cad.actions.group"))}
+                  onMouseLeave={handleMouseLeave}
+                />
+                <IconButton
+                  icon={<FiX size={16} />}
+                  disabled={!canUngroupSelected}
+                  onClick={onUngroupSelected}
+                  title={t("cad.actions.ungroup")}
+                  onMouseEnter={() => handleMouseEnter(t("cad.actions.ungroup"))}
+                  onMouseLeave={handleMouseLeave}
+                />
+              </>
+            )}
             <IconButton
               icon={<FiTrash2 size={16} />}
               variant="danger"

@@ -129,33 +129,37 @@ export function buildPocketOffsets(
   let currentLoops = buildOffset(base, -toolRadius, "round", 4);
 
   while (currentLoops.length > 0) {
-    const sorted = currentLoops
-      .filter((l) => l.length >= 4)
-      .sort((a, b) => {
-        const aa = Math.abs(area(a));
-        const bb = Math.abs(area(b));
-        return bb - aa;
-      });
+    const validLoops = currentLoops.filter((l) => l.length >= 4);
+    if (validLoops.length === 0) break;
 
-    if (sorted.length === 0) break;
-    for (const loop of sorted) paths.push(loop);
+    for (const loop of validLoops) {
+      paths.push(loop);
+    }
 
-    const nextSeed = sorted[0];
-    const next = buildOffset(nextSeed.slice(0, -1), -stepover, "round", 4);
-    if (next.length === 0) break;
-    currentLoops = next;
+    // Generate next set of offsets from ALL current valid loops
+    const nextLoops: Point[][] = [];
+    for (const loop of validLoops) {
+      const next = buildOffset(loop.slice(0, -1), -stepover, "round", 4);
+      nextLoops.push(...next);
+    }
+
+    if (nextLoops.length === 0) break;
+    currentLoops = nextLoops;
   }
 
-  if (keepCenterCleanup && paths.length === 0) {
+  if (keepCenterCleanup) {
     const c = centroid(base);
     if (pointInPolygon(c, base)) {
-      paths.push([
-        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
-        { x: c.x + toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
-        { x: c.x + toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
-        { x: c.x - toolRadius * 0.25, y: c.y + toolRadius * 0.25 },
-        { x: c.x - toolRadius * 0.25, y: c.y - toolRadius * 0.25 },
-      ]);
+       const tinyBox = [
+        { x: c.x - 0.01, y: c.y - 0.01 },
+        { x: c.x + 0.01, y: c.y - 0.01 },
+        { x: c.x + 0.01, y: c.y + 0.01 },
+        { x: c.x - 0.01, y: c.y + 0.01 },
+        { x: c.x - 0.01, y: c.y - 0.01 },
+      ];
+      if (paths.length === 0) {
+        paths.push(tinyBox);
+      }
     }
   }
 
@@ -167,22 +171,16 @@ function centroid(points: Point[]): Point {
   return { x: sum.x / Math.max(points.length, 1), y: sum.y / Math.max(points.length, 1) };
 }
 
-function area(points: Point[]): number {
-  let a = 0;
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
-    const q = points[(i + 1) % points.length];
-    a += p.x * q.y - q.x * p.y;
-  }
-  return a / 2;
-}
 
-export function generateOffsetPocketWithHoles(contours: Point[][], step: number): Point[][] {
+export function generateOffsetPocketWithHoles(
+  contours: Point[][],
+  toolRadius: number,
+  step: number
+): Point[][] {
   const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
   if (normalized.length === 0 || step <= EPS) return [];
 
   const classified = classifyContours(normalized);
-  const toolRadius = step / 2;
   const result: Point[][] = [];
 
   for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
@@ -196,6 +194,7 @@ export function generateOffsetPocketWithHoles(contours: Point[][], step: number)
 
 export function generateParallelPocketWithHoles(
   contours: Point[][],
+  toolRadius: number,
   step: number,
   angle = 0
 ): Point[][] {
@@ -209,13 +208,27 @@ export function generateParallelPocketWithHoles(
     const outer = classified.external[extIndex];
     const holeIndices = classified.holes.get(extIndex) ?? [];
     const holes = holeIndices.map((idx) => normalized[idx]);
-    result.push(...generateParallelPocketForRegion(outer, holes, step, angle));
+
+    // Offset the boundary and holes by toolRadius to avoid overcutting
+    const offsetOuter = buildOffset(outer, -toolRadius, "round", 4);
+    if (offsetOuter.length === 0) continue;
+
+    const offsetHoles = holes.flatMap((h) => buildOffset(h, toolRadius, "round", 4));
+
+    for (const loop of offsetOuter) {
+      result.push(...generateParallelPocketForRegion(loop, offsetHoles, step, angle));
+    }
   }
 
   return result;
 }
 
-export function generateBestPocket(contours: Point[][], step: number, angle = 0): Point[][] {
+export function generateBestPocket(
+  contours: Point[][],
+  toolRadius: number,
+  step: number,
+  angle = 0
+): Point[][] {
   const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
   if (normalized.length === 0 || step <= EPS) return [];
 
@@ -223,12 +236,12 @@ export function generateBestPocket(contours: Point[][], step: number, angle = 0)
   const hasHoles = Array.from(classified.holes.values()).some((items) => items.length > 0);
 
   if (hasHoles) {
-    const parallel = generateParallelPocketWithHoles(normalized, step, angle);
+    const parallel = generateParallelPocketWithHoles(normalized, toolRadius, step, angle);
     if (parallel.length > 0) return parallel;
   }
 
-  const offsetPocket = generateOffsetPocketWithHoles(normalized, step);
+  const offsetPocket = generateOffsetPocketWithHoles(normalized, toolRadius, step);
   if (offsetPocket.length > 0) return offsetPocket;
 
-  return generateParallelPocketWithHoles(normalized, step, angle);
+  return generateParallelPocketWithHoles(normalized, toolRadius, step, angle);
 }
