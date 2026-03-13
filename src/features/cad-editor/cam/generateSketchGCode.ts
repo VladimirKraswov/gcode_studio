@@ -238,11 +238,6 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
     const contours = geometryContours.map((c) => toContour(c.points));
     const cam = resolveCam(shape, doc);
 
-    logger.debug("CAD", `Extracted ${contours.length} contours from ${shape.type} "${shape.name}"`, {
-      shapeId: shape.id,
-      contours: contours.map(c => c.length)
-    });
-
     if (cam.operation === "pocket") {
       rawToolpaths.push(...buildPocketToolpaths(shape, doc, contours));
       continue;
@@ -268,16 +263,6 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
 
   const reordered = oriented.map((item) => {
     const source = rawToolpaths[item.index];
-
-    logger.debug("CAM", `Toolpath ${item.index} Z-diagnostic`, {
-      name: source.name,
-      cutZ: source.cutZ,
-      pointsCount: source.points.length,
-      zRange: {
-        min: Math.min(...source.points.map(p => p.z)),
-        max: Math.max(...source.points.map(p => p.z))
-      }
-    });
 
     // Determine if the points were reversed by optimizeTravel
     const firstPoint = item.points[0];

@@ -89,6 +89,8 @@ function AppContent() {
     );
   }
 
+  const isConsole = activeTab === "console";
+
   return (
     <MainLayout
       header={
@@ -99,9 +101,9 @@ function AppContent() {
           tabMeta={tabMeta}
         />
       }
-      leftPanel={<LeftPanelContainer />}
+      leftPanel={!isConsole && <LeftPanelContainer />}
       centerPanel={<CenterPanelContainer />}
-      rightPanel={<RightPanelContainer />}
+      rightPanel={!isConsole && <RightPanelContainer />}
       bottomBar={
         activeTab === "view" ? (
           <PlaybackFooter

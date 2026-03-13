@@ -69,16 +69,18 @@ export function MainLayout({
 
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
         {/* Left Sidebar (Explorer) */}
-        <aside
-            className="shrink-0 border-r border-border bg-panel-solid flex flex-col overflow-hidden relative"
-            style={{ width: leftWidth }}
-        >
-          {leftPanel}
-          <div
-            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-r border-transparent hover:border-primary/20"
-            onMouseDown={startResizingLeft}
-          />
-        </aside>
+        {leftPanel && (
+          <aside
+              className="shrink-0 border-r border-border bg-panel-solid flex flex-col overflow-hidden relative"
+              style={{ width: leftWidth }}
+          >
+            {leftPanel}
+            <div
+              className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-r border-transparent hover:border-primary/20"
+              onMouseDown={startResizingLeft}
+            />
+          </aside>
+        )}
 
         {/* Main Workspace */}
         <main className="flex-1 flex flex-col min-w-0 bg-bg-soft relative overflow-hidden">
@@ -95,16 +97,18 @@ export function MainLayout({
         </main>
 
         {/* Right Sidebar (Properties) */}
-        <aside
-            className="shrink-0 border-l border-border bg-panel-solid flex flex-col overflow-hidden relative"
-            style={{ width: rightWidth }}
-        >
-          <div
-            className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-l border-transparent hover:border-primary/20"
-            onMouseDown={startResizingRight}
-          />
-          {rightPanel}
-        </aside>
+        {rightPanel && (
+          <aside
+              className="shrink-0 border-l border-border bg-panel-solid flex flex-col overflow-hidden relative"
+              style={{ width: rightWidth }}
+          >
+            <div
+              className="absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors z-50 border-l border-transparent hover:border-primary/20"
+              onMouseDown={startResizingRight}
+            />
+            {rightPanel}
+          </aside>
+        )}
       </div>
     </div>
   );
