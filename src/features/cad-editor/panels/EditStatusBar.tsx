@@ -88,7 +88,7 @@ export function EditStatusBar({
 }: EditStatusBarProps) {
   const { t } = useTranslation();
   const getSolveStateLabel = useSolveStateLabel();
-  const { hint } = useUI();
+  const { hint, selectionMode } = useUI();
   const interactionLabel = isTransforming
     ? t("cad.status.transformation")
     : isDragging
@@ -102,6 +102,15 @@ export function EditStatusBar({
   return (
     <div className="flex items-center justify-between px-3 h-full text-[11px] text-text-muted select-none">
       <div className="flex items-center gap-3">
+        <Badge
+          variant={selectionMode === "object" ? "primary" : "ghost"}
+          className="px-2 py-0.5 rounded-md font-extrabold uppercase tracking-widest text-[9px]"
+        >
+          {selectionMode === "object" ? "CAM MODE" : "SKETCH MODE"}
+        </Badge>
+
+        <span className="h-3 w-px bg-border" />
+
         <Badge
           variant={getInteractionBadgeVariant({
             isDragging,
@@ -119,7 +128,7 @@ export function EditStatusBar({
           {t("cad.status.objects_count")}<span className="text-text">{objectCount}</span>
         </span>
 
-        {typeof dof === "number" && (
+        {selectionMode === "primitive" && typeof dof === "number" && (
           <>
             <span className="h-3 w-px bg-border" />
             <span className="font-medium">
@@ -128,7 +137,7 @@ export function EditStatusBar({
           </>
         )}
 
-        {solveState && (
+        {selectionMode === "primitive" && solveState && (
           <>
             <span className="h-3 w-px bg-border" />
             <Badge

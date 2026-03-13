@@ -77,6 +77,7 @@ export const builtinShapesPlugin: CadPlugin = {
         documentHeight,
         view,
         isSelected,
+        selectionMode,
         solveState,
         onPointerDown,
         overrideStroke,
@@ -87,6 +88,7 @@ export const builtinShapesPlugin: CadPlugin = {
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -123,6 +125,7 @@ export const builtinShapesPlugin: CadPlugin = {
         documentHeight,
         view,
         isSelected,
+        selectionMode,
         solveState,
         onPointerDown,
         overrideStroke,
@@ -133,6 +136,7 @@ export const builtinShapesPlugin: CadPlugin = {
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -164,13 +168,14 @@ export const builtinShapesPlugin: CadPlugin = {
           ny: dx / len,
         };
       },
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, selectionMode, solveState, onPointerDown, overrideStroke }) => (
         <LineShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -219,13 +224,14 @@ export const builtinShapesPlugin: CadPlugin = {
           ny: Math.sin(rad),
         };
       },
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, selectionMode, solveState, onPointerDown, overrideStroke }) => (
         <ArcShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -277,13 +283,14 @@ export const builtinShapesPlugin: CadPlugin = {
           ny: Math.cos(angle),
         };
       },
-      render: ({ shape, points, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
+      render: ({ shape, points, documentHeight, view, isSelected, selectionMode, solveState, onPointerDown, overrideStroke }) => (
         <EllipseShapeView
           shape={shape}
           points={points}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -324,6 +331,7 @@ export const builtinShapesPlugin: CadPlugin = {
         documentHeight,
         view,
         isSelected,
+        selectionMode,
         solveState,
         onPointerDown,
         overrideStroke,
@@ -334,6 +342,7 @@ export const builtinShapesPlugin: CadPlugin = {
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -377,6 +386,7 @@ export const builtinShapesPlugin: CadPlugin = {
         documentHeight,
         view,
         isSelected,
+        selectionMode,
         solveState,
         onPointerDown,
         overrideStroke,
@@ -387,6 +397,7 @@ export const builtinShapesPlugin: CadPlugin = {
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}
@@ -403,6 +414,7 @@ export const builtinShapesPlugin: CadPlugin = {
         documentHeight,
         view,
         isSelected,
+        selectionMode,
         solveState,
         onPointerDown,
         textPreviewMap,
@@ -414,6 +426,7 @@ export const builtinShapesPlugin: CadPlugin = {
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           polylines={textPreviewMap[shape.id] ?? []}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
@@ -425,12 +438,13 @@ export const builtinShapesPlugin: CadPlugin = {
     defineShapePlugin<SketchSvg>({
       type: "svg",
       getBounds: (shape: SketchSvg, points: SketchPoint[]) => shapeBounds(shape, points),
-      render: ({ shape, documentHeight, view, isSelected, solveState, onPointerDown, overrideStroke }) => (
+      render: ({ shape, documentHeight, view, isSelected, selectionMode, solveState, onPointerDown, overrideStroke }) => (
         <SvgShapeView
           shape={shape}
           documentHeight={documentHeight}
           view={view}
           isSelected={isSelected}
+          selectionMode={selectionMode}
           solveState={solveState}
           onPointerDown={(event) => onPointerDown(event, shape.id)}
           overrideStroke={overrideStroke}

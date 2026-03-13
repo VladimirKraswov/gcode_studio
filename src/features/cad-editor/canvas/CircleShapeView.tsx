@@ -11,6 +11,7 @@ export type CircleShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  selectionMode: "primitive" | "object";
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGCircleElement>) => void;
   overrideStroke?: string;
@@ -22,6 +23,7 @@ export function CircleShapeView({
   documentHeight,
   view,
   isSelected,
+  selectionMode: _selectionMode,
   solveState,
   onPointerDown,
   overrideStroke,

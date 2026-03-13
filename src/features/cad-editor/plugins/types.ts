@@ -16,6 +16,7 @@ export type ShapeRenderProps<TShape extends SketchShape = SketchShape> = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+    selectionMode: "primitive" | "object";
   textPreviewMap: Record<string, { x: number; y: number }[][]>;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;

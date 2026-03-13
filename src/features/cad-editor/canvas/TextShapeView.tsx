@@ -12,6 +12,7 @@ export type TextShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  selectionMode: "primitive" | "object";
   solveState?: SketchSolveState;
   polylines: CadPoint[][];
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
@@ -23,6 +24,7 @@ export function TextShapeView({
   documentHeight,
   view,
   isSelected,
+  selectionMode: _selectionMode,
   solveState,
   polylines: _polylines,
   onPointerDown,

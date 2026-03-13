@@ -13,6 +13,7 @@ type ShapeRendererProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  selectionMode: "primitive" | "object";
   textPreviewMap: Record<string, CadPoint[][]>;
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGElement>, shapeId: string) => void;
@@ -25,6 +26,7 @@ export function ShapeRenderer({
   documentHeight,
   view,
   isSelected,
+  selectionMode,
   textPreviewMap,
   solveState,
   onPointerDown,
@@ -44,6 +46,7 @@ export function ShapeRenderer({
     documentHeight,
     view,
     isSelected,
+    selectionMode,
     textPreviewMap,
     solveState,
     onPointerDown,
@@ -59,7 +62,7 @@ export function ShapeRenderer({
 
   let feedback = null;
 
-  if (svgPath && (isPocket || isInside || isOutside)) {
+  if (selectionMode === "object" && svgPath && (isPocket || isInside || isOutside)) {
     const screenPath = svgPath
       .replace(/([ML])\s*(-?[\d.]+)\s*(-?[\d.]+)/g, (_, cmd, x, y) => {
         const p = cadToScreenPoint(

@@ -28,6 +28,7 @@ export type SvgShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  selectionMode: "primitive" | "object";
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGGElement>) => void;
   overrideStroke?: string;
@@ -38,6 +39,7 @@ export function SvgShapeView({
   documentHeight,
   view,
   isSelected,
+  selectionMode: _selectionMode,
   solveState,
   onPointerDown,
   overrideStroke,

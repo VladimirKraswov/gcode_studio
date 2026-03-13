@@ -25,6 +25,7 @@ type CadCanvasProps = {
   svgRef: React.RefObject<SVGSVGElement | null>;
   document: SketchDocument;
   selection: SelectionState;
+  selectionMode: "primitive" | "object";
   view: ViewTransform;
   draft: DraftShape;
   polylineDraft: any[];
@@ -63,11 +64,13 @@ function ArrayPreviewOverlay({
   preview,
   document,
   view,
+  selectionMode,
   textPreviewMap,
 }: {
   preview: { shapes: SketchShape[]; points: any[] } | null;
   document: SketchDocument;
   view: ViewTransform;
+  selectionMode: "primitive" | "object";
   textPreviewMap: any;
 }) {
   if (!preview || preview.shapes.length === 0) return null;
@@ -82,6 +85,7 @@ function ArrayPreviewOverlay({
           documentHeight={document.height}
           view={view}
           isSelected={false}
+          selectionMode={selectionMode}
           textPreviewMap={textPreviewMap}
           onPointerDown={() => {}}
           overrideStroke="#f97316"
@@ -95,6 +99,7 @@ export function CadCanvas({
   svgRef,
   document,
   selection,
+  selectionMode,
   view,
   draft,
   polylineDraft,
@@ -195,6 +200,7 @@ export function CadCanvas({
           documentHeight={document.height}
           view={view}
           isSelected={selectedIds.has(shape.id)}
+          selectionMode={selectionMode}
           textPreviewMap={textPreviewMap}
           solveState={solveState}
           onPointerDown={onShapePointerDown}
@@ -205,10 +211,11 @@ export function CadCanvas({
         preview={arrayPreview}
         document={document}
         view={view}
+        selectionMode={selectionMode}
         textPreviewMap={textPreviewMap}
       />
 
-      {tool === "select" && (
+      {selectionMode === "primitive" && tool === "select" && (
         <CadConstraintOverlay
           document={document}
           documentHeight={document.height}
@@ -226,6 +233,7 @@ export function CadCanvas({
         <SelectionOverlay
           document={document}
           selection={selection}
+          selectionMode={selectionMode}
           documentHeight={document.height}
           view={view}
           onPointerDown={onSelectionPointerDown}
@@ -243,13 +251,15 @@ export function CadCanvas({
         view={view}
       />
 
-      <DraftOverlay
-        draft={draft}
-        polylineDraft={polylineDraft}
-        polylineHoverPoint={polylineHoverPoint}
-        documentHeight={document.height}
-        view={view}
-      />
+      {selectionMode === "primitive" && (
+        <DraftOverlay
+          draft={draft}
+          polylineDraft={polylineDraft}
+          polylineHoverPoint={polylineHoverPoint}
+          documentHeight={document.height}
+          view={view}
+        />
+      )}
     </svg>
   );
 }

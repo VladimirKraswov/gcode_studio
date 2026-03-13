@@ -158,6 +158,7 @@ export default function EditTab(props: EditTabProps) {
               svgRef={editor.svgRef}
               document={props.document}
               selection={props.selection}
+              selectionMode={selectionMode}
               view={editor.view}
               draft={editor.draft}
               polylineDraft={editor.polylineDraft}

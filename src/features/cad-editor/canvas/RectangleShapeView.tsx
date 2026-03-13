@@ -11,6 +11,7 @@ export type RectangleShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  selectionMode: "primitive" | "object";
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
   overrideStroke?: string;
@@ -22,6 +23,7 @@ export function RectangleShapeView({
   documentHeight,
   view,
   isSelected,
+  selectionMode: _selectionMode,
   solveState,
   onPointerDown,
   overrideStroke,

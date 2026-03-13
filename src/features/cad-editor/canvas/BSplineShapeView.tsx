@@ -11,6 +11,7 @@ export type BSplineShapeViewProps = {
   documentHeight: number;
   view: ViewTransform;
   isSelected: boolean;
+  selectionMode: "primitive" | "object";
   solveState?: SketchSolveState;
   onPointerDown: (event: React.PointerEvent<SVGPolylineElement>) => void;
   overrideStroke?: string;
@@ -22,6 +23,7 @@ export function BSplineShapeView({
   documentHeight,
   view,
   isSelected,
+  selectionMode,
   onPointerDown,
   overrideStroke,
 }: BSplineShapeViewProps) {
@@ -69,7 +71,7 @@ export function BSplineShapeView({
         onPointerDown={onPointerDown}
       />
 
-      {isSelected && controlPoints.length > 1 && (
+      {selectionMode === "primitive" && isSelected && controlPoints.length > 1 && (
         <polyline
           points={controlSvgPoints}
           fill="none"

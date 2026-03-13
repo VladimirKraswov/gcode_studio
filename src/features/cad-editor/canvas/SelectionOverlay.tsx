@@ -10,6 +10,7 @@ type ScaleHandle = "nw" | "ne" | "sw" | "se";
 type SelectionOverlayProps = {
   document: SketchDocument;
   selection: SelectionState;
+  selectionMode: "primitive" | "object";
   documentHeight: number;
   view: ViewTransform;
   onPointerDown?: (event: React.PointerEvent<SVGRectElement>) => void;
@@ -30,6 +31,7 @@ function isPointSelectionId(id: string): boolean {
 export function SelectionOverlay({
   document,
   selection,
+  selectionMode,
   documentHeight,
   view,
   onScaleHandlePointerDown,
@@ -52,7 +54,7 @@ export function SelectionOverlay({
     (shape) => shape.type !== "text" && shape.type !== "svg",
   );
 
-  if (isParametricOnly) return null;
+  if (selectionMode === "primitive" && isParametricOnly) return null;
 
   const bounds = selectionBounds(selectedShapes, document.points);
 
@@ -118,59 +120,63 @@ export function SelectionOverlay({
         rx={10}
       />
 
-      <line
-        x1={cx}
-        y1={y}
-        x2={cx}
-        y2={rotateLineTop}
-        stroke={palette.stroke}
-        strokeWidth={1.5}
-        pointerEvents="none"
-      />
+      {selectionMode === "primitive" && (
+        <>
+          <line
+            x1={cx}
+            y1={y}
+            x2={cx}
+            y2={rotateLineTop}
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
 
-      <circle
-        cx={cx}
-        cy={rotateHandleY}
-        r={11}
-        fill="transparent"
-        stroke="transparent"
-        onPointerDown={onRotateHandlePointerDown}
-        style={{ cursor: "alias", pointerEvents: "all" }}
-      />
+          <circle
+            cx={cx}
+            cy={rotateHandleY}
+            r={11}
+            fill="transparent"
+            stroke="transparent"
+            onPointerDown={onRotateHandlePointerDown}
+            style={{ cursor: "alias", pointerEvents: "all" }}
+          />
 
-      <circle
-        cx={cx}
-        cy={rotateHandleY}
-        r={5.5}
-        fill={theme.cad.constraintLabelFill}
-        stroke={palette.stroke}
-        strokeWidth={1.5}
-        pointerEvents="none"
-      />
+          <circle
+            cx={cx}
+            cy={rotateHandleY}
+            r={5.5}
+            fill={theme.cad.constraintLabelFill}
+            stroke={palette.stroke}
+            strokeWidth={1.5}
+            pointerEvents="none"
+          />
 
-      {!isDragging &&
-        corners.map((corner) => (
-          <g key={corner.key}>
-            <circle
-              cx={corner.cx}
-              cy={corner.cy}
-              r={12}
-              fill="transparent"
-              stroke="transparent"
-              onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
-              style={{ cursor: corner.cursor, pointerEvents: "all" }}
-            />
-            <circle
-              cx={corner.cx}
-              cy={corner.cy}
-              r={4}
-              fill={theme.cad.constraintLabelFill}
-              stroke={palette.stroke}
-              strokeWidth={1.5}
-              pointerEvents="none"
-            />
-          </g>
-        ))}
+          {!isDragging &&
+            corners.map((corner) => (
+              <g key={corner.key}>
+                <circle
+                  cx={corner.cx}
+                  cy={corner.cy}
+                  r={12}
+                  fill="transparent"
+                  stroke="transparent"
+                  onPointerDown={(event) => onScaleHandlePointerDown?.(event, corner.key)}
+                  style={{ cursor: corner.cursor, pointerEvents: "all" }}
+                />
+                <circle
+                  cx={corner.cx}
+                  cy={corner.cy}
+                  r={4}
+                  fill={theme.cad.constraintLabelFill}
+                  stroke={palette.stroke}
+                  strokeWidth={1.5}
+                  pointerEvents="none"
+                />
+              </g>
+            ))}
+        </>
+      )}
     </g>
   );
 }
