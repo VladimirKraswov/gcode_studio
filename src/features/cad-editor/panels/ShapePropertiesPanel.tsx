@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FiBox,
   FiCircle,
@@ -74,32 +75,36 @@ function getShapeIcon(type: SketchShape["type"]) {
   }
 }
 
-function getConstraintLabel(constraint: SketchConstraint): string {
-  const value =
-    typeof constraint.value === "number"
-      ? ` ${Number(constraint.value.toFixed(3))}`
-      : "";
+function useConstraintLabel() {
+  const { t } = useTranslation();
 
-  switch (constraint.type) {
-    case "horizontal": return "Horizontal";
-    case "vertical": return "Vertical";
-    case "coincident": return "Coincident";
-    case "parallel": return "Parallel";
-    case "perpendicular": return "Perpendicular";
-    case "equal": return "Equal";
-    case "tangent": return "Tangent";
-    case "distance": return `Distance${value}`;
-    case "distance-x": return `Distance X${value}`;
-    case "distance-y": return `Distance Y${value}`;
-    case "angle": return `Angle${value}`;
-    case "radius": return `Radius${value}`;
-    case "diameter": return `Diameter${value}`;
-    case "point-on-object": return "Point on Object";
-    case "midpoint": return "Midpoint";
-    case "collinear": return "Collinear";
-    case "lock": return "Lock";
-    default: return constraint.type;
-  }
+  return (constraint: SketchConstraint): string => {
+    const value =
+      typeof constraint.value === "number"
+        ? ` ${Number(constraint.value.toFixed(3))}`
+        : "";
+
+    switch (constraint.type) {
+      case "horizontal": return t("cad.constraints.horizontal");
+      case "vertical": return t("cad.constraints.vertical");
+      case "coincident": return t("cad.constraints.coincident");
+      case "parallel": return t("cad.constraints.parallel");
+      case "perpendicular": return t("cad.constraints.perpendicular");
+      case "equal": return t("cad.constraints.equal");
+      case "tangent": return t("cad.constraints.tangent");
+      case "distance": return `${t("cad.constraints.distance")}${value}`;
+      case "distance-x": return `${t("cad.constraints.distance")} X${value}`;
+      case "distance-y": return `${t("cad.constraints.distance")} Y${value}`;
+      case "angle": return `Angle${value}`;
+      case "radius": return `Radius${value}`;
+      case "diameter": return `Diameter${value}`;
+      case "point-on-object": return "Point on Object";
+      case "midpoint": return "Midpoint";
+      case "collinear": return "Collinear";
+      case "lock": return t("cad.constraints.lock");
+      default: return constraint.type;
+    }
+  };
 }
 
 function openArrayEditor(groupId: string) {
@@ -143,6 +148,8 @@ export function ShapePropertiesPanel({
   onRemoveBSplineControlPoint = () => {},
   onDeleteConstraint = () => {},
 }: ShapePropertiesPanelProps) {
+  const { t } = useTranslation();
+  const getConstraintLabel = useConstraintLabel();
   const selectedShape = useMemo(
     () =>
       selection.primaryRef?.kind === "shape"
@@ -197,7 +204,7 @@ export function ShapePropertiesPanel({
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <FiInfo size={32} className="text-border mb-3" />
         <div className="text-xs text-text-muted">
-          Выберите объект на холсте для просмотра свойств
+          {t("cad.properties.select_object")}
         </div>
       </div>
     );
@@ -212,17 +219,17 @@ export function ShapePropertiesPanel({
           </div>
           <div className="min-w-0">
             <div className="text-[13px] font-bold text-text truncate">
-              Точка {selectedPoint.id}
+              {t("cad.properties.point")} {selectedPoint.id}
             </div>
             <div className="text-[11px] text-text-muted capitalize">
-              Vertex
+              {t("cad.properties.vertex")}
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
           <div>
-            <SectionTitle title="Геометрия" />
+            <SectionTitle title={t("cad.properties.geometry")} />
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
                 <Label>X</Label>
@@ -250,7 +257,7 @@ export function ShapePropertiesPanel({
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
               />
               <Label htmlFor="isFixed" className="mb-0 cursor-pointer">
-                Закрепить (Lock)
+                {t("cad.properties.lock")}
               </Label>
             </div>
           </div>
@@ -280,16 +287,16 @@ export function ShapePropertiesPanel({
         </div>
 
         <div>
-          <SectionTitle title="Параметры" />
+          <SectionTitle title={t("cad.properties.parameters")} />
           <div className="space-y-3">
             <div className="grid gap-1.5">
-              <Label>Тип</Label>
+              <Label>{t("cad.properties.type")}</Label>
               <Input value={selectedConstraint.type} disabled />
             </div>
 
             {isDimensionalConstraint(selectedConstraint) && (
               <div className="grid gap-1.5">
-                <Label>Значение</Label>
+                <Label>{t("cad.properties.value")}</Label>
                 <Input
                   type="number"
                   value={selectedConstraint.value ?? 0}
@@ -332,7 +339,7 @@ export function ShapePropertiesPanel({
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
               />
               <Label htmlFor="constraint-enabled" className="mb-0 cursor-pointer">
-                Ограничение активно
+                {t("cad.properties.constraint_active")}
               </Label>
             </div>
 
@@ -356,22 +363,22 @@ export function ShapePropertiesPanel({
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
               />
               <Label htmlFor="constraint-driven" className="mb-0 cursor-pointer">
-                Справочный размер (Driven)
+                {t("cad.properties.driven")}
               </Label>
             </div>
           </div>
         </div>
 
         <div>
-          <SectionTitle title="Привязки" />
+          <SectionTitle title={t("cad.properties.bindings")} />
           <div className="space-y-2">
             <div className="grid gap-1.5">
-              <Label>Точки</Label>
+              <Label>{t("cad.properties.points")}</Label>
               <Input value={pointIds.join(", ")} disabled />
             </div>
 
             <div className="grid gap-1.5">
-              <Label>Объекты</Label>
+              <Label>{t("cad.properties.shapes")}</Label>
               <Input value={shapeIds.join(", ")} disabled />
             </div>
           </div>
@@ -384,7 +391,7 @@ export function ShapePropertiesPanel({
           onClick={() => onDeleteConstraint(selectedConstraint.id)}
         >
           <FiTrash2 size={14} className="mr-2" />
-          Удалить ограничение
+          {t("cad.properties.delete_constraint")}
         </Button>
       </div>
     );
@@ -448,10 +455,10 @@ export function ShapePropertiesPanel({
 
       <div className="space-y-4">
         <div>
-          <SectionTitle title="Идентификация" />
+          <SectionTitle title={t("cad.properties.identification")} />
           <div className="space-y-3">
             <div className="grid gap-1.5">
-              <Label>Имя объекта</Label>
+              <Label>{t("cad.properties.name")}</Label>
               <Input
                 value={selectedShape?.name || ""}
                 onChange={(e) => updateSelected({ name: e.target.value })}
@@ -467,18 +474,18 @@ export function ShapePropertiesPanel({
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
               />
               <Label htmlFor="isConstruction" className="mb-0 cursor-pointer">
-                Вспомогательная геометрия
+                {t("cad.properties.construction")}
               </Label>
             </div>
           </div>
         </div>
 
         <div>
-          <SectionTitle title="Геометрия" />
+          <SectionTitle title={t("cad.properties.geometry")} />
 
           {selectedShape?.type === "line" && (
             <div className="grid gap-1.5 mb-3">
-              <Label>Длина</Label>
+              <Label>{t("cad.properties.length")}</Label>
               <Input
                 type="number"
                 value={lineLength?.toFixed(3)}
@@ -514,7 +521,7 @@ export function ShapePropertiesPanel({
           {(selectedShape?.type === "circle" || selectedShape?.type === "arc") && (
             <div className="grid grid-cols-2 gap-3 mb-3">
               <div className="grid gap-1.5">
-                <Label>Радиус</Label>
+                <Label>{t("cad.properties.radius")}</Label>
                 <Input
                   type="number"
                   value={(selectedShape as any).radius?.toFixed(3)}
@@ -527,7 +534,7 @@ export function ShapePropertiesPanel({
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label>Диаметр</Label>
+                <Label>{t("cad.properties.diameter")}</Label>
                 <Input
                   type="number"
                   value={((selectedShape as any).radius * 2)?.toFixed(3)}
@@ -547,7 +554,7 @@ export function ShapePropertiesPanel({
               <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="grid gap-1.5">
-                    <Label>Степень (Degree)</Label>
+                    <Label>{t("cad.properties.degree")}</Label>
                     <Input
                       type="number"
                       min="1"
@@ -568,7 +575,7 @@ export function ShapePropertiesPanel({
                   </div>
 
                   <div className="grid gap-1.5">
-                    <Label>Контрольных точек</Label>
+                    <Label>{t("cad.properties.control_points")}</Label>
                     <Input
                       type="number"
                       value={selectedBSpline.controlPointIds.length}
@@ -588,7 +595,7 @@ export function ShapePropertiesPanel({
                     className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
                   />
                   <Label htmlFor="bspline-periodic" className="mb-0 cursor-pointer">
-                    Замкнутый / Periodic spline
+                    {t("cad.properties.periodic")}
                   </Label>
                 </div>
 
@@ -599,7 +606,7 @@ export function ShapePropertiesPanel({
                     className="w-full bg-panel-solid"
                     onClick={onInsertBSplineControlPoint}
                   >
-                    Добавить control point
+                    {t("cad.properties.add_control_point")}
                   </Button>
 
                   <Button
@@ -613,13 +620,12 @@ export function ShapePropertiesPanel({
                       !selectedBSpline.controlPointIds.includes(selection.primaryId)
                     }
                   >
-                    Удалить выбранную control point
+                    {t("cad.properties.remove_control_point")}
                   </Button>
                 </div>
 
                 <div className="text-[11px] text-text-muted leading-relaxed">
-                  Кнопка «Добавить control point» вставляет новую точку в наиболее подходящий
-                  сегмент control polygon. Чтобы удалить точку, сначала выдели control point сплайна.
+                  {t("cad.properties.bspline_hint")}
                 </div>
               </div>
             </div>
@@ -627,7 +633,7 @@ export function ShapePropertiesPanel({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label>Глубина Z</Label>
+              <Label>{t("cad.properties.cut_z")}</Label>
               <Input
                 type="number"
                 value={selectedShape?.cutZ ?? document.cutZ}
@@ -638,7 +644,7 @@ export function ShapePropertiesPanel({
             </div>
 
             <div className="grid gap-1.5">
-              <Label>Толщина линии</Label>
+              <Label>{t("cad.properties.stroke_width")}</Label>
               <Input
                 type="number"
                 min="0.1"
@@ -656,13 +662,13 @@ export function ShapePropertiesPanel({
 
         {selectedGroup?.array && (
           <div>
-            <SectionTitle title="Массив" />
+            <SectionTitle title={t("cad.properties.array")} />
             <div className="p-3 bg-primary-soft/30 border border-primary-soft rounded-lg space-y-3">
               <div className="flex items-center gap-2 text-[12px] font-bold text-primary">
                 <FiRefreshCw size={14} />
                 {selectedGroup.array.type === "linear"
-                  ? "Линейный массив"
-                  : "Круговой массив"}
+                  ? t("cad.properties.linear_array")
+                  : t("cad.properties.circular_array")}
               </div>
 
               <Button
@@ -672,17 +678,17 @@ export function ShapePropertiesPanel({
                 onClick={() => openArrayEditor(selectedGroup.id)}
               >
                 <FiEdit3 size={14} className="mr-2" />
-                Настроить массив
+                {t("cad.properties.configure_array")}
               </Button>
             </div>
           </div>
         )}
 
         <div>
-          <SectionTitle title="CAM Обработка" />
+          <SectionTitle title={t("cad.properties.cam_processing")} />
           <div className="space-y-3">
             <div className="grid gap-1.5">
-              <Label>Тип операции</Label>
+              <Label>{t("cad.properties.op_type")}</Label>
               <select
                 value={shapeCamSettings?.operation}
                 onChange={(e) =>
@@ -692,16 +698,16 @@ export function ShapePropertiesPanel({
                 }
                 className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="follow-path">По контуру (Follow path)</option>
-                <option value="profile-inside">Внутри (Inside)</option>
-                <option value="profile-outside">Снаружи (Outside)</option>
-                <option value="pocket">Карман (Pocket)</option>
+                <option value="follow-path">{t("cad.properties.op_follow")}</option>
+                <option value="profile-inside">{t("cad.properties.op_inside")}</option>
+                <option value="profile-outside">{t("cad.properties.op_outside")}</option>
+                <option value="pocket">{t("cad.properties.op_pocket")}</option>
               </select>
             </div>
 
             {shapeCamSettings?.operation !== "follow-path" && (
               <div className="grid gap-1.5">
-                <Label>Направление</Label>
+                <Label>{t("cad.properties.direction")}</Label>
                 <select
                   value={shapeCamSettings?.direction}
                   onChange={(e) =>
@@ -711,8 +717,8 @@ export function ShapePropertiesPanel({
                   }
                   className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 >
-                  <option value="climb">Попутное (Climb)</option>
-                  <option value="conventional">Встречное (Conventional)</option>
+                  <option value="climb">{t("cad.properties.dir_climb")}</option>
+                  <option value="conventional">{t("cad.properties.dir_conventional")}</option>
                 </select>
               </div>
             )}

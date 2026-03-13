@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/DocumentSettingsPanel.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchDocument } from "../model/types";
 import {
   GridSheetSection,
@@ -21,45 +22,47 @@ export function DocumentSettingsPanel({
   document,
   setDocument,
 }: DocumentSettingsPanelProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col gap-2 p-1">
-      <CollapsibleSection title="Сетка и Лист" icon={<FiGrid size={16} />} defaultCollapsed={false}>
+      <CollapsibleSection title={t("cad.doc_settings.grid_sheet")} icon={<FiGrid size={16} />} defaultCollapsed={false}>
         <div className="pt-2">
           <GridSheetSection document={document} setDocument={setDocument} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Параметры инструмента" icon={<FiTool size={16} />}>
+      <CollapsibleSection title={t("cad.doc_settings.tool_params")} icon={<FiTool size={16} />}>
         <div className="pt-2">
           <ToolSection document={document} setDocument={setDocument} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Подачи и Скорости" icon={<FiZap size={16} />}>
+      <CollapsibleSection title={t("cad.doc_settings.feeds_speeds")} icon={<FiZap size={16} />}>
         <div className="pt-2">
           <FeedsSection document={document} setDocument={setDocument} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Настройки Z" icon={<FiArrowDown size={16} />}>
+      <CollapsibleSection title={t("cad.doc_settings.z_settings")} icon={<FiArrowDown size={16} />}>
         <div className="pt-2">
           <ZAxisSection document={document} setDocument={setDocument} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Параметры CAM" icon={<FiTarget size={16} />}>
+      <CollapsibleSection title={t("cad.doc_settings.cam_params")} icon={<FiTarget size={16} />}>
         <div className="pt-2">
           <CamDefaultsSection document={document} setDocument={setDocument} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Управление шпинделем" icon={<FiMove size={16} />}>
+      <CollapsibleSection title={t("cad.doc_settings.spindle_control")} icon={<FiMove size={16} />}>
         <div className="pt-2">
           <SpindleLaserSection document={document} setDocument={setDocument} />
         </div>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Генерация G-code" icon={<FiMove size={16} />}>
+      <CollapsibleSection title={t("cad.doc_settings.gcode_gen")} icon={<FiMove size={16} />}>
         <div className="pt-2">
           <GenerationBasicsSection document={document} setDocument={setDocument} />
         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import {
   FiBox,
@@ -116,32 +117,36 @@ function getShapeIcon(shape: SketchShape) {
   }
 }
 
-function getConstraintLabel(constraint: SketchConstraint): string {
-  const value =
-    typeof constraint.value === "number"
-      ? ` ${Number(constraint.value.toFixed(3))}`
-      : "";
+function useConstraintLabel() {
+  const { t } = useTranslation();
 
-  switch (constraint.type) {
-    case "horizontal": return "Horizontal";
-    case "vertical": return "Vertical";
-    case "coincident": return "Coincident";
-    case "parallel": return "Parallel";
-    case "perpendicular": return "Perpendicular";
-    case "equal": return "Equal";
-    case "tangent": return "Tangent";
-    case "distance": return `Distance${value}`;
-    case "distance-x": return `Distance X${value}`;
-    case "distance-y": return `Distance Y${value}`;
-    case "angle": return `Angle${value}`;
-    case "radius": return `Radius${value}`;
-    case "diameter": return `Diameter${value}`;
-    case "point-on-object": return "Point on Object";
-    case "midpoint": return "Midpoint";
-    case "collinear": return "Collinear";
-    case "lock": return "Lock";
-    default: return constraint.type;
-  }
+  return (constraint: SketchConstraint): string => {
+    const value =
+      typeof constraint.value === "number"
+        ? ` ${Number(constraint.value.toFixed(3))}`
+        : "";
+
+    switch (constraint.type) {
+      case "horizontal": return t("cad.constraints.horizontal");
+      case "vertical": return t("cad.constraints.vertical");
+      case "coincident": return t("cad.constraints.coincident");
+      case "parallel": return t("cad.constraints.parallel");
+      case "perpendicular": return t("cad.constraints.perpendicular");
+      case "equal": return t("cad.constraints.equal");
+      case "tangent": return t("cad.constraints.tangent");
+      case "distance": return `${t("cad.constraints.distance")}${value}`;
+      case "distance-x": return `${t("cad.constraints.distance")} X${value}`;
+      case "distance-y": return `${t("cad.constraints.distance")} Y${value}`;
+      case "angle": return `Angle${value}`;
+      case "radius": return `Radius${value}`;
+      case "diameter": return `Diameter${value}`;
+      case "point-on-object": return "Point on Object";
+      case "midpoint": return "Midpoint";
+      case "collinear": return "Collinear";
+      case "lock": return t("cad.constraints.lock");
+      default: return constraint.type;
+    }
+  };
 }
 
 function getArrayBadgeMeta(array: SketchArrayDefinition | null | undefined): { label: string; variant: "info" | "purple" } | null {
@@ -172,6 +177,8 @@ export function ObjectListPanel({
   onDeleteConstraint = () => {},
   onReorderShapes,
 }: ObjectListPanelProps) {
+  const { t } = useTranslation();
+  const getConstraintLabel = useConstraintLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const { setHint } = useUI();
@@ -253,7 +260,7 @@ export function ObjectListPanel({
           nodes.push({
             kind: "group",
             id: item.groupId,
-            name: group?.name ?? `Группа (${item.shapes.length})`,
+            name: group?.name ?? t("cad.objects.group_default", { count: item.shapes.length }),
             depth: 0,
             collapsed,
             selected,
@@ -403,17 +410,17 @@ export function ObjectListPanel({
           onContextMenu={(e) => e.preventDefault()}
         >
           <button type="button" className={menuItem} onClick={() => { onSelectionChange(selectOnly(makeShapeRef(target.shapeId))); setContextMenu(null); }}>
-            <FiLayers size={14} /> Выбрать
+            <FiLayers size={14} /> {t("cad.objects.menu.select")}
           </button>
           <button type="button" className={menuItem} onClick={() => beginRenameShape(target.shapeId)}>
-            <FiEdit3 size={14} /> Переименовать
+            <FiEdit3 size={14} /> {t("cad.objects.menu.rename")}
           </button>
           <button type="button" className={menuItem} onClick={() => { onToggleVisibility(target.shapeId); setContextMenu(null); }}>
-            <FiEye size={14} /> Скрыть / Показать
+            <FiEye size={14} /> {t("cad.objects.menu.toggle_visibility")}
           </button>
           <div className="my-1 h-px bg-border" />
           <button type="button" className={`${menuItem} ${menuDanger}`} onClick={() => { onDeleteShape(target.shapeId); setContextMenu(null); }}>
-            <FiTrash2 size={14} /> Удалить
+            <FiTrash2 size={14} /> {t("cad.objects.menu.delete")}
           </button>
         </div>,
         portalHost,
@@ -430,13 +437,13 @@ export function ObjectListPanel({
           onContextMenu={(e) => e.preventDefault()}
         >
           <button type="button" className={menuItem} onClick={() => beginRenameGroup(target.groupId)}>
-            <FiEdit3 size={14} /> Переименовать группу
+            <FiEdit3 size={14} /> {t("cad.objects.menu.rename_group")}
           </button>
           <button type="button" className={menuItem} onClick={() => { onToggleGroupCollapsed(target.groupId); setContextMenu(null); }}>
-            <FiChevronRight size={14} /> Свернуть / Развернуть
+            <FiChevronRight size={14} /> {t("cad.objects.menu.toggle_expand")}
           </button>
           <button type="button" className={menuItem} onClick={() => { openArrayEditor(target.groupId); setContextMenu(null); }}>
-            <FiLayers size={14} /> Редактировать массив
+            <FiLayers size={14} /> {t("cad.objects.menu.edit_array")}
           </button>
         </div>,
         portalHost,
@@ -453,11 +460,11 @@ export function ObjectListPanel({
           onContextMenu={(e) => e.preventDefault()}
         >
           <button type="button" className={menuItem} onClick={() => { onSelectionChange(selectOnly(makeConstraintRef(target.constraintId))); setContextMenu(null); }}>
-            <FiHash size={14} /> Выбрать
+            <FiHash size={14} /> {t("cad.objects.menu.select")}
           </button>
           <div className="my-1 h-px bg-border" />
           <button type="button" className={`${menuItem} ${menuDanger}`} onClick={() => { onDeleteConstraint(target.constraintId); setContextMenu(null); }}>
-            <FiTrash2 size={14} /> Удалить ограничение
+            <FiTrash2 size={14} /> {t("cad.objects.menu.delete_constraint")}
           </button>
         </div>,
         portalHost,
@@ -470,8 +477,8 @@ export function ObjectListPanel({
       <div className="p-1 border-b border-border bg-panel-muted/10">
         <Tabs
             tabs={[
-                { id: "objects", label: "Объекты", icon: <FiBox size={13} /> },
-                { id: "constraints", label: "Ограничения", icon: <FiHash size={13} /> }
+                { id: "objects", label: t("cad.objects.tabs.objects"), icon: <FiBox size={13} /> },
+                { id: "constraints", label: t("cad.objects.tabs.constraints"), icon: <FiHash size={13} /> }
             ]}
             activeTab={activeTab}
             onChange={setActiveTab}
@@ -485,7 +492,7 @@ export function ObjectListPanel({
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Поиск..."
+            placeholder={t("cad.objects.search_placeholder")}
             className="h-8 pl-8 text-[12px] bg-panel-muted border-transparent"
           />
         </div>
@@ -493,7 +500,7 @@ export function ObjectListPanel({
 
       <div className="flex-1 overflow-y-auto scrollbar-thin p-1">
         {tree.length === 0 ? (
-          <div className="p-8 text-center text-xs text-text-muted">Ничего не найдено</div>
+          <div className="p-8 text-center text-xs text-text-muted">{t("cad.objects.no_items")}</div>
         ) : (
           <div className="space-y-px">
             {tree.map((node) => {
@@ -526,7 +533,7 @@ export function ObjectListPanel({
                   {isGroup ? (
                     <button
                       onClick={() => onToggleGroupCollapsed(node.id)}
-                      onMouseEnter={() => setHint(node.collapsed ? "Развернуть группу" : "Свернуть группу")}
+                      onMouseEnter={() => setHint(node.collapsed ? t("cad.objects.hint.expand") : t("cad.objects.hint.collapse"))}
                       onMouseLeave={() => setHint("")}
                       className="w-4 h-4 flex items-center justify-center text-text-muted hover:text-text hover:scale-125 transition-transform"
                     >
@@ -588,7 +595,7 @@ export function ObjectListPanel({
                   {node.kind === "shape" && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onToggleVisibility(node.id); }}
-                      onMouseEnter={() => setHint(node.visible ? "Скрыть объект" : "Показать объект")}
+                      onMouseEnter={() => setHint(node.visible ? t("cad.objects.hint.hide") : t("cad.objects.hint.show"))}
                       onMouseLeave={() => setHint("")}
                       className={`w-6 h-6 flex items-center justify-center rounded-md hover:bg-black/5 dark:hover:bg-white/5 hover:scale-110 transition-all ${node.visible ? "text-text-muted opacity-0 group-hover:opacity-100" : "text-primary opacity-100"}`}
                     >

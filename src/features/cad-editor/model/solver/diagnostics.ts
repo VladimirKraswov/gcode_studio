@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import type {
   SketchConstraint,
   SketchDocument,
@@ -130,7 +131,7 @@ function collectDuplicateConstraintIssues(
       issues.push({
         constraintId: c.id,
         severity: "warning",
-        message: `Ограничение "${c.type}" дублирует уже существующее (${existing}).`,
+        message: i18next.t("cad.diagnostics.duplicate", { type: c.type, existing }),
       });
     } else {
       seen.set(key, c.id);
@@ -170,7 +171,7 @@ function collectSimpleConflictIssues(
         issues.push({
           constraintId: c.id,
           severity: "warning",
-          message: `Точка ${pid} уже зафиксирована ограничением ${existing}.`,
+          message: i18next.t("cad.diagnostics.point_fixed", { pid, existing }),
         });
       } else {
         lockMap.set(pid, c.id);
@@ -190,12 +191,12 @@ function collectSimpleConflictIssues(
       issues.push({
         constraintId: hId,
         severity: "error",
-        message: `Линия между точками ${aId} и ${bId} одновременно ограничена как горизонтальная и вертикальная.`,
+        message: i18next.t("cad.diagnostics.line_both_horiz_vert", { aId, bId }),
       });
       issues.push({
         constraintId: vId,
         severity: "error",
-        message: `Линия между точками ${aId} и ${bId} одновременно ограничена как вертикальная и горизонтальная.`,
+        message: i18next.t("cad.diagnostics.line_both_horiz_vert", { aId, bId }),
       });
     }
   }

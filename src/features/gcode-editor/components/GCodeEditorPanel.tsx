@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GCodeEditor } from "./GCodeEditor";
 
 type GCodeEditorPanelProps = {
@@ -11,13 +12,15 @@ export default function GCodeEditorPanel({
   setSource,
   fileName,
 }: GCodeEditorPanelProps) {
+  const { t } = useTranslation();
+
   return (
     <GCodeEditor
       source={source}
       setSource={setSource}
       fileName={fileName}
       variant="panel"
-      title="Редактор G-code"
+      title={t("tabs.gcode")}
     />
   );
 }

@@ -1,5 +1,6 @@
 // path: /src/modules/cad/hooks/useSvgImportFlow.ts
 import { useCallback, useRef, useState } from "react";
+import i18next from "i18next";
 import { parseSvgToContours } from "../geometry/svgImport";
 
 export type SvgImportStage = "reading" | "parsing" | "ready" | "error" | "aborted";
@@ -68,7 +69,7 @@ function readFileAsText(file: File, signalRef: { aborted: boolean; reader?: File
       onProgress(Math.max(0, Math.min(55, fraction * 55)));
     };
 
-    reader.onerror = () => reject(new Error("Не удалось прочитать SVG файл"));
+    reader.onerror = () => reject(new Error(i18next.t("svg_import.error_read")));
     reader.onabort = () => reject(new DOMException("Aborted", "AbortError"));
 
     reader.onload = () => {
@@ -118,7 +119,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
       ...prev,
       stage: "aborted",
       progress: prev.progress,
-      message: "Импорт был остановлен пользователем.",
+      message: i18next.t("svg_import.aborted_msg"),
       error: null,
     }));
   }, []);
@@ -146,7 +147,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
       fileName: file.name,
       stage: "reading",
       progress: 0,
-      message: "Чтение файла...",
+      message: i18next.t("svg_import.reading_msg"),
       error: null,
       draft: null,
       contours: [],
@@ -157,7 +158,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
         setState((prev) => ({
           ...prev,
           progress: value,
-          message: "Чтение SVG файла...",
+          message: i18next.t("svg_import.reading_msg"),
         }));
       });
 
@@ -169,7 +170,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
         ...prev,
         stage: "parsing",
         progress: 64,
-        message: "Разбор контуров SVG...",
+        message: i18next.t("svg_import.parsing_msg"),
       }));
 
       await new Promise<void>((resolve) => {
@@ -187,7 +188,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
         fileName: file.name,
         stage: "ready",
         progress: 100,
-        message: "SVG подготовлен. Теперь можно задать размеры и координаты.",
+        message: i18next.t("svg_import.ready_msg"),
         error: null,
         contours: parsed.contours,
         draft: {
@@ -209,7 +210,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
           ...prev,
           open: true,
           stage: "aborted",
-          message: "Импорт был остановлен пользователем.",
+          message: i18next.t("svg_import.aborted_msg"),
           error: null,
         }));
         return;
@@ -221,7 +222,7 @@ export function useSvgImportFlow({ onConfirm }: UseSvgImportFlowParams) {
         stage: "error",
         progress: prev.progress,
         message: "",
-        error: error instanceof Error ? error.message : "Не удалось импортировать SVG",
+        error: error instanceof Error ? error.message : i18next.t("svg_import.generic_error"),
       }));
       taskRef.current = null;
     }

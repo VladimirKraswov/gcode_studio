@@ -1,4 +1,5 @@
 import { FiEdit, FiSettings } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
 import {
   ShapePropertiesPanel,
@@ -20,9 +21,11 @@ export function CadPropertiesSection({
   selection,
   cadEditor,
 }: CadPropertiesSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col gap-4">
-      <CollapsibleSection title="Свойства объекта" icon={<FiEdit size={18} />}>
+      <CollapsibleSection title={t("common.object_properties")} icon={<FiEdit size={18} />}>
         <ShapePropertiesPanel
           document={editDocument}
           setDocument={setEditDocument}
@@ -71,9 +74,11 @@ export function CamPropertiesSection({
   editDocument,
   setEditDocument,
 }: CamPropertiesSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col gap-4">
-      <CollapsibleSection title="Настройки документа" icon={<FiSettings size={18} />}>
+      <CollapsibleSection title={t("common.doc_settings")} icon={<FiSettings size={18} />}>
         <DocumentSettingsPanel
           document={editDocument}
           setDocument={setEditDocument}

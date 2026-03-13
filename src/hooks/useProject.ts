@@ -1,5 +1,6 @@
 // src/hooks/useProject.ts
 import { useCallback } from "react";
+import i18next from "i18next";
 import { downloadTextFile } from "@/shared/utils/common";
 import { createProjectFile, parseProjectFile } from "@/shared/utils/projectFile";
 import { useGCode } from "@/contexts/GCodeContext";
@@ -60,7 +61,7 @@ export function useProject() {
     const name = fileName.replace(/\.[^/.]+$/, "") + ".json";
     downloadTextFile(json, name);
 
-    addNotification("success", `Проект ${name} успешно сохранён`);
+    addNotification("success", i18next.t("common.project_saved", { name }));
   }, [
     fileName,
     source,
@@ -94,9 +95,9 @@ export function useProject() {
       setSelection(project.selection);
       setCadView(project.cadView);
 
-      addNotification("success", `Проект ${file.name} успешно открыт`);
+      addNotification("success", i18next.t("common.project_opened", { name: file.name }));
     } catch (e: any) {
-      addNotification("error", e.message || "Не удалось прочитать файл проекта");
+      addNotification("error", e.message || i18next.t("common.project_read_error"));
     }
   }, [
     setFileName,

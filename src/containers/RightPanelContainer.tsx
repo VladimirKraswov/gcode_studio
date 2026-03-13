@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FiBarChart2, FiEdit, FiInfo, FiTool } from "react-icons/fi";
 
 import { useGCode } from "@/contexts/GCodeContext";
@@ -14,6 +15,7 @@ import { CadPropertiesSection, CamPropertiesSection } from "./RightPanelSections
 type CadTab = "cad" | "cam";
 
 export function RightPanelContainer() {
+  const { t } = useTranslation();
   const { activeTab } = useUI();
   const { parsed, currentState, stock } = useGCode();
   const { cameraInfo, editDocument, setEditDocument, selection, cadEditor } = useCad();
@@ -55,7 +57,7 @@ export function RightPanelContainer() {
   return (
     <RightPanel>
       <div className="flex flex-col gap-4">
-        <CollapsibleSection title="Состояние" icon={<FiInfo size={18} />}>
+        <CollapsibleSection title={t("common.status")} icon={<FiInfo size={18} />}>
           <InfoPanelSection
             bounds={parsed?.bounds ?? { minX: 0, minY: 0, minZ: 0, maxX: 0, maxY: 0, maxZ: 0 }}
             stock={stock}
@@ -66,7 +68,7 @@ export function RightPanelContainer() {
           />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Статистика" icon={<FiBarChart2 size={18} />}>
+        <CollapsibleSection title={t("common.statistics")} icon={<FiBarChart2 size={18} />}>
           <GCodeStatsSection parsed={parsed ?? undefined} />
         </CollapsibleSection>
       </div>

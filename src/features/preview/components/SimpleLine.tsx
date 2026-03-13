@@ -32,6 +32,8 @@ export const SimpleLine = memo(function SimpleLine({
     });
   }, [color, opacity]);
 
+  const line = useMemo(() => new THREE.Line(geometry, material), [geometry, material]);
+
   useEffect(() => {
     return () => {
       geometry.dispose();
@@ -39,5 +41,5 @@ export const SimpleLine = memo(function SimpleLine({
     };
   }, [geometry, material]);
 
-  return <line geometry={geometry} material={material} frustumCulled={false} />;
+  return <primitive object={line} frustumCulled={false} /> as any;
 });

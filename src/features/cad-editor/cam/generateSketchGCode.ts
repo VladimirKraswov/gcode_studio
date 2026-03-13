@@ -1,6 +1,7 @@
 import type { SketchDocument, SketchShape } from "../model/types";
 import { collectVisibleShapes } from "../model/grouping";
 import { extractShapeContours } from "../geometry/shapeContours";
+import { logger } from "@/shared/utils/logger";
 
 import {
   generateGCode,
@@ -226,6 +227,12 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
   const visibleShapes = collectVisibleShapes(doc).filter((s) => !s.isConstruction);
   const rawToolpaths: Toolpath[] = [];
 
+  logger.info("CAD", "Starting toolpath planning", {
+    visibleShapes: visibleShapes.length,
+    toolDiameter: doc.toolDiameter,
+    units: doc.units
+  });
+
   for (const shape of visibleShapes) {
     const geometryContours = await extractShapeContours(shape, doc.points);
     const contours = geometryContours.map((c) => toContour(c.points));
@@ -241,7 +248,10 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
     }
   }
 
-  if (rawToolpaths.length === 0) return [];
+  if (rawToolpaths.length === 0) {
+    logger.warn("CAM", "No toolpaths generated from visible shapes");
+    return [];
+  }
 
   const oriented = optimizeTravel(
     rawToolpaths.map((tp) => ({
@@ -253,14 +263,36 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
 
   const reordered = oriented.map((item) => {
     const source = rawToolpaths[item.index];
+
+    // Determine if the points were reversed by optimizeTravel
+    const firstPoint = item.points[0];
+    const sourceFirst = source.points[0];
+    const sourceLast = source.points[source.points.length - 1];
+
+    const distToFirst = Math.hypot(firstPoint.x - sourceFirst.x, firstPoint.y - sourceFirst.y);
+    const distToLast = Math.hypot(firstPoint.x - sourceLast.x, firstPoint.y - sourceLast.y);
+
+    const isReversed = distToLast < distToFirst;
+
     return {
       ...source,
-      points: item.points.map((p) => ({
-        x: p.x,
-        y: p.y,
-        z: 0,
-      })),
+      points: item.points.map((p, pIndex) => {
+        // Map back to the original Z if possible
+        const originalIndex = isReversed ? (source.points.length - 1 - pIndex) : pIndex;
+        const originalZ = source.points[originalIndex]?.z ?? 0;
+
+        return {
+          x: p.x,
+          y: p.y,
+          z: originalZ,
+        };
+      }),
     };
+  });
+
+  logger.success("CAM", "Toolpath planning complete", {
+    totalToolpaths: reordered.length,
+    totalPoints: reordered.reduce((acc, tp) => acc + tp.points.length, 0)
   });
 
   return renumberToolpaths(reordered);

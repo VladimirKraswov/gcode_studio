@@ -1,5 +1,7 @@
-import { FiDownload, FiFolder, FiMenu, FiMoon, FiSettings, FiSun, FiEye, FiCode, FiTool } from "react-icons/fi";
+import { FiDownload, FiFolder, FiMenu, FiMoon, FiSettings, FiSun, FiEye, FiCode, FiTool, FiTerminal } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "@/shared/hooks/useTheme";
+import { useUI } from "@/contexts/UIContext";
 import { type MainTab } from "@/types/ui";
 
 type AppHeaderProps = {
@@ -14,7 +16,9 @@ type AppHeaderProps = {
 };
 
 export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) {
+  const { t } = useTranslation();
   const { isDark, toggleTheme } = useTheme();
+  const ui = useUI();
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-panel-solid px-4 shadow-sm">
@@ -25,7 +29,7 @@ export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) 
         <div>
           <h1 className="text-sm font-bold text-text leading-tight flex items-center gap-2">
             GCode Studio
-            <span className="px-1.5 py-0.5 rounded-full bg-primary-soft text-primary text-[10px] uppercase tracking-wider">Alpha</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-primary-soft text-primary text-[10px] uppercase tracking-wider">{t("common.alpha")}</span>
           </h1>
           <p className="text-[11px] text-text-muted font-medium flex items-center gap-1.5">
             <FiFolder size={10} />
@@ -35,7 +39,7 @@ export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) 
       </div>
 
       <div className="flex items-center gap-1 bg-panel-muted p-1 rounded-xl border border-border">
-        {(["view", "gcode", "edit"] as const).map((tab) => (
+        {(["view", "gcode", "edit", "console"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -49,7 +53,8 @@ export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) 
             {tab === "view" && <FiEye size={14} />}
             {tab === "gcode" && <FiCode size={14} />}
             {tab === "edit" && <FiTool size={14} />}
-            {tab === "view" ? "Превью" : tab === "gcode" ? "G-code" : "Конструктор"}
+            {tab === "console" && <FiTerminal size={14} />}
+            {t(`tabs.${tab}`)}
           </button>
         ))}
       </div>
@@ -62,14 +67,17 @@ export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) 
           >
             {isDark ? <FiSun size={18} /> : <FiMoon size={18} />}
           </button>
-          <button className="h-9 w-9 flex items-center justify-center rounded-lg text-text-muted hover:text-text hover:bg-panel-muted transition-colors">
+          <button
+            onClick={() => ui.setIsSettingsOpen(true)}
+            className="h-9 w-9 flex items-center justify-center rounded-lg text-text-muted hover:text-text hover:bg-panel-muted transition-colors"
+          >
             <FiSettings size={18} />
           </button>
         </div>
 
         <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
           <FiDownload size={14} />
-          Экспорт
+          {t("common.export")}
         </button>
       </div>
     </header>

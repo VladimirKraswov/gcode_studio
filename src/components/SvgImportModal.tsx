@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FiAlertCircle,
   FiLoader,
@@ -65,6 +66,8 @@ export function SvgImportModal({
   onChangeDraft,
   onConfirm,
 }: SvgImportModalProps) {
+  const { t } = useTranslation();
+
   useEffect(() => {
     if (!open) return;
 
@@ -119,7 +122,7 @@ export function SvgImportModal({
 
             <div>
               <div className="text-lg font-extrabold text-text">
-                Импорт SVG
+                {t("svg_import.title")}
               </div>
               <div className="mt-0.5 text-xs text-text-muted">
                 {fileName}
@@ -130,7 +133,7 @@ export function SvgImportModal({
           <button
             type="button"
             onClick={onClose}
-            title="Закрыть"
+            title={t("common.cancel")}
             className="grid h-[38px] w-[38px] place-items-center rounded-xl border border-border bg-panel-solid text-text"
           >
             <FiX size={18} />
@@ -150,10 +153,10 @@ export function SvgImportModal({
 
               <div className="text-sm font-bold text-text">
                 {stage === "error"
-                  ? "Ошибка импорта"
+                  ? t("svg_import.error_stage")
                   : stage === "aborted"
-                    ? "Импорт прерван"
-                    : "Загрузка и обработка SVG"}
+                    ? t("svg_import.aborted_stage")
+                    : t("svg_import.processing_stage")}
               </div>
             </div>
 
@@ -183,18 +186,18 @@ export function SvgImportModal({
           <>
             <div className="ui-panel-inset mb-3.5 grid gap-3 p-3.5">
               <div className="text-[13px] font-extrabold text-text">
-                Исходный размер SVG
+                {t("svg_import.source_size")}
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">
-                <Stat label="Ширина" value={String(draft.sourceWidth)} />
-                <Stat label="Высота" value={String(draft.sourceHeight)} />
+                <Stat label={t("cad.doc_settings.width")} value={String(draft.sourceWidth)} />
+                <Stat label={t("cad.doc_settings.height")} value={String(draft.sourceHeight)} />
               </div>
             </div>
 
             <div className="grid gap-3">
               <label className="ui-label">
-                Имя объекта
+                {t("cad.properties.name")}
                 <input
                   className="ui-input"
                   type="text"
@@ -205,7 +208,7 @@ export function SvgImportModal({
 
               <div className="grid grid-cols-2 gap-2.5">
                 <label className="ui-label">
-                  Ширина
+                  {t("cad.doc_settings.width")}
                   <input
                     className="ui-input"
                     type="number"
@@ -230,7 +233,7 @@ export function SvgImportModal({
                 </label>
 
                 <label className="ui-label">
-                  Высота
+                  {t("cad.doc_settings.height")}
                   <input
                     className="ui-input"
                     type="number"
@@ -272,7 +275,7 @@ export function SvgImportModal({
                     });
                   }}
                 />
-                Пропорциональное масштабирование
+                {t("svg_import.proportional")}
               </label>
 
               <div className="grid grid-cols-2 gap-2.5">
@@ -308,7 +311,7 @@ export function SvgImportModal({
 
         <div className="mt-[18px] flex justify-end gap-2.5">
           <button type="button" onClick={onClose} className="ui-btn-ghost">
-            Закрыть
+            {t("common.cancel")}
           </button>
 
           <button
@@ -317,7 +320,7 @@ export function SvgImportModal({
             disabled={!canConfirm}
             className="ui-btn-primary disabled:cursor-not-allowed disabled:opacity-55"
           >
-            Импортировать
+            {t("svg_import.import_btn")}
           </button>
         </div>
       </div>

@@ -2,6 +2,7 @@
 // FILE: src/modules/cad/model/grouping.ts
 // =============================
 
+import i18next from "i18next";
 import type { SketchDocument, SketchGroup, SketchShape } from "./types";
 import type { SelectionState } from "./selection";
 import { createId } from "./ids";
@@ -52,7 +53,7 @@ export function groupSelectedShapes(
 
   return {
     ...document,
-    groups: [...document.groups, { id: groupId, name: `Группа ${document.groups.length + 1}`, collapsed: false }],
+    groups: [...document.groups, { id: groupId, name: i18next.t("cad.objects.group_default", { count: document.groups.length + 1 }), collapsed: false }],
     shapes: document.shapes.map((shape) =>
       ids.has(shape.id) ? { ...shape, groupId } : shape,
     ),

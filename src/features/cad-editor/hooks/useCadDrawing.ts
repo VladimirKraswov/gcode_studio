@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import i18next from "i18next";
 import type { DraftShape } from "../geometry/draftGeometry";
 import type { SketchPolylinePoint, SketchTool, SketchDocument, SketchBSpline } from "../model/types";
 import { createDefaultTextToolState } from "../editor-state/textToolState";
@@ -68,7 +69,7 @@ export function useCadDrawing(
     }
 
     const shape = createPolylineShape(
-      `Polyline ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
+      `${i18next.t("cad.tools.polyline")} ${document.shapes.filter((s) => s.type === "polyline").length + 1}`,
       dedupedPointIds,
       false,
     );
@@ -103,7 +104,7 @@ export function useCadDrawing(
     }
 
     const shape = createBSplineShape(
-      `Spline ${document.shapes.filter((s) => s.type === "bspline").length + 1}`,
+      `${i18next.t("cad.tools.spline")} ${document.shapes.filter((s) => s.type === "bspline").length + 1}`,
       dedupedPointIds,
     );
 

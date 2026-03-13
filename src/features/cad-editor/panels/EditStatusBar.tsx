@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { SketchTool } from "../model/types";
 import type { SketchSolveState } from "../model/solver/diagnostics";
 import { Badge } from "@/shared/components/ui/Badge";
@@ -17,19 +18,23 @@ type EditStatusBarProps = {
   issueCount?: number;
 };
 
-function solveStateLabel(state?: SketchSolveState): string {
-  switch (state) {
-    case "well-defined":
-      return "Полностью определён";
-    case "underdefined":
-      return "Недоопределён";
-    case "overdefined":
-      return "Переопределён";
-    case "conflicting":
-      return "Конфликт ограничений";
-    default:
-      return "Без анализа";
-  }
+function useSolveStateLabel() {
+  const { t } = useTranslation();
+
+  return (state?: SketchSolveState): string => {
+    switch (state) {
+      case "well-defined":
+        return t("cad.status.fully_defined");
+      case "underdefined":
+        return t("cad.status.under_defined");
+      case "overdefined":
+        return t("cad.status.over_defined");
+      case "conflicting":
+        return t("cad.status.conflict");
+      default:
+        return t("cad.status.no_analysis");
+    }
+  };
 }
 
 function solveStateBadgeVariant(state?: SketchSolveState): BadgeVariant {
@@ -81,16 +86,18 @@ export function EditStatusBar({
   solveState,
   issueCount = 0,
 }: EditStatusBarProps) {
+  const { t } = useTranslation();
+  const getSolveStateLabel = useSolveStateLabel();
   const { hint } = useUI();
   const interactionLabel = isTransforming
-    ? "Трансформация"
+    ? t("cad.status.transformation")
     : isDragging
-      ? "Перемещение"
+      ? t("cad.status.movement")
       : isPanning
-        ? "Навигация"
+        ? t("cad.status.navigation")
         : tool === "select"
-          ? "Выбор"
-          : "Рисование";
+          ? t("cad.status.selection")
+          : t("cad.status.drawing");
 
   return (
     <div className="flex items-center justify-between px-3 h-full text-[11px] text-text-muted select-none">
@@ -109,7 +116,7 @@ export function EditStatusBar({
         <span className="h-3 w-px bg-border" />
 
         <span className="font-medium">
-          Объектов в сцене: <span className="text-text">{objectCount}</span>
+          {t("cad.status.objects_count")}<span className="text-text">{objectCount}</span>
         </span>
 
         {typeof dof === "number" && (
@@ -128,7 +135,7 @@ export function EditStatusBar({
               variant={solveStateBadgeVariant(solveState)}
               className="px-1.5 py-0 rounded-sm font-bold"
             >
-              {solveStateLabel(solveState)}
+              {getSolveStateLabel(solveState)}
             </Badge>
           </>
         )}
@@ -137,7 +144,7 @@ export function EditStatusBar({
           <>
             <span className="h-3 w-px bg-border" />
             <span className="font-medium">
-              Проблем: <span className="text-danger font-bold">{issueCount}</span>
+              {t("cad.status.problems_count")}<span className="text-danger font-bold">{issueCount}</span>
             </span>
           </>
         )}
@@ -148,7 +155,7 @@ export function EditStatusBar({
           <div className="flex items-center gap-2">
             <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
             <span className="text-primary font-bold">
-              Ожидание завершения контура
+              {t("cad.status.waiting_polyline")}
             </span>
           </div>
         )}
@@ -164,7 +171,7 @@ export function EditStatusBar({
 
         {!hint && (
             <span>
-                Активный инструмент:{" "}
+                {t("cad.status.active_tool")}
                 <span className="text-text font-bold capitalize">{tool}</span>
             </span>
         )}

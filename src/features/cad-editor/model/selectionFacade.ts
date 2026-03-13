@@ -8,6 +8,7 @@ import {
   toggleSelection,
 } from "./selection";
 import { getDragShapeIds } from "./grouping";
+import { shapeBounds } from "./shapeBounds";
 
 export function isPointSelectionId(id: string): boolean {
   return id.startsWith("pt_") || id.startsWith("pt-");
@@ -62,4 +63,37 @@ export function buildGroupShapeSelection(shapes: SketchShape[]): SelectionState 
     ids: shapes.map((shape) => shape.id),
     primaryId: shapes[0]?.id ?? null,
   };
+}
+
+export function getEntitiesInBox(
+  document: { shapes: SketchShape[]; points: any[] },
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): SketchSelectionRef[] {
+  const result: SketchSelectionRef[] = [];
+
+  // Points
+  for (const point of document.points) {
+    if (point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY) {
+      result.push(makePointRef(point.id));
+    }
+  }
+
+  // Shapes
+  for (const shape of document.shapes) {
+    const bounds = shapeBounds(shape, document.points);
+    const intersects = !(
+      bounds.maxX < minX ||
+      bounds.minX > maxX ||
+      bounds.maxY < minY ||
+      bounds.minY > maxY
+    );
+    if (intersects) {
+      result.push(makeShapeRef(shape.id));
+    }
+  }
+
+  return result;
 }

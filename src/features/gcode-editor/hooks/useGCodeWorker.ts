@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ParsedGCode } from "@/types/gcode";
+import { logger } from "@/shared/utils/logger";
 
 export type { ParsedGCode };
 
@@ -35,6 +36,16 @@ export function useGCodeWorker(source: string) {
 
       setParsed(nextParsed);
       setIsParsing(false);
+
+      logger.info("PARSER", "G-code parsing complete", {
+        stats: nextParsed.stats,
+        bounds: nextParsed.bounds,
+        totalLength: nextParsed.totalLength
+      });
+
+      if (nextParsed.stats.workMoves > 0 && nextParsed.stats.cuttingMoves === 0) {
+        logger.warn("PARSER", "G1 commands found but none are cutting (Z <= 0). Check tool offsets or safe height.");
+      }
     };
 
     workerRef.current = worker;

@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { PlacementMode, StockDimensions } from "@/types/gcode";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -25,10 +26,12 @@ export function StockSceneSection({
   detailLevel,
   onDetailLevelChange,
 }: StockSceneSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-5 pt-1">
       <div className="space-y-2.5">
-        <Label className="text-[11px] uppercase font-bold text-text-muted tracking-wider">Позиционирование</Label>
+        <Label className="text-[11px] uppercase font-bold text-text-muted tracking-wider">{t("common.positioning")}</Label>
         <div className="space-y-2">
           <label className="flex items-center gap-3 p-2 rounded-md hover:bg-panel-muted cursor-pointer transition-colors border border-transparent has-[:checked]:border-primary/30 has-[:checked]:bg-primary-soft/20">
             <input
@@ -37,7 +40,7 @@ export function StockSceneSection({
               onChange={() => onPlacementModeChange("origin")}
               className="w-4 h-4 text-primary focus:ring-primary accent-primary"
             />
-            <span className="text-[13px] font-medium">Левый нижний угол (X0 Y0)</span>
+            <span className="text-[13px] font-medium">{t("common.origin_bottom_left")}</span>
           </label>
 
           <label className="flex items-center gap-3 p-2 rounded-md hover:bg-panel-muted cursor-pointer transition-colors border border-transparent has-[:checked]:border-primary/30 has-[:checked]:bg-primary-soft/20">
@@ -47,16 +50,16 @@ export function StockSceneSection({
               onChange={() => onPlacementModeChange("center")}
               className="w-4 h-4 text-primary focus:ring-primary accent-primary"
             />
-            <span className="text-[13px] font-medium">Центрировать по траектории</span>
+            <span className="text-[13px] font-medium">{t("common.center_on_toolpath")}</span>
           </label>
         </div>
       </div>
 
       <div className="space-y-2.5">
-        <Label className="text-[11px] uppercase font-bold text-text-muted tracking-wider">Размеры заготовки (мм)</Label>
+        <Label className="text-[11px] uppercase font-bold text-text-muted tracking-wider">{t("common.stock_dimensions_mm")}</Label>
         <div className="grid grid-cols-3 gap-2">
           <div className="space-y-1.5">
-            <Label className="text-[11px]">X (Ширина)</Label>
+            <Label className="text-[11px]">X ({t("cad.doc_settings.width")})</Label>
             <Input
               type="number"
               min="1"
@@ -71,7 +74,7 @@ export function StockSceneSection({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px]">Y (Высота)</Label>
+            <Label className="text-[11px]">Y ({t("cad.doc_settings.height")})</Label>
             <Input
               type="number"
               min="1"
@@ -86,7 +89,7 @@ export function StockSceneSection({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px]">Z (Толщина)</Label>
+            <Label className="text-[11px]">Z ({t("cad.doc_settings.cut_z")})</Label>
             <Input
               type="number"
               min="0.1"
@@ -104,7 +107,7 @@ export function StockSceneSection({
       </div>
 
       <div className="flex items-center justify-between p-2 rounded-lg bg-panel-muted border border-border">
-        <Label className="font-bold">Снятие материала</Label>
+        <Label className="font-bold">{t("common.material_removal")}</Label>
         <Switch
           checked={showMaterialRemoval}
           onCheckedChange={onShowMaterialRemovalChange}
@@ -113,7 +116,7 @@ export function StockSceneSection({
 
       <div className="space-y-3 p-3 rounded-lg border border-border bg-panel-muted/30">
         <div className="flex justify-between items-center">
-          <Label className="font-bold">Качество меша</Label>
+          <Label className="font-bold">{t("common.mesh_quality")}</Label>
           <span className="text-[11px] font-mono text-primary bg-primary-soft px-1.5 rounded">{detailLevel}</span>
         </div>
         <Slider
@@ -123,7 +126,7 @@ export function StockSceneSection({
           value={detailLevel}
           onChange={onDetailLevelChange}
         />
-        <p className="text-[10px] text-text-muted italic">Более высокое качество требует больше ресурсов GPU</p>
+        <p className="text-[10px] text-text-muted italic">{t("common.high_quality_gpu_hint")}</p>
       </div>
     </div>
   );

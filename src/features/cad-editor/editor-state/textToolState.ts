@@ -13,7 +13,7 @@ export const DEFAULT_FONT_OPTIONS = [
 
 export function createDefaultTextToolState(): TextToolState {
   return {
-    text: "Привет",
+    text: "GCode",
     height: 12,
     letterSpacing: 0,
     fontFile: DEFAULT_FONT_OPTIONS[0],

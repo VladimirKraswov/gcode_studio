@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/settings/CamDefaultsSection.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchCamSettings, SketchDocument } from "@/features/cad-editor/model/types";
 import { createDefaultCamSettings } from "@/features/cad-editor/model/document";
 import { Label } from "@/shared/components/ui/Label";
@@ -14,6 +15,7 @@ export function CamDefaultsSection({
   document,
   setDocument,
 }: CamDefaultsSectionProps) {
+  const { t } = useTranslation();
   const defaultCamSettings = (() => {
     const defaults = createDefaultCamSettings();
     const value = document.defaultCamSettings ?? defaults;
@@ -59,7 +61,7 @@ export function CamDefaultsSection({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Операция</Label>
+          <Label>{t("cad.doc_settings.operation")}</Label>
           <select
             value={defaultCamSettings.operation}
             onChange={(e) =>
@@ -69,15 +71,15 @@ export function CamDefaultsSection({
             }
             className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            <option value="follow-path">По контуру</option>
-            <option value="profile-inside">Внутри</option>
-            <option value="profile-outside">Снаружи</option>
-            <option value="pocket">Карман</option>
+            <option value="follow-path">{t("cad.properties.op_follow")}</option>
+            <option value="profile-inside">{t("cad.properties.op_inside")}</option>
+            <option value="profile-outside">{t("cad.properties.op_outside")}</option>
+            <option value="pocket">{t("cad.properties.op_pocket")}</option>
           </select>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Направление</Label>
+          <Label>{t("cad.doc_settings.direction")}</Label>
           <select
             value={defaultCamSettings.direction}
             onChange={(e) =>
@@ -87,15 +89,15 @@ export function CamDefaultsSection({
             }
             className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            <option value="climb">Попутное</option>
-            <option value="conventional">Встречное</option>
+            <option value="climb">{t("cad.properties.dir_climb")}</option>
+            <option value="conventional">{t("cad.properties.dir_conventional")}</option>
           </select>
         </div>
       </div>
 
       <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
         <div className="flex items-center justify-between">
-          <Label className="font-bold">Ramping (Врезание)</Label>
+          <Label className="font-bold">{t("cad.doc_settings.ramping_label")}</Label>
           <Switch
             checked={defaultCamSettings.ramping.enabled}
             onCheckedChange={(checked) =>
@@ -108,7 +110,7 @@ export function CamDefaultsSection({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Витков врезания</Label>
+          <Label>{t("cad.doc_settings.ramping_turns")}</Label>
           <Input
             type="number"
             min="1"
@@ -128,7 +130,7 @@ export function CamDefaultsSection({
 
       <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
         <div className="flex items-center justify-between">
-          <Label className="font-bold">Tabs (Перемычки)</Label>
+          <Label className="font-bold">{t("cad.doc_settings.tabs_label")}</Label>
           <Switch
             checked={defaultCamSettings.tabs.enabled}
             onCheckedChange={(checked) =>
@@ -142,7 +144,7 @@ export function CamDefaultsSection({
 
         <div className="grid grid-cols-3 gap-2">
           <div className="space-y-1.5">
-            <Label className="text-[10px]">Кол-во</Label>
+            <Label className="text-[10px]">{t("cad.doc_settings.tabs_count")}</Label>
             <Input
               type="number"
               min="0"
@@ -159,7 +161,7 @@ export function CamDefaultsSection({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-[10px]">Ширина</Label>
+            <Label className="text-[10px]">{t("cad.doc_settings.tabs_width")}</Label>
             <Input
               type="number"
               min="0.1"
@@ -176,7 +178,7 @@ export function CamDefaultsSection({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-[10px]">Высота</Label>
+            <Label className="text-[10px]">{t("cad.doc_settings.tabs_height")}</Label>
             <Input
               type="number"
               min="0.1"

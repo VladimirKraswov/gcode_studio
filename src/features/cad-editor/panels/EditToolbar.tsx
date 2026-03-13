@@ -1,4 +1,5 @@
 import { useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import {
   FiCheck,
   FiCopy,
@@ -64,6 +65,7 @@ export function EditToolbar({
   hasSelection,
   hasDraft,
 }: EditToolbarProps) {
+  const { t } = useTranslation();
   const svgInputRef = useRef<HTMLInputElement>(null);
   const tools = useToolPlugins();
   const { setHint } = useUI();
@@ -99,16 +101,16 @@ export function EditToolbar({
           icon={<FiCornerUpLeft size={16} />}
           disabled={!canUndo}
           onClick={onUndo}
-          title="Отменить (Ctrl+Z)"
-          onMouseEnter={() => handleMouseEnter("Отменить")}
+          title={`${t("cad.actions.undo")} (Ctrl+Z)`}
+          onMouseEnter={() => handleMouseEnter(t("cad.actions.undo"))}
           onMouseLeave={handleMouseLeave}
         />
         <IconButton
           icon={<FiCornerUpRight size={16} />}
           disabled={!canRedo}
           onClick={onRedo}
-          title="Повторить (Ctrl+Y)"
-          onMouseEnter={() => handleMouseEnter("Повторить")}
+          title={`${t("cad.actions.redo")} (Ctrl+Y)`}
+          onMouseEnter={() => handleMouseEnter(t("cad.actions.redo"))}
           onMouseLeave={handleMouseLeave}
         />
       </div>
@@ -119,8 +121,8 @@ export function EditToolbar({
         <IconButton
           icon={<FiImage size={16} />}
           onClick={() => svgInputRef.current?.click()}
-          title="Импорт SVG"
-          onMouseEnter={() => handleMouseEnter("Импорт SVG")}
+          title={t("cad.actions.import_svg")}
+          onMouseEnter={() => handleMouseEnter(t("cad.actions.import_svg"))}
           onMouseLeave={handleMouseLeave}
         />
         <input
@@ -137,8 +139,8 @@ export function EditToolbar({
         <IconButton
           icon={<FiMaximize size={16} />}
           onClick={onResetView}
-          title="Сбросить вид"
-          onMouseEnter={() => handleMouseEnter("Сбросить вид")}
+          title={t("cad.actions.reset_view")}
+          onMouseEnter={() => handleMouseEnter(t("cad.actions.reset_view"))}
           onMouseLeave={handleMouseLeave}
         />
       </div>
@@ -150,8 +152,8 @@ export function EditToolbar({
             <IconButton
               icon={<FiCopy size={16} />}
               onClick={onCloneSelected}
-              title="Клонировать"
-              onMouseEnter={() => handleMouseEnter("Клонировать")}
+              title={t("cad.actions.clone")}
+              onMouseEnter={() => handleMouseEnter(t("cad.actions.clone"))}
               onMouseLeave={handleMouseLeave}
             />
              <IconButton
@@ -161,39 +163,39 @@ export function EditToolbar({
                 e.preventDefault();
                 onStartCircularArray();
               }}
-              title="Массив (ЛКМ - лин, ПКМ - круг)"
-              onMouseEnter={() => handleMouseEnter("Создать массив")}
+              title={t("cad.actions.array")}
+              onMouseEnter={() => handleMouseEnter(t("cad.actions.array"))}
               onMouseLeave={handleMouseLeave}
             />
              <IconButton
               icon={<FiRefreshCw size={16} />}
               onClick={() => onMirrorSelected("x")}
-              title="Отразить"
-              onMouseEnter={() => handleMouseEnter("Отразить")}
+              title={t("cad.actions.mirror")}
+              onMouseEnter={() => handleMouseEnter(t("cad.actions.mirror"))}
               onMouseLeave={handleMouseLeave}
             />
             <IconButton
               icon={<FiLayers size={16} />}
               disabled={!canGroupSelected}
               onClick={onGroupSelected}
-              title="Группировать"
-              onMouseEnter={() => handleMouseEnter("Группировать")}
+              title={t("cad.actions.group")}
+              onMouseEnter={() => handleMouseEnter(t("cad.actions.group"))}
               onMouseLeave={handleMouseLeave}
             />
             <IconButton
               icon={<FiX size={16} />}
               disabled={!canUngroupSelected}
               onClick={onUngroupSelected}
-              title="Разгруппировать"
-              onMouseEnter={() => handleMouseEnter("Разгруппировать")}
+              title={t("cad.actions.ungroup")}
+              onMouseEnter={() => handleMouseEnter(t("cad.actions.ungroup"))}
               onMouseLeave={handleMouseLeave}
             />
             <IconButton
               icon={<FiTrash2 size={16} />}
               variant="danger"
               onClick={onDeleteSelected}
-              title="Удалить"
-              onMouseEnter={() => handleMouseEnter("Удалить")}
+              title={t("cad.actions.delete")}
+              onMouseEnter={() => handleMouseEnter(t("cad.actions.delete"))}
               onMouseLeave={handleMouseLeave}
             />
           </div>
@@ -208,16 +210,16 @@ export function EditToolbar({
               icon={<FiCheck size={16} />}
               variant="success"
               onClick={onCommitPolyline}
-              title="Применить"
-              onMouseEnter={() => handleMouseEnter("Применить")}
+              title={t("common.apply")}
+              onMouseEnter={() => handleMouseEnter(t("common.apply"))}
               onMouseLeave={handleMouseLeave}
             />
             <IconButton
               icon={<FiX size={16} />}
               variant="danger"
               onClick={onCancelDraft}
-              title="Отмена"
-              onMouseEnter={() => handleMouseEnter("Отмена")}
+              title={t("common.cancel")}
+              onMouseEnter={() => handleMouseEnter(t("common.cancel"))}
               onMouseLeave={handleMouseLeave}
             />
           </div>
