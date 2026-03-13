@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { TextToolState } from "../editor-state/textToolState";
 import type { SketchDocument } from "../model/types";
 import type { SelectionState } from "../model/selection";
@@ -17,10 +18,12 @@ export function TextToolPanel({
   value = { text: "GCode", height: 10, letterSpacing: 0, fontFile: "Roboto" },
   onChange = () => {},
 }: TextToolPanelProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="ui-panel-inset mb-3 grid shrink-0 gap-2.5 p-3">
       <label className="ui-label">
-        Текст
+        {t("cad.tools.text")}
         <input
           type="text"
           value={value.text}
@@ -31,7 +34,7 @@ export function TextToolPanel({
 
       <div className="grid grid-cols-2 gap-2">
         <label className="ui-label">
-          Высота
+          {t("cad.doc_settings.height")}
           <input
             type="number"
             min="2"
@@ -42,7 +45,7 @@ export function TextToolPanel({
         </label>
 
         <label className="ui-label">
-          Интервал
+          {t("cad.properties.letter_spacing")}
           <input
             type="number"
             min="0"

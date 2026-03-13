@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/settings/ZAxisSection.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -9,11 +10,13 @@ type ZAxisSectionProps = {
 };
 
 export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Верх заготовки (Start Z)</Label>
+          <Label>{t("cad.doc_settings.start_z")}</Label>
           <Input
             type="number"
             value={document.startZ}
@@ -27,7 +30,7 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label>Безопасная высота (Safe Z)</Label>
+          <Label>{t("cad.doc_settings.safe_z")}</Label>
           <Input
             type="number"
             value={document.safeZ}
@@ -41,7 +44,7 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label>Глубина (Cut Z)</Label>
+          <Label>{t("cad.doc_settings.cut_z")}</Label>
           <Input
             type="number"
             value={document.cutZ}
@@ -55,7 +58,7 @@ export function ZAxisSection({ document, setDocument }: ZAxisSectionProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label>Шаг по Z (Pass depth)</Label>
+          <Label>{t("cad.doc_settings.pass_depth")}</Label>
           <Input
             type="number"
             min="0.001"

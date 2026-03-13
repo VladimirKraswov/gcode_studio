@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { SvgImportModal } from "./SvgImportModal";
 import {
   CadCanvas,
@@ -39,6 +40,7 @@ type EditTabProps = {
 };
 
 export default function EditTab(props: EditTabProps) {
+  const { t } = useTranslation();
   const { setCadEditor } = useCad();
   const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
 
@@ -132,7 +134,7 @@ export default function EditTab(props: EditTabProps) {
               <Draggable className="pointer-events-auto shadow-2xl rounded-xl" handleClassName="drag-handle">
                 <div className="bg-panel border border-border overflow-hidden rounded-xl">
                   <div className="bg-panel-muted p-2 flex items-center justify-between border-b border-border cursor-move drag-handle">
-                    <span className="font-bold text-xs px-1">Text Settings</span>
+                    <span className="font-bold text-xs px-1">{t("edit.text_settings")}</span>
                   </div>
                   <div className="p-1">
                     <TextToolPanel
@@ -194,7 +196,7 @@ export default function EditTab(props: EditTabProps) {
             onClick={editor.handleGenerateClick}
             disabled={editor.isGenerating}
             className="absolute bottom-6 right-6 h-12 w-12 rounded-full bg-primary text-white shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center disabled:opacity-50 z-20"
-            title="Сгенерировать G-code"
+            title={t("edit.generate_gcode")}
           >
              <FiPlay size={20} className={editor.isGenerating ? "animate-pulse" : ""} />
           </button>

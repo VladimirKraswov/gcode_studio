@@ -1,4 +1,5 @@
 import { FiCode, FiEdit3, FiEye } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import type { MainTab } from "@/types/ui";
 
 type MainTabsProps = {
@@ -6,13 +7,15 @@ type MainTabsProps = {
   onChange: (tab: MainTab) => void;
 };
 
-const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
-  { id: "view", label: "3D-превью", icon: <FiEye size={16} /> },
-  { id: "gcode", label: "G-code", icon: <FiCode size={16} /> },
-  { id: "edit", label: "Редактор", icon: <FiEdit3 size={16} /> },
-];
-
 export function MainTabs({ activeTab, onChange }: MainTabsProps) {
+  const { t } = useTranslation();
+
+  const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
+    { id: "view", label: t("tabs.preview"), icon: <FiEye size={16} /> },
+    { id: "gcode", label: t("tabs.gcode"), icon: <FiCode size={16} /> },
+    { id: "edit", label: t("tabs.edit"), icon: <FiEdit3 size={16} /> },
+  ];
+
   return (
     <div className="flex flex-wrap gap-2.5">
       {tabs.map((tab) => {

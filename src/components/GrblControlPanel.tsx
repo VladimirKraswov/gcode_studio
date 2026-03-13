@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useGrblSender } from "@/hooks/useGrblSender";
 import {
   FiHome,
@@ -8,20 +9,21 @@ import {
 } from "react-icons/fi";
 
 export function GrblControlPanel() {
+  const { t } = useTranslation();
   const { status, log, connect, disconnect, send } = useGrblSender();
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-panel-solid)] p-4 shadow-[var(--shadow-soft)]">
       <h3 className="mb-3 text-base font-bold text-[var(--color-text)]">
-        Управление GRBL
+        {t("grbl.title")}
       </h3>
 
       <div className="mb-2 text-[13px] text-[var(--color-text)]">
-        <span className="font-semibold">Статус:</span> {status.state}
+        <span className="font-semibold">{t("grbl.status")}:</span> {status.state}
       </div>
 
       <div className="mb-4 text-[13px] text-[var(--color-text-soft)]">
-        Позиция: X{status.pos.x.toFixed(2)} Y{status.pos.y.toFixed(2)} Z
+        {t("grbl.position")}: X{status.pos.x.toFixed(2)} Y{status.pos.y.toFixed(2)} Z
         {status.pos.z.toFixed(2)}
       </div>
 
@@ -31,7 +33,7 @@ export function GrblControlPanel() {
           disabled={status.connected}
           className="ui-btn disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Подключиться
+          {t("grbl.connect")}
         </button>
 
         <button
@@ -39,7 +41,7 @@ export function GrblControlPanel() {
           disabled={!status.connected}
           className="ui-btn-danger disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Отключиться
+          {t("grbl.disconnect")}
         </button>
       </div>
 
@@ -52,7 +54,7 @@ export function GrblControlPanel() {
         </button>
 
         <button onClick={() => send("?")} className="ui-btn-ghost">
-          Обновить статус
+          {t("grbl.update_status")}
         </button>
       </div>
 
@@ -105,8 +107,8 @@ export function GrblControlPanel() {
           Z-5
         </button>
 
-        <button onClick={() => send("G90")} className="ui-btn-ghost" title="Абсолютные">
-          Абсолютные
+        <button onClick={() => send("G90")} className="ui-btn-ghost" title={t("grbl.absolute")}>
+          {t("grbl.absolute")}
         </button>
       </div>
 

@@ -6,6 +6,7 @@ import {
   FiEye,
   FiEyeOff,
 } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import { IconButton } from "@/shared/components/ui/IconButton";
 import { Slider } from "@/shared/components/ui/Slider";
 
@@ -32,26 +33,28 @@ export function PlaybackFooter({
   showToolpath,
   onToggleToolpath,
 }: PlaybackFooterProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="h-full flex items-center px-4 gap-4">
       <div className="flex items-center gap-1">
         <IconButton
           icon={playing ? <FiPause size={16} /> : <FiPlay size={16} />}
           onClick={onPlayPause}
-          title={playing ? "Пауза" : "Запуск"}
+          title={playing ? t("preview.pause") : t("preview.play")}
           variant={playing ? "primary" : "ghost"}
           className="w-8 h-8"
         />
         <IconButton
           icon={<FiRotateCcw size={16} />}
           onClick={onResetPlayback}
-          title="Сброс"
+          title={t("preview.reset")}
           className="w-8 h-8"
         />
         <IconButton
           icon={showToolpath ? <FiEye size={16} /> : <FiEyeOff size={16} />}
           onClick={onToggleToolpath}
-          title={showToolpath ? "Скрыть траекторию" : "Показать траекторию"}
+          title={showToolpath ? t("preview.hide_toolpath") : t("preview.show_toolpath")}
           variant={showToolpath ? "primary" : "ghost"}
           className="w-8 h-8"
         />

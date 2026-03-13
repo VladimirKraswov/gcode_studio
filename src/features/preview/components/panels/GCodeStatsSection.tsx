@@ -1,4 +1,5 @@
 import { FiActivity, FiFileText, FiMove, FiScissors, FiTrendingUp } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import type { ParsedGCode } from "@/types/gcode";
 import { fmt } from "@/shared/utils/common";
 
@@ -21,16 +22,17 @@ function StatItem({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 export function GCodeStatsSection({ parsed }: GCodeStatsSectionProps) {
+  const { t } = useTranslation();
   if (!parsed) return null;
   const { stats, totalLength } = parsed;
 
   return (
     <div className="flex flex-col gap-2 p-1">
-      <StatItem icon={<FiFileText size={16} />} label="Всего строк" value={stats.totalLines} />
-      <StatItem icon={<FiMove size={16} />} label="Всего перемещений" value={stats.totalMoves} />
-      <StatItem icon={<FiTrendingUp size={16} />} label="Холостые ходы (G0)" value={stats.rapidMoves} />
-      <StatItem icon={<FiScissors size={16} />} label="Рабочие ходы (G1)" value={stats.workMoves} />
-      <StatItem icon={<FiActivity size={16} />} label="Общая длина пути" value={`${fmt(totalLength)} мм`} />
+      <StatItem icon={<FiFileText size={16} />} label={t("common.total_lines")} value={stats.totalLines} />
+      <StatItem icon={<FiMove size={16} />} label={t("common.total_moves")} value={stats.totalMoves} />
+      <StatItem icon={<FiTrendingUp size={16} />} label={t("common.rapid_moves_g0")} value={stats.rapidMoves} />
+      <StatItem icon={<FiScissors size={16} />} label={t("common.work_moves_g1")} value={stats.workMoves} />
+      <StatItem icon={<FiActivity size={16} />} label={t("common.path_length")} value={`${fmt(totalLength)} mm`} />
     </div>
   );
 }

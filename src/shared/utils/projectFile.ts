@@ -4,6 +4,7 @@
 // FILE: src/utils/projectFile.ts
 // =============================
 
+import i18next from "i18next";
 import type { GCodeStudioProject } from "@/types/project";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -18,15 +19,15 @@ export function parseProjectFile(text: string): GCodeStudioProject {
   const raw: unknown = JSON.parse(text);
 
   if (!isObject(raw)) {
-    throw new Error("Некорректный формат проекта");
+    throw new Error(i18next.t("common.project_invalid_format"));
   }
 
   if (raw.kind !== "gcode-studio-project") {
-    throw new Error("Это не файл проекта GCode Studio");
+    throw new Error(i18next.t("common.project_not_studio"));
   }
 
   if (raw.version !== 3) {
-    throw new Error("Поддерживается только формат проекта version 3");
+    throw new Error(i18next.t("common.project_version_unsupported"));
   }
 
   return raw as GCodeStudioProject;

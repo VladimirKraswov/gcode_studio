@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/settings/GenerationBasicsSection.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
 import { Label } from "@/shared/components/ui/Label";
 
@@ -11,11 +12,13 @@ export function GenerationBasicsSection({
   document,
   setDocument,
 }: GenerationBasicsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Единицы (Units)</Label>
+          <Label>{t("cad.doc_settings.units")}</Label>
           <select
             value={document.units}
             onChange={(e) =>
@@ -26,13 +29,13 @@ export function GenerationBasicsSection({
             }
             className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
-            <option value="mm">мм (G21)</option>
-            <option value="inch">дюймы (G20)</option>
+            <option value="mm">mm (G21)</option>
+            <option value="inch">inch (G20)</option>
           </select>
         </div>
 
         <div className="space-y-1.5">
-          <Label>Смещение (Offset)</Label>
+          <Label>{t("cad.doc_settings.offset")}</Label>
           <select
             value={document.workOffset}
             onChange={(e) =>

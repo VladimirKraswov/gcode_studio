@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cadToScreenPoint } from "@/utils/coordinates";
 import { useTheme } from "@/shared/hooks/useTheme";
 import type {
@@ -155,6 +156,7 @@ export function CadConstraintOverlay({
   onDimensionValueChange,
   onDimensionDelete,
 }: CadConstraintOverlayProps) {
+  const { t } = useTranslation();
   const { theme } = useTheme();
   const [editingConstraint, setEditingConstraint] = useState<SketchConstraint | null>(null);
   const [dialogPos, setDialogPos] = useState({ x: 0, y: 0 });
@@ -313,7 +315,7 @@ export function CadConstraintOverlay({
           setEditingConstraint(null);
         }}
         initialValue={editingConstraint?.value ?? 0}
-        title={`Размер: ${editingConstraint?.type || ""}`}
+        title={`${t("cad.constraints.distance")}: ${editingConstraint?.type || ""}`}
         x={dialogPos.x}
         y={dialogPos.y}
       />

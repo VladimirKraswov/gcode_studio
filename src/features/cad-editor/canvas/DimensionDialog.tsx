@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/shared/components/ui/Button";
 import { Input } from "@/shared/components/ui/Input";
 
@@ -23,6 +24,7 @@ export function DimensionDialog({
   x,
   y,
 }: DimensionDialogProps) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(String(initialValue));
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -59,17 +61,17 @@ export function DimensionDialog({
                 onClose();
               }
             }}
-            placeholder="Введите значение..."
+            placeholder={t("cad.objects.search_placeholder")}
           />
           <div className="flex gap-2 justify-between">
             {onDelete && (
                 <Button variant="ghost" size="sm" onClick={onDelete} className="text-destructive hover:bg-destructive/10">
-                    Удалить
+                    {t("cad.actions.delete")}
                 </Button>
             )}
             <div className="flex gap-2 ml-auto">
                 <Button variant="ghost" size="sm" onClick={onClose}>
-                    Отмена
+                    {t("common.cancel")}
                 </Button>
                 <Button size="sm" onClick={() => onSubmit(Number(value))}>
                     OK

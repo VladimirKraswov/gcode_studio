@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/settings/SpindleLaserSection.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -13,11 +14,13 @@ export function SpindleLaserSection({
   document,
   setDocument,
 }: SpindleLaserSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Обороты (S)</Label>
+          <Label>{t("cad.doc_settings.spindle_rpm")}</Label>
           <Input
             type="number"
             min="0"
@@ -32,7 +35,7 @@ export function SpindleLaserSection({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Направление</Label>
+          <Label>{t("cad.doc_settings.direction")}</Label>
           <select
             value={document.spindleDirection}
             onChange={(e) =>
@@ -51,7 +54,7 @@ export function SpindleLaserSection({
 
       <div className="p-3 bg-panel-muted border border-border rounded-lg space-y-3">
         <div className="flex items-center justify-between">
-          <Label className="font-medium">Управление M3/M4/M5</Label>
+          <Label className="font-medium">M3/M4/M5</Label>
           <Switch
             checked={document.spindleOn}
             onCheckedChange={(checked) =>
@@ -64,7 +67,7 @@ export function SpindleLaserSection({
         </div>
 
         <div className="flex items-center justify-between">
-          <Label className="font-medium">Охлаждение M8/M9</Label>
+          <Label className="font-medium">{t("cad.doc_settings.coolant")}</Label>
           <Switch
             checked={document.coolant}
             onCheckedChange={(checked) =>
@@ -77,7 +80,7 @@ export function SpindleLaserSection({
         </div>
 
         <div className="flex items-center justify-between">
-          <Label className="font-medium">Возврат в нуль</Label>
+          <Label className="font-medium">{t("cad.doc_settings.return_to_zero")}</Label>
           <Switch
             checked={document.returnHome}
             onCheckedChange={(checked) =>

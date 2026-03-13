@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { logger, type LogEntry, type LogLevel, type LogCategory } from '@/shared/utils/logger';
 import { FiTrash2, FiDownload, FiSearch, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import { Badge } from '@/shared/components/ui/Badge';
 
 export function ConsolePanel() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filterLevel, setFilterLevel] = useState<LogLevel | 'all'>('all');
   const [filterCategory, setFilterCategory] = useState<LogCategory | 'all'>('all');
@@ -54,7 +56,7 @@ export function ConsolePanel() {
           <FiSearch className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             type="text"
-            placeholder="Search logs..."
+            placeholder={t("console.search_placeholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-8 pr-2 py-1 bg-bg border border-border rounded-md outline-none focus:border-primary"
@@ -66,13 +68,13 @@ export function ConsolePanel() {
           onChange={(e) => setFilterLevel(e.target.value as any)}
           className="bg-bg border border-border rounded-md px-2 py-1 outline-none"
         >
-          <option value="all">All Levels</option>
-          <option value="trace">Trace</option>
-          <option value="debug">Debug</option>
-          <option value="info">Info</option>
-          <option value="warn">Warn</option>
-          <option value="error">Error</option>
-          <option value="success">Success</option>
+          <option value="all">{t("console.all_levels")}</option>
+          <option value="trace">{t("console.level_trace")}</option>
+          <option value="debug">{t("console.level_debug")}</option>
+          <option value="info">{t("console.level_info")}</option>
+          <option value="warn">{t("console.level_warn")}</option>
+          <option value="error">{t("console.level_error")}</option>
+          <option value="success">{t("console.level_success")}</option>
         </select>
 
         <select
@@ -80,21 +82,21 @@ export function ConsolePanel() {
           onChange={(e) => setFilterCategory(e.target.value as any)}
           className="bg-bg border border-border rounded-md px-2 py-1 outline-none"
         >
-          <option value="all">All Categories</option>
-          <option value="CAD">CAD</option>
-          <option value="CAM">CAM</option>
-          <option value="GCODE">G-Code</option>
-          <option value="PARSER">Parser</option>
-          <option value="PREVIEW">Preview</option>
-          <option value="MATERIAL">Material</option>
-          <option value="UI">UI</option>
-          <option value="WORKER">Worker</option>
-          <option value="PERF">Performance</option>
+          <option value="all">{t("console.all_categories")}</option>
+          <option value="CAD">{t("console.cat_cad")}</option>
+          <option value="CAM">{t("console.cat_cam")}</option>
+          <option value="GCODE">{t("console.cat_gcode")}</option>
+          <option value="PARSER">{t("console.cat_parser")}</option>
+          <option value="PREVIEW">{t("console.cat_preview")}</option>
+          <option value="MATERIAL">{t("console.cat_material")}</option>
+          <option value="UI">{t("console.cat_ui")}</option>
+          <option value="WORKER">{t("console.cat_worker")}</option>
+          <option value="PERF">{t("console.cat_perf")}</option>
         </select>
 
         <button
           onClick={() => logger.clear()}
-          title="Clear"
+          title={t("common.clear")}
           className="p-1.5 hover:bg-bg-soft rounded-md text-text-muted hover:text-danger transition-colors"
         >
           <FiTrash2 size={16} />
@@ -102,7 +104,7 @@ export function ConsolePanel() {
 
         <button
           onClick={handleExport}
-          title="Export JSON"
+          title={t("console.export_json")}
           className="p-1.5 hover:bg-bg-soft rounded-md text-text-muted hover:text-primary transition-colors"
         >
           <FiDownload size={16} />
@@ -115,7 +117,7 @@ export function ConsolePanel() {
             checked={autoScroll}
             onChange={(e) => setAutoScroll(e.target.checked)}
           />
-          <label htmlFor="autoscroll" className="text-text-muted whitespace-nowrap">Auto-scroll</label>
+          <label htmlFor="autoscroll" className="text-text-muted whitespace-nowrap">{t("console.auto_scroll")}</label>
         </div>
       </div>
 
@@ -129,7 +131,7 @@ export function ConsolePanel() {
         ))}
         {filteredLogs.length === 0 && (
           <div className="h-full flex items-center justify-center text-text-muted italic">
-            No logs to display
+            {t("console.no_logs")}
           </div>
         )}
       </div>

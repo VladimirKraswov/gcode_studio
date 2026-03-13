@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useGCode } from "@/contexts/GCodeContext";
 import { useUI } from "@/contexts/UIContext";
 import { useCad } from "@/contexts/CadContext";
@@ -10,6 +11,7 @@ import { ObjectListPanel } from "@/features/cad-editor";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
 
 export function LeftPanelContainer() {
+  const { t } = useTranslation();
   const { activeTab } = useUI();
   const {
     fileName,
@@ -86,7 +88,7 @@ export function LeftPanelContainer() {
 
   return (
     <LeftPanel>
-      <CollapsibleSection title="Файл проекта" icon={<FiFolder size={18} />}>
+      <CollapsibleSection title={t("common.project_file")} icon={<FiFolder size={18} />}>
         <FileProjectSection
           fileName={fileName}
           onFileChange={handleFileChange}
@@ -98,7 +100,7 @@ export function LeftPanelContainer() {
       </CollapsibleSection>
 
       <CollapsibleSection
-        title="Заготовка и сцена"
+        title={t("common.stock_scene")}
         icon={<FiSliders size={18} />}
         defaultCollapsed={false}
       >

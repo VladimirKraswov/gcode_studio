@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/settings/ToolSection.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -9,10 +10,12 @@ type ToolSectionProps = {
 };
 
 export function ToolSection({ document, setDocument }: ToolSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="grid gap-1.5">
-        <Label>Тип инструмента</Label>
+        <Label>{t("cad.doc_settings.tool_type")}</Label>
         <select
           value={document.toolType}
           onChange={(e) =>
@@ -24,16 +27,16 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
           }
           className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <option value="router">Router (Фреза)</option>
-          <option value="spindle">Spindle (Шпиндель)</option>
-          <option value="laser">Laser (Лазер)</option>
-          <option value="drag-knife">Drag knife (Флюгерный нож)</option>
+          <option value="router">{t("cad.doc_settings.tool_router")}</option>
+          <option value="spindle">{t("cad.doc_settings.tool_spindle")}</option>
+          <option value="laser">{t("cad.doc_settings.tool_laser")}</option>
+          <option value="drag-knife">{t("cad.doc_settings.tool_knife")}</option>
         </select>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>Номер T</Label>
+          <Label>{t("cad.doc_settings.tool_number")}</Label>
           <Input
             type="number"
             min="1"
@@ -48,7 +51,7 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label>Диаметр (мм)</Label>
+          <Label>{t("cad.doc_settings.diameter_mm")}</Label>
           <Input
             type="number"
             min="0"
@@ -65,7 +68,7 @@ export function ToolSection({ document, setDocument }: ToolSectionProps) {
       </div>
 
       <div className="space-y-1.5">
-        <Label>Шаг перекрытия (Stepover 0..1)</Label>
+        <Label>{t("cad.doc_settings.stepover_label")}</Label>
         <Input
           type="number"
           min="0.05"

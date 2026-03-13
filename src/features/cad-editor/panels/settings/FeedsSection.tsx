@@ -1,4 +1,5 @@
 // src/features/cad-editor/panels/settings/FeedsSection.tsx
+import { useTranslation } from "react-i18next";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
 import { Label } from "@/shared/components/ui/Label";
 import { Input } from "@/shared/components/ui/Input";
@@ -9,11 +10,13 @@ type FeedsSectionProps = {
 };
 
 export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3">
         <div className="space-y-1.5">
-          <Label>Рабочая подача (F cut)</Label>
+          <Label>{t("cad.doc_settings.feed_cut")}</Label>
           <Input
             type="number"
             min="1"
@@ -28,7 +31,7 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label>Подача врезания (F plunge)</Label>
+          <Label>{t("cad.doc_settings.feed_plunge")}</Label>
           <Input
             type="number"
             min="1"
@@ -43,7 +46,7 @@ export function FeedsSection({ document, setDocument }: FeedsSectionProps) {
         </div>
 
         <div className="space-y-1.5">
-          <Label>Холостой ход (F rapid)</Label>
+          <Label>{t("cad.doc_settings.feed_rapid")}</Label>
           <Input
             type="number"
             min="1"

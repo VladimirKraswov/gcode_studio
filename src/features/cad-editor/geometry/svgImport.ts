@@ -1,4 +1,5 @@
 // path: /src/modules/cad/geometry/svgImport.ts
+import i18next from "i18next";
 import type { SketchPolylinePoint } from "../model/types";
 
 export type ParsedSvgGeometry = {
@@ -286,11 +287,11 @@ export function parseSvgToContours(svgText: string): ParsedSvgGeometry {
   const svg = doc.documentElement as unknown as SVGSVGElement;
 
   if (!svg || svg.tagName.toLowerCase() !== "svg") {
-    throw new Error("Некорректный SVG");
+    throw new Error(i18next.t("common.error_svg_invalid"));
   }
 
   if (doc.querySelector("parsererror")) {
-    throw new Error("Не удалось разобрать SVG");
+    throw new Error(i18next.t("common.error_svg_parse"));
   }
 
   const { width, height } = getSvgSize(svg);
@@ -375,7 +376,7 @@ export function parseSvgToContours(svgText: string): ParsedSvgGeometry {
     });
 
     if (contours.length === 0) {
-      throw new Error("В SVG не найдено поддерживаемых контуров");
+      throw new Error(i18next.t("common.error_svg_no_contours"));
     }
 
     return { width, height, contours };

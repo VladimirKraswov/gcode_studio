@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { GCodeEditor } from "./GCodeEditor";
 
 type GCodeEditorTabProps = {
@@ -13,13 +14,15 @@ export function GCodeEditorTab({
   fileName,
   onClose,
 }: GCodeEditorTabProps) {
+  const { t } = useTranslation();
+
   return (
     <GCodeEditor
       source={source}
       setSource={setSource}
       fileName={fileName}
       variant="tab"
-      title="Редактор G-code"
+      title={t("tabs.gcode")}
       onClose={onClose}
     />
   );

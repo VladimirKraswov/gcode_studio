@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import i18next from "i18next";
 import {
   startArcRadiusDraft,
   startCircleDraft,
@@ -280,7 +281,7 @@ export function useCadEditor({
     const centerRes = materializeSnappedPoint(nextDoc, { x: cx, y: cy });
     nextDoc = centerRes.document;
 
-    const shape = createCircleShape(`Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`, centerRes.pointId, radius);
+    const shape = createCircleShape(`${i18next.t("cad.tools.circle")} ${document.shapes.filter((s) => s.type === "circle").length + 1}`, centerRes.pointId, radius);
     checkpointHistory();
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
@@ -303,7 +304,7 @@ export function useCadEditor({
     const dy = Math.abs(p1.y - p2.y);
     if (dy < dx * 0.05) nextDoc.constraints.push(createConstraint("horizontal", [p1.id, p2.id]));
     else if (dx < dy * 0.05) nextDoc.constraints.push(createConstraint("vertical", [p1.id, p2.id]));
-    const shape = createLineShape(`Line ${document.shapes.filter((s) => s.type === "line").length + 1}`, p1.id, p2.id);
+    const shape = createLineShape(`${i18next.t("cad.tools.line")} ${document.shapes.filter((s) => s.type === "line").length + 1}`, p1.id, p2.id);
     checkpointHistory();
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
@@ -323,7 +324,7 @@ export function useCadEditor({
     nextDoc = p2Res.document;
 
     const shape = createArcShape({
-      name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
+      name: `${i18next.t("cad.tools.arc")} ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
       center: centerRes.pointId,
       p1: p1Res.pointId,
       p2: p2Res.pointId,
@@ -355,11 +356,12 @@ export function useCadEditor({
     nextDoc = p4Res.document;
 
     const groupId = createId("group");
-    const rectIndex = document.groups.filter((g) => g.name.startsWith("Rectangle")).length + 1;
-    const l1 = { ...createLineShape(`Rectangle ${rectIndex} - Bottom`, p1Res.pointId, p2Res.pointId), groupId };
-    const l2 = { ...createLineShape(`Rectangle ${rectIndex} - Right`, p2Res.pointId, p3Res.pointId), groupId };
-    const l3 = { ...createLineShape(`Rectangle ${rectIndex} - Top`, p3Res.pointId, p4Res.pointId), groupId };
-    const l4 = { ...createLineShape(`Rectangle ${rectIndex} - Left`, p4Res.pointId, p1Res.pointId), groupId };
+    const rectLabel = i18next.t("cad.tools.rectangle");
+    const rectIndex = document.groups.filter((g) => g.name.startsWith(rectLabel)).length + 1;
+    const l1 = { ...createLineShape(`${rectLabel} ${rectIndex} - Bottom`, p1Res.pointId, p2Res.pointId), groupId };
+    const l2 = { ...createLineShape(`${rectLabel} ${rectIndex} - Right`, p2Res.pointId, p3Res.pointId), groupId };
+    const l3 = { ...createLineShape(`${rectLabel} ${rectIndex} - Top`, p3Res.pointId, p4Res.pointId), groupId };
+    const l4 = { ...createLineShape(`${rectLabel} ${rectIndex} - Left`, p4Res.pointId, p1Res.pointId), groupId };
 
     const nextConstraints = [
       createConstraint("horizontal", [p1Res.pointId, p2Res.pointId]),
@@ -372,7 +374,7 @@ export function useCadEditor({
     const finalDoc = updateGeometry({
       ...nextDoc,
       shapes: [...nextDoc.shapes, l1, l2, l3, l4],
-      groups: [...nextDoc.groups, { id: groupId, name: `Rectangle ${rectIndex}`, collapsed: false }],
+      groups: [...nextDoc.groups, { id: groupId, name: `${rectLabel} ${rectIndex}`, collapsed: false }],
       constraints: [...nextDoc.constraints, ...nextConstraints]
     });
     setDocument(finalDoc);
@@ -396,7 +398,7 @@ export function useCadEditor({
     const dist = distance(p1, p2);
     if (dist < 1) return;
 
-    const shape = createEllipseShape(`Ellipse ${document.shapes.filter((s) => s.type === "ellipse").length + 1}`, centerRes.pointId, majorRes.pointId, dist * 0.6);
+    const shape = createEllipseShape(`${i18next.t("cad.tools.ellipse")} ${document.shapes.filter((s) => s.type === "ellipse").length + 1}`, centerRes.pointId, majorRes.pointId, dist * 0.6);
     checkpointHistory();
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
@@ -405,7 +407,7 @@ export function useCadEditor({
   const addText = useCallback((x: number, y: number) => {
     const value = textTool.text.trim();
     if (!value) return;
-    const shape = createTextShape(`Text ${document.shapes.filter((s) => s.type === "text").length + 1}`, x, y, value, Math.max(2, textTool.height), Math.max(0, textTool.letterSpacing), textTool.fontFile);
+    const shape = createTextShape(`${i18next.t("cad.tools.text")} ${document.shapes.filter((s) => s.type === "text").length + 1}`, x, y, value, Math.max(2, textTool.height), Math.max(0, textTool.letterSpacing), textTool.fontFile);
     checkpointHistory();
     setDocument(addShape(document, shape));
     focusCreatedShape(shape.id);
