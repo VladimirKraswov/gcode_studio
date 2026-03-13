@@ -150,16 +150,14 @@ export function buildPocketOffsets(
   if (keepCenterCleanup) {
     const c = centroid(base);
     if (pointInPolygon(c, base)) {
-       const tinyBox = [
+      const tinyBox = [
         { x: c.x - 0.01, y: c.y - 0.01 },
         { x: c.x + 0.01, y: c.y - 0.01 },
         { x: c.x + 0.01, y: c.y + 0.01 },
         { x: c.x - 0.01, y: c.y + 0.01 },
         { x: c.x - 0.01, y: c.y - 0.01 },
       ];
-      if (paths.length === 0) {
-        paths.push(tinyBox);
-      }
+      paths.push(tinyBox);
     }
   }
 

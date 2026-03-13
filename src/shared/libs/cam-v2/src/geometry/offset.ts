@@ -208,7 +208,7 @@ function rawOffsetLoop(
   if (base.length < 3 || Math.abs(offset) <= EPS) return [];
 
   const clockwise = isClockwise(base);
-  const signedOffset = clockwise ? offset : -offset;
+  const signedOffset = -offset;
   const offsetAbs = Math.abs(signedOffset);
   const n = base.length;
   const out: Point[] = [];
@@ -250,7 +250,7 @@ function rawOffsetLoop(
       appendPoint(out, p1);
       const a0 = Math.atan2(p1.y - curr.y, p1.x - curr.x);
       const a1 = Math.atan2(p2.y - curr.y, p2.x - curr.x);
-      const ccw = signedOffset < 0 ? !clockwise : clockwise;
+      const ccw = !clockwise;
       appendArc(out, curr, offsetAbs, a0, a1, ccw);
       continue;
     }
