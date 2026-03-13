@@ -162,7 +162,7 @@ function ellipseToContours(
   return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
 }
 
-function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 120): GeometryContour[] {
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 300): GeometryContour[] {
   const sampled = sampleBSpline(shape, points, segments);
 
   if (sampled.length < 2) return [];

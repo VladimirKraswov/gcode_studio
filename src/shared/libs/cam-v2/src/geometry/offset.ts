@@ -16,7 +16,7 @@ type DirectedEdge = {
 type Node = Point;
 
 function round(value: number): number {
-  return Number(value.toFixed(4));
+  return Number(value.toFixed(6));
 }
 
 function rp(p: Point): Point {
@@ -181,6 +181,9 @@ function rawOffsetLoop(
     const turn = cross(v1, v2);
     const convex = clockwise ? turn < 0 : turn > 0;
 
+    // Gapping (adding arcs/multiple points) is needed when the offset
+    // moves "away" from the corner, which happens at convex corners
+    // for outward offsets and concave corners for inward offsets.
     const gapping = offset > 0 ? convex : !convex;
 
     if (Math.abs(turn) < 1e-8) {
@@ -316,8 +319,17 @@ export function pointInPolygon(point: Point, polygon: Point[]): boolean {
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const xi = polygon[i].x, yi = polygon[i].y;
     const xj = polygon[j].x, yj = polygon[j].y;
-    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi || 1e-10) + xi);
+
+    // Robust point-in-polygon with epsilon and boundary handling
+    const intersect = ((yi > y) !== (yj > y)) &&
+                     (x < (xj - xi) * (y - yi) / (yj - yi || 1e-10) + xi);
     if (intersect) inside = !inside;
+
+    // Exact match on vertex or point on horizontal edge
+    const onEdge = Math.abs((xj - xi) * (y - yi) - (x - xi) * (yj - yi)) < 1e-8 &&
+                   x >= Math.min(xi, xj) - 1e-8 && x <= Math.max(xi, xj) + 1e-8 &&
+                   y >= Math.min(yi, yj) - 1e-8 && y <= Math.max(yi, yj) + 1e-8;
+    if (onEdge) return true;
   }
   return inside;
 }

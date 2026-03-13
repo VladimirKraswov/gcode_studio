@@ -1,6 +1,6 @@
 // src/geometry/pocket.ts
 import type { Point } from "../types";
-import { buildOffset } from "./offset";
+import { buildOffset, pointInPolygon as pip } from "./offset";
 
 function round(value: number): number {
   return Number(value.toFixed(4));
@@ -34,16 +34,7 @@ function centroid(points: Point[]): Point {
 }
 
 function pointInPolygon(point: Point, polygon: Point[]): boolean {
-  let inside = false;
-  const n = polygon.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = polygon[i].x, yi = polygon[i].y;
-    const xj = polygon[j].x, yj = polygon[j].y;
-    const intersect = ((yi > point.y) !== (yj > point.y)) &&
-        (point.x < (xj - xi) * (point.y - yi) / ((yj - yi) || 1e-10) + xi);
-    if (intersect) inside = !inside;
-  }
-  return inside;
+  return pip(point, polygon);
 }
 
 export function buildPocketOffsets(
@@ -70,15 +61,17 @@ export function buildPocketOffsets(
 
   if (keepCenterCleanup) {
     const c = centroid(base);
-    if (pointInPolygon(c, base)) {
-       const d = 0.05;
-       paths.push([
-         { x: round(c.x - d), y: round(c.y - d) },
-         { x: round(c.x + d), y: round(c.y - d) },
-         { x: round(c.x + d), y: round(c.y + d) },
-         { x: round(c.x - d), y: round(c.y + d) },
-         { x: round(c.x - d), y: round(c.y - d) },
-       ]);
+    const d = 0.05;
+    const cleanupPath = [
+      { x: round(c.x - d), y: round(c.y - d) },
+      { x: round(c.x + d), y: round(c.y - d) },
+      { x: round(c.x + d), y: round(c.y + d) },
+      { x: round(c.x - d), y: round(c.y + d) },
+      { x: round(c.x - d), y: round(c.y - d) },
+    ];
+    // Only add if ALL points of cleanup path are inside the boundary
+    if (cleanupPath.every(p => pointInPolygon(p, base))) {
+       paths.push(cleanupPath);
     }
   }
 
