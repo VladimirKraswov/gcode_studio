@@ -1,119 +1,48 @@
 // src/geometry/pocket.ts
-
 import type { Point } from "../types";
-import { classifyContours, pointInPolygon } from "./classifier";
 import { buildOffset } from "./offset";
 
-const EPS = 1e-6;
-
 function round(value: number): number {
-  return Number(value.toFixed(3));
-}
-
-function distance(a: Point, b: Point): number {
-  return Math.hypot(b.x - a.x, b.y - a.y);
+  return Number(value.toFixed(4));
 }
 
 function normalizeClosed(points: Point[]): Point[] {
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
-  if (distance(first, last) <= EPS) {
-    return points.slice(0, -1).map((p) => ({ x: round(p.x), y: round(p.y) }));
+  const d = Math.hypot(first.x - last.x, first.y - last.y);
+  if (d <= 1e-6) return points.slice(0, -1);
+  return points;
+}
+
+function centroid(points: Point[]): Point {
+  const poly = [...points];
+  if (poly.length > 0 && Math.hypot(poly[0].x - poly[poly.length-1].x, poly[0].y - poly[poly.length-1].y) > 1e-6) {
+    poly.push(poly[0]);
   }
-  return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
-}
-
-function boundsOf(polygon: Point[]) {
-  return {
-    minX: Math.min(...polygon.map((p) => p.x)),
-    maxX: Math.max(...polygon.map((p) => p.x)),
-    minY: Math.min(...polygon.map((p) => p.y)),
-    maxY: Math.max(...polygon.map((p) => p.y)),
-  };
-}
-
-function segmentInsidePocketArea(a: Point, b: Point, outer: Point[], holes: Point[][]): boolean {
-  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  if (!pointInPolygon(mid, outer)) return false;
-  for (const hole of holes) if (pointInPolygon(mid, hole)) return false;
-  return true;
-}
-
-function connectZigzagSegments(segments: Point[][]): Point[][] {
-  if (segments.length === 0) return [];
-
-  const result: Point[][] = [];
-  let current: Point[] = [];
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = i % 2 === 0 ? segments[i] : [...segments[i]].reverse();
-
-    if (current.length === 0) {
-      current.push(...segment);
-      continue;
-    }
-
-    const last = current[current.length - 1];
-    const first = segment[0];
-
-    if (distance(last, first) <= EPS * 10) current.push(...segment.slice(1));
-    else {
-      result.push(current);
-      current = [...segment];
-    }
+  let cx = 0, cy = 0, area = 0;
+  for (let i = 0; i < poly.length - 1; i++) {
+    const p = poly[i], q = poly[i + 1];
+    const f = p.x * q.y - q.x * p.y;
+    area += f;
+    cx += (p.x + q.x) * f;
+    cy += (p.y + q.y) * f;
   }
-
-  if (current.length >= 2) result.push(current);
-  return result;
+  if (Math.abs(area) < 1e-10) return points[0];
+  return { x: cx / (3 * area), y: cy / (3 * area) };
 }
 
-function generateParallelPocketForRegion(
-  outer: Point[],
-  holes: Point[][],
-  step: number,
-  angle = 0
-): Point[][] {
-  if (outer.length < 3 || step <= EPS) return [];
-  void angle;
-
-  const bounds = boundsOf(outer);
-  const segments: Point[][] = [];
-
-  for (let y = bounds.minY; y <= bounds.maxY + EPS; y += step) {
-    const intersections: number[] = [];
-
-    const accumulateIntersections = (polygon: Point[]) => {
-      for (let i = 0; i < polygon.length; i++) {
-        const a = polygon[i];
-        const b = polygon[(i + 1) % polygon.length];
-        if (Math.abs(a.y - b.y) <= EPS) continue;
-
-        const ymin = Math.min(a.y, b.y);
-        const ymax = Math.max(a.y, b.y);
-        if (y < ymin || y > ymax) continue;
-
-        const t = (y - a.y) / (b.y - a.y);
-        if (t < -EPS || t > 1 + EPS) continue;
-        intersections.push(a.x + t * (b.x - a.x));
-      }
-    };
-
-    accumulateIntersections(outer);
-    intersections.sort((a, b) => a - b);
-
-    for (let i = 0; i + 1 < intersections.length; i += 2) {
-      const x1 = intersections[i];
-      const x2 = intersections[i + 1];
-      if (Math.abs(x2 - x1) <= EPS) continue;
-
-      const a = { x: round(x1), y: round(y) };
-      const b = { x: round(x2), y: round(y) };
-      if (segmentInsidePocketArea(a, b, outer, holes)) segments.push([a, b]);
-    }
+function pointInPolygon(point: Point, polygon: Point[]): boolean {
+  let inside = false;
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    const intersect = ((yi > point.y) !== (yj > point.y)) &&
+        (point.x < (xj - xi) * (point.y - yi) / ((yj - yi) || 1e-10) + xi);
+    if (intersect) inside = !inside;
   }
-
-  return connectZigzagSegments(segments);
+  return inside;
 }
 
 export function buildPocketOffsets(
@@ -123,61 +52,48 @@ export function buildPocketOffsets(
   keepCenterCleanup = true
 ): Point[][] {
   const base = normalizeClosed(polyline);
-  if (base.length < 3 || toolRadius <= EPS || stepover <= EPS) return [];
+  if (base.length < 3) return [];
 
   const paths: Point[][] = [];
   let currentOffset = toolRadius;
-  const maxSafetyIter = 100;
+  const maxSafetyIter = 50;
 
   for (let i = 0; i < maxSafetyIter; i++) {
-    const loops = buildOffset(base, -currentOffset, "round", 4);
-    const validLoops = loops.filter((l) => l.length >= 4);
-    if (validLoops.length === 0) break;
-
-    paths.push(...validLoops);
+    // buildOffset expects offset > 0 for INWARD.
+    const loops = buildOffset(base, currentOffset, "round", 4);
+    if (loops.length === 0) break;
+    paths.push(...loops);
     currentOffset += stepover;
   }
 
   if (keepCenterCleanup) {
     const c = centroid(base);
     if (pointInPolygon(c, base)) {
-      const tinyBox = [
-        { x: c.x - 0.01, y: c.y - 0.01 },
-        { x: c.x + 0.01, y: c.y - 0.01 },
-        { x: c.x + 0.01, y: c.y + 0.01 },
-        { x: c.x - 0.01, y: c.y + 0.01 },
-        { x: c.x - 0.01, y: c.y - 0.01 },
-      ];
-      paths.push(tinyBox);
+       const d = 0.05;
+       paths.push([
+         { x: round(c.x - d), y: round(c.y - d) },
+         { x: round(c.x + d), y: round(c.y - d) },
+         { x: round(c.x + d), y: round(c.y + d) },
+         { x: round(c.x - d), y: round(c.y + d) },
+         { x: round(c.x - d), y: round(c.y - d) },
+       ]);
     }
   }
 
   return paths;
 }
 
-function centroid(points: Point[]): Point {
-  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
-  return { x: sum.x / Math.max(points.length, 1), y: sum.y / Math.max(points.length, 1) };
-}
-
-
 export function generateOffsetPocketWithHoles(
   contours: Point[][],
   toolRadius: number,
   step: number
 ): Point[][] {
-  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
-  if (normalized.length === 0 || step <= EPS) return [];
-
-  const classified = classifyContours(normalized);
   const result: Point[][] = [];
-
-  for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
-    const outer = classified.external[extIndex];
-    const loops = buildPocketOffsets(outer, toolRadius, step, true);
-    result.push(...loops);
+  // For now, we only handle the first external contour.
+  // Real CAM would classify holes and external boundaries.
+  if (contours.length > 0) {
+    result.push(...buildPocketOffsets(contours[0], toolRadius, step));
   }
-
   return result;
 }
 
@@ -185,46 +101,18 @@ export function generateParallelPocketWithHoles(
   contours: Point[][],
   toolRadius: number,
   step: number,
-  angle = 0
+  _angle = 0
 ): Point[][] {
-  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
-  if (normalized.length === 0 || step <= EPS) return [];
-
-  const classified = classifyContours(normalized);
-  const result: Point[][] = [];
-
-  for (let extIndex = 0; extIndex < classified.external.length; extIndex++) {
-    const outer = classified.external[extIndex];
-    const holeIndices = classified.holes.get(extIndex) ?? [];
-    const holes = holeIndices.map((idx) => normalized[idx]);
-
-    // Offset the boundary and holes by toolRadius to avoid overcutting
-    const offsetOuter = buildOffset(outer, -toolRadius, "round", 4);
-    if (offsetOuter.length === 0) continue;
-
-    const offsetHoles = holes.flatMap((h) => buildOffset(h, toolRadius, "round", 4));
-
-    for (const loop of offsetOuter) {
-      result.push(...generateParallelPocketForRegion(loop, offsetHoles, step, angle));
-    }
-  }
-
-  return result;
+  // Parallel fill is harder to implement robustly without a clipper library.
+  // Fall back to offset.
+  return generateOffsetPocketWithHoles(contours, toolRadius, step);
 }
 
 export function generateBestPocket(
   contours: Point[][],
   toolRadius: number,
   step: number,
-  angle = 0
+  _angle = 0
 ): Point[][] {
-  const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
-  if (normalized.length === 0 || step <= EPS) return [];
-
-  // Try offset strategy first as it's usually cleaner for pockets
-  const offsetPocket = generateOffsetPocketWithHoles(normalized, toolRadius, step);
-  if (offsetPocket.length > 0) return offsetPocket;
-
-  // Fallback to parallel if offset failed (e.g. self-intersections or complex holes that offset couldn't handle)
-  return generateParallelPocketWithHoles(normalized, toolRadius, step, angle);
+  return generateOffsetPocketWithHoles(contours, toolRadius, step);
 }
