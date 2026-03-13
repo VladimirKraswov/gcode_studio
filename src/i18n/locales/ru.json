@@ -237,12 +237,14 @@
       "cam_processing": "CAM Обработка",
       "op_type": "Тип операции",
       "op_follow": "По контуру (Follow path)",
-      "op_inside": "Внутри (Inside)",
-      "op_outside": "Снаружи (Outside)",
-      "op_pocket": "Карман (Pocket)",
+      "op_inside": "Внутренний контур",
+      "op_outside": "Внешний контур",
+      "op_pocket": "Карман",
       "direction": "Направление",
       "dir_climb": "Попутное (Climb)",
-      "dir_conventional": "Встречное (Conventional)"
+      "dir_conventional": "Встречное (Conventional)",
+      "cam_in": "in",
+      "cam_out": "out"
     },
     "doc_settings": {
       "grid_sheet": "Сетка и Лист",

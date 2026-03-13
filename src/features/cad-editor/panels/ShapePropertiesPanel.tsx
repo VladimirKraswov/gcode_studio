@@ -13,10 +13,8 @@ import {
   FiHash,
   FiTrash2,
 } from "react-icons/fi";
-import { createDefaultCamSettings } from "../model/document";
 import type {
   SketchBSpline,
-  SketchCamSettings,
   SketchDocument,
   SketchShape,
   SketchConstraint,
@@ -115,31 +113,6 @@ function openArrayEditor(groupId: string) {
   );
 }
 
-function resolveShapeCamSettings(
-  shape: SketchShape,
-  document: SketchDocument,
-): SketchCamSettings {
-  const docDefaults = document.defaultCamSettings ?? createDefaultCamSettings();
-  const shapeCam = shape.camSettings ?? {};
-
-  return {
-    operation: shapeCam.operation ?? docDefaults.operation,
-    direction: shapeCam.direction ?? docDefaults.direction,
-    stepdown: shapeCam.stepdown ?? docDefaults.stepdown,
-    stepover: shapeCam.stepover ?? docDefaults.stepover,
-    tabs: {
-      enabled: shapeCam.tabs?.enabled ?? docDefaults.tabs.enabled,
-      count: shapeCam.tabs?.count ?? docDefaults.tabs.count,
-      width: shapeCam.tabs?.width ?? docDefaults.tabs.width,
-      height: shapeCam.tabs?.height ?? docDefaults.tabs.height,
-    },
-    ramping: {
-      enabled: shapeCam.ramping?.enabled ?? docDefaults.ramping.enabled,
-      turns: shapeCam.ramping?.turns ?? docDefaults.ramping.turns,
-    },
-  };
-}
-
 export function ShapePropertiesPanel({
   document,
   setDocument,
@@ -180,11 +153,6 @@ export function ShapePropertiesPanel({
         ? document.groups.find((group) => group.id === selectedShape.groupId) ?? null
         : null,
     [document.groups, selectedShape?.groupId],
-  );
-
-  const shapeCamSettings = useMemo(
-    () => (selectedShape ? resolveShapeCamSettings(selectedShape, document) : null),
-    [selectedShape, document],
   );
 
   const lineLength = useMemo(() => {
@@ -401,26 +369,6 @@ export function ShapePropertiesPanel({
     if (!selectedShape) return;
     setDocument((prev) =>
       updateShape(prev, selectedShape.id, patch as Partial<SketchShape>),
-    );
-  }
-
-  function updateSelectedCam(
-    patch:
-      | Partial<SketchCamSettings>
-      | ((prev: SketchCamSettings) => SketchCamSettings),
-  ) {
-    if (!selectedShape) return;
-
-    const current = resolveShapeCamSettings(selectedShape, document);
-    const next =
-      typeof patch === "function"
-        ? patch(current)
-        : { ...current, ...patch };
-
-    setDocument((prev) =>
-      updateShape(prev, selectedShape.id, {
-        camSettings: next,
-      } as Partial<SketchShape>),
     );
   }
 
@@ -683,47 +631,6 @@ export function ShapePropertiesPanel({
             </div>
           </div>
         )}
-
-        <div>
-          <SectionTitle title={t("cad.properties.cam_processing")} />
-          <div className="space-y-3">
-            <div className="grid gap-1.5">
-              <Label>{t("cad.properties.op_type")}</Label>
-              <select
-                value={shapeCamSettings?.operation}
-                onChange={(e) =>
-                  updateSelectedCam({
-                    operation: e.target.value as SketchCamSettings["operation"],
-                  })
-                }
-                className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="follow-path">{t("cad.properties.op_follow")}</option>
-                <option value="profile-inside">{t("cad.properties.op_inside")}</option>
-                <option value="profile-outside">{t("cad.properties.op_outside")}</option>
-                <option value="pocket">{t("cad.properties.op_pocket")}</option>
-              </select>
-            </div>
-
-            {shapeCamSettings?.operation !== "follow-path" && (
-              <div className="grid gap-1.5">
-                <Label>{t("cad.properties.direction")}</Label>
-                <select
-                  value={shapeCamSettings?.direction}
-                  onChange={(e) =>
-                    updateSelectedCam({
-                      direction: e.target.value as SketchCamSettings["direction"],
-                    })
-                  }
-                  className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                >
-                  <option value="climb">{t("cad.properties.dir_climb")}</option>
-                  <option value="conventional">{t("cad.properties.dir_conventional")}</option>
-                </select>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
     </div>
   );

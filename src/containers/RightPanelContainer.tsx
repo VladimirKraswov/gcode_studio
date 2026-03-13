@@ -10,9 +10,10 @@ import { InfoPanelSection } from "@/features/preview/components/panels/InfoPanel
 import { GCodeStatsSection } from "@/features/preview/components/panels/GCodeStatsSection";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
 import { Tabs } from "@/shared/components/ui/Tabs";
-import { CadPropertiesSection, CamPropertiesSection } from "./RightPanelSections";
+import { FiFileText } from "react-icons/fi";
+import { CadPropertiesSection, CamPropertiesSection, IndividualCamPropertiesSection } from "./RightPanelSections";
 
-type CadTab = "cad" | "cam";
+type CadTab = "cad" | "cam" | "doc";
 
 export function RightPanelContainer() {
   const { t } = useTranslation();
@@ -29,6 +30,7 @@ export function RightPanelContainer() {
           tabs={[
             { id: "cad", label: "CAD", icon: <FiEdit size={14} /> },
             { id: "cam", label: "CAM", icon: <FiTool size={14} /> },
+            { id: "doc", label: "Doc", icon: <FiFileText size={14} /> },
           ]}
           activeTab={cadTab}
           onChange={(id) => setCadTab(id as CadTab)}
@@ -36,14 +38,22 @@ export function RightPanelContainer() {
         />
 
         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          {cadTab === "cad" ? (
+          {cadTab === "cad" && (
             <CadPropertiesSection
               editDocument={editDocument}
               setEditDocument={setEditDocument}
               selection={selection}
               cadEditor={cadEditor}
             />
-          ) : (
+          )}
+          {cadTab === "cam" && (
+            <IndividualCamPropertiesSection
+              editDocument={editDocument}
+              setEditDocument={setEditDocument}
+              selection={selection}
+            />
+          )}
+          {cadTab === "doc" && (
             <CamPropertiesSection
               editDocument={editDocument}
               setEditDocument={setEditDocument}

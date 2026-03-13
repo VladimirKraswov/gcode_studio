@@ -26,6 +26,11 @@ export type ShapePlugin<TShape extends SketchShape = SketchShape> = {
   type: TShape["type"];
   render: (props: ShapeRenderProps<TShape>) => React.ReactNode;
   getBounds: (shape: TShape, points: SketchPoint[]) => Bounds2D;
+  getSvgPath?: (shape: TShape, points: SketchPoint[]) => string;
+  getFeedbackAnchor?: (
+    shape: TShape,
+    points: SketchPoint[],
+  ) => { x: number; y: number; nx: number; ny: number } | null;
   hitTest?: (
     point: { x: number; y: number },
     shape: TShape,

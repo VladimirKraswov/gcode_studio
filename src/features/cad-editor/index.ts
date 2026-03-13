@@ -14,6 +14,7 @@ export { EditToolbar } from "./panels/EditToolbar";
 export { ArrayToolPanel } from "./panels/ArrayToolPanel";
 export { TextToolPanel } from "./panels/TextToolPanel";
 export { DocumentSettingsPanel } from "./panels/DocumentSettingsPanel";
+export { IndividualCamPanel } from "./panels/IndividualCamPanel";
 export { ShapePropertiesPanel } from "./panels/ShapePropertiesPanel";
 export { ObjectListPanel } from "./panels/ObjectListPanel";
 export { QuickConstraintBar } from "./panels/QuickConstraintBar";

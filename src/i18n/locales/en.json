@@ -237,12 +237,14 @@
       "cam_processing": "CAM Processing",
       "op_type": "Operation Type",
       "op_follow": "Follow Path",
-      "op_inside": "Inside Profile",
-      "op_outside": "Outside Profile",
+      "op_inside": "Internal Profile",
+      "op_outside": "External Profile",
       "op_pocket": "Pocket",
       "direction": "Direction",
       "dir_climb": "Climb",
-      "dir_conventional": "Conventional"
+      "dir_conventional": "Conventional",
+      "cam_in": "in",
+      "cam_out": "out"
     },
     "doc_settings": {
       "grid_sheet": "Grid & Sheet",

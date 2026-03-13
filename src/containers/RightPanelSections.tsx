@@ -1,9 +1,10 @@
-import { FiEdit, FiSettings } from "react-icons/fi";
+import { FiEdit, FiSettings, FiTool } from "react-icons/fi";
 import { useTranslation } from "react-i18next";
 import { CollapsibleSection } from "@/shared/components/layout/CollapsibleSection";
 import {
   ShapePropertiesPanel,
   DocumentSettingsPanel,
+  IndividualCamPanel,
   calculateBSplineInsertionPoint,
 } from "@/features/cad-editor";
 import type { SketchDocument, SelectionState } from "@/features/cad-editor";
@@ -59,6 +60,32 @@ export function CadPropertiesSection({
           onRemoveBSplineControlPoint={() => {
             cadEditor?.removeSelectedPointFromBSpline?.();
           }}
+        />
+      </CollapsibleSection>
+    </div>
+  );
+}
+
+interface IndividualCamPropertiesSectionProps {
+  editDocument: SketchDocument;
+  setEditDocument: React.Dispatch<React.SetStateAction<SketchDocument>>;
+  selection: SelectionState;
+}
+
+export function IndividualCamPropertiesSection({
+  editDocument,
+  setEditDocument,
+  selection,
+}: IndividualCamPropertiesSectionProps) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="flex flex-col gap-4">
+      <CollapsibleSection title={t("cad.properties.cam_processing")} icon={<FiTool size={18} />}>
+        <IndividualCamPanel
+          document={editDocument}
+          setDocument={setEditDocument}
+          selection={selection}
         />
       </CollapsibleSection>
     </div>

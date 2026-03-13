@@ -164,6 +164,25 @@ export function CadCanvas({
         background: theme.cad.canvasBg,
       }}
     >
+      <defs>
+        <pattern
+          id="pocket-hatch"
+          patternUnits="userSpaceOnUse"
+          width={10}
+          height={10}
+          patternTransform="rotate(45)"
+        >
+          <line
+            x1="0"
+            y1="0"
+            x2="0"
+            y2="10"
+            stroke="currentColor"
+            strokeWidth="1"
+            opacity="0.3"
+          />
+        </pattern>
+      </defs>
       <CadGrid document={document} view={view} />
       <CadSheet document={document} view={view} />
       <CadOriginMarker documentHeight={document.height} view={view} />
