@@ -11,7 +11,8 @@ function normalizeClosed(points: Point[]): Point[] {
   const first = points[0];
   const last = points[points.length - 1];
   const d = Math.hypot(first.x - last.x, first.y - last.y);
-  if (d <= 1e-6) return points.slice(0, -1);
+  // Using a slightly more relaxed threshold to handle B-spline approximation artifacts
+  if (d <= 0.005) return points.slice(0, -1);
   return points;
 }
 

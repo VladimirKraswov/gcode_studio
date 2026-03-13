@@ -192,16 +192,29 @@ export function planPocket(input: PocketPlanInput): Toolpath[] {
     { x: 0, y: 0 }
   );
 
-  return oriented.map((path, index) => ({
-    name: makeName(name, "Pocket", index),
-    points: to3D(wantConventional ? [...path.points].reverse() : path.points),
-    closed: true,
-    cutZ,
-    kind: "pocket",
-    stepdown: tool.passDepth,
-    tabs: { ...resolveTabs(tabs), enabled: false },
-    ramping: { ...resolveRamping(ramping), enabled: false },
-    leadIn: resolveLead(leadIn),
-    leadOut: resolveLead(leadOut),
-  }));
+  return oriented.map((path, index) => {
+    // For pockets, generateBestPocket returns CCW loops.
+    // In CAM, Climb milling for an internal pocket (CCW path) is actually CW (if we want to keep tool to the left of the path).
+    // Wait, if the path is CCW and tool is INSIDE, then the tool is to the RIGHT of the path for Climb?
+    // Let's stick to standard:
+    // Outside + Climb = CCW
+    // Inside/Pocket + Climb = CW
+    // Our pocket generator returns CCW loops. So for Climb, we need to reverse them to get CW.
+    const ccw = signedArea(path.points) > 0;
+    const wantCCW = wantConventional; // Conventional for Pocket is CCW, Climb is CW.
+    const finalPoints = (ccw === wantCCW) ? path.points : [...path.points].reverse();
+
+    return {
+      name: makeName(name, "Pocket", index),
+      points: to3D(finalPoints),
+      closed: true,
+      cutZ,
+      kind: "pocket",
+      stepdown: tool.passDepth,
+      tabs: { ...resolveTabs(tabs), enabled: false },
+      ramping: { ...resolveRamping(ramping), enabled: false },
+      leadIn: resolveLead(leadIn),
+      leadOut: resolveLead(leadOut),
+    };
+  });
 }

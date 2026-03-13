@@ -8,7 +8,7 @@ export type CadPoint = {
 const EPS = 1e-9;
 
 function round(value: number): number {
-  return Number(value.toFixed(3));
+  return Number(value.toFixed(6));
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -108,8 +108,8 @@ function deBoor(
   }
 
   return {
-    x: round(d[degree].x),
-    y: round(d[degree].y),
+    x: d[degree].x,
+    y: d[degree].y,
   };
 }
 
@@ -156,11 +156,7 @@ export function sampleBSpline(
   }
 
   if (periodic && result.length > 1) {
-    const first = result[0];
-    const last = result[result.length - 1];
-    if (Math.hypot(first.x - last.x, first.y - last.y) > 0.001) {
-      result.push({ ...first });
-    }
+    result[result.length - 1] = { ...result[0] };
   }
 
   return dedupeSequential(result);
@@ -169,11 +165,16 @@ export function sampleBSpline(
 function dedupeSequential(points: CadPoint[]): CadPoint[] {
   const out: CadPoint[] = [];
 
-  for (const p of points) {
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
     const last = out[out.length - 1];
-    if (!last || Math.hypot(last.x - p.x, last.y - p.y) > 0.001) {
+    if (!last || Math.hypot(last.x - p.x, last.y - p.y) > 1e-6) {
       out.push(p);
     }
+    // If it's the last point and it's too close to the previous one,
+    // it's skipped to avoid redundant zero-length segments, which is
+    // safe because closure is handled by the caller/sampler ensuring
+    // the first and last points are identical if needed.
   }
 
   return out;
