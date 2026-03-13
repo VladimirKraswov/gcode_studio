@@ -19,6 +19,8 @@ import type { CadPanButtonMode } from "@/shared/utils/settings";
 import { FiPlay } from "react-icons/fi";
 import { useCad } from "@/contexts/CadContext";
 import { Draggable } from "@/shared/components/ui/Draggable";
+import { useUI } from "@/contexts/UIContext";
+import { FiLayout, FiLayers } from "react-icons/fi";
 
 type EditTabProps = {
   document: SketchDocument;
@@ -42,6 +44,7 @@ type EditTabProps = {
 export default function EditTab(props: EditTabProps) {
   const { t } = useTranslation();
   const { setCadEditor } = useCad();
+  const { selectionMode, setSelectionMode } = useUI();
   const cadRegistry = useMemo(() => createDefaultCadRegistry(), []);
 
   const editor = useCadEditor({
@@ -50,6 +53,7 @@ export default function EditTab(props: EditTabProps) {
     setDocumentSilently: props.setDocumentSilently,
     onGenerateGCode: props.onGenerateGCode,
     selection: props.selection,
+    selectionMode,
     onSelectionChange: props.onSelectionChange,
     onSelectionChangeSilently: props.onSelectionChangeSilently,
     view: props.view,
@@ -190,6 +194,26 @@ export default function EditTab(props: EditTabProps) {
               <QuickConstraintBar onAdd={editor.addQuickConstraint} />
             </div>
           )}
+
+          {/* Selection Mode Toggle */}
+          <div className="absolute right-6 top-6 z-30 flex gap-1 bg-panel border border-border p-1 rounded-xl shadow-lg">
+             <button
+               onClick={() => setSelectionMode("primitive")}
+               className={`p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold ${selectionMode === "primitive" ? "bg-primary text-white" : "text-text-muted hover:bg-panel-muted"}`}
+               title={t("cad.selection_mode.primitive")}
+             >
+               <FiLayout size={14} />
+               {t("cad.selection_mode.primitive")}
+             </button>
+             <button
+               onClick={() => setSelectionMode("object")}
+               className={`p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold ${selectionMode === "object" ? "bg-primary text-white" : "text-text-muted hover:bg-panel-muted"}`}
+               title={t("cad.selection_mode.object")}
+             >
+               <FiLayers size={14} />
+               {t("cad.selection_mode.object")}
+             </button>
+          </div>
 
           {/* Quick Generate Button */}
           <button

@@ -16,7 +16,7 @@ import { updateGeometry } from "@/features/cad-editor/model/solver/manager";
 import { useGCodeFile } from "@/features/gcode-editor/hooks/useGCodeFile";
 import { useSceneState } from "@/features/preview/hooks/useSceneState";
 import type { SketchDocument } from "@/features/cad-editor";
-import type { UIContextValue } from "@/contexts/UIContext";
+import type { UIContextValue, CadSelectionMode } from "@/contexts/UIContext";
 import type { SettingsContextValue } from "@/contexts/SettingsContext";
 import type { GCodeContextValue } from "@/contexts/GCodeContext";
 import type { CadContextValue } from "@/contexts/CadContext";
@@ -31,6 +31,7 @@ export function useAppState() {
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [hint, setHint] = useState("");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<CadSelectionMode>("primitive");
 
   const ui: UIContextValue = useMemo(() => ({
     activeTab,
@@ -39,7 +40,9 @@ export function useAppState() {
     setHint,
     isSettingsOpen,
     setIsSettingsOpen,
-  }), [activeTab, hint, isSettingsOpen]);
+    selectionMode,
+    setSelectionMode,
+  }), [activeTab, hint, isSettingsOpen, selectionMode]);
 
   // --- Settings State ---
   const [settings, setSettings] = useState<UserSettings>(() => loadSettings());

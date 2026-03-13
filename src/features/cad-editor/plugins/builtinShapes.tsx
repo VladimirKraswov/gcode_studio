@@ -41,7 +41,26 @@ export const builtinShapesPlugin: CadPlugin = {
         const xmax = Math.max(p1.x, p2.x);
         const ymin = Math.min(p1.y, p2.y);
         const ymax = Math.max(p1.y, p2.y);
-        return `M ${xmin} ${ymin} L ${xmax} ${ymin} L ${xmax} ${ymax} L ${xmin} ${ymax} Z`;
+        const rotation = shape.rotation ?? 0;
+        if (rotation === 0) {
+          return `M ${xmin} ${ymin} L ${xmax} ${ymin} L ${xmax} ${ymax} L ${xmin} ${ymax} Z`;
+        }
+        const center = { x: (xmin + xmax) / 2, y: (ymin + ymax) / 2 };
+        const pts = [
+          { x: xmin, y: ymin },
+          { x: xmax, y: ymin },
+          { x: xmax, y: ymax },
+          { x: xmin, y: ymax },
+        ].map(p => {
+          const dx = p.x - center.x;
+          const dy = p.y - center.y;
+          const rad = (rotation * Math.PI) / 180;
+          return {
+            x: center.x + dx * Math.cos(rad) - dy * Math.sin(rad),
+            y: center.y + dx * Math.sin(rad) + dy * Math.cos(rad)
+          };
+        });
+        return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y} L ${pts[2].x} ${pts[2].y} L ${pts[3].x} ${pts[3].y} Z`;
       },
       getFeedbackAnchor: (shape, points) => {
         const pointMap = new Map(points.map((p) => [p.id, p]));

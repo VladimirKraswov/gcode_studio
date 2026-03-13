@@ -175,6 +175,10 @@
       "text": "Text",
       "text_hint": "Add text"
     },
+    "selection_mode": {
+      "primitive": "Sketch",
+      "object": "CAD"
+    },
     "actions": {
       "undo": "Undo",
       "redo": "Redo",

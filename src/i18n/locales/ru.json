@@ -175,6 +175,10 @@
       "text": "Текст",
       "text_hint": "Добавить текст"
     },
+    "selection_mode": {
+      "primitive": "Скетч",
+      "object": "CAD"
+    },
     "actions": {
       "undo": "Отменить",
       "redo": "Повторить",

@@ -1,6 +1,8 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { type MainTab } from "@/types/ui";
 
+export type CadSelectionMode = "primitive" | "object";
+
 export interface UIContextValue {
   activeTab: MainTab;
   setActiveTab: (tab: MainTab) => void;
@@ -8,6 +10,8 @@ export interface UIContextValue {
   setHint: (hint: string) => void;
   isSettingsOpen: boolean;
   setIsSettingsOpen: (open: boolean) => void;
+  selectionMode: CadSelectionMode;
+  setSelectionMode: (mode: CadSelectionMode) => void;
 }
 
 export const UIContext = createContext<UIContextValue | undefined>(undefined);

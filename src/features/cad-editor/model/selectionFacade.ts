@@ -20,16 +20,46 @@ export function normalizeSelectionRef(rawId: string): SketchSelectionRef {
     : makeShapeRef(rawId);
 }
 
+import type { SketchDocument } from "./types";
+import { toState } from "./selection";
+
 export function resolveSelectionOnPointerDown(params: {
+  document: SketchDocument;
   selection: SelectionState;
   rawId: string;
   shiftKey: boolean;
+  selectionMode?: "primitive" | "object";
 }): {
   ref: SketchSelectionRef;
   nextSelection: SelectionState;
 } {
-  const { selection, rawId, shiftKey } = params;
-  const ref = normalizeSelectionRef(rawId);
+  const { document, selection, rawId, shiftKey, selectionMode = "primitive" } = params;
+  let ref = normalizeSelectionRef(rawId);
+
+  // In 'object' mode, if we select a shape that belongs to a group, select the entire group
+  if (selectionMode === "object" && ref.kind === "shape") {
+    const shape = document.shapes.find((s) => s.id === ref.id);
+    if (shape?.groupId) {
+      const groupShapes = document.shapes.filter((s) => s.groupId === shape.groupId);
+      if (groupShapes.length > 0) {
+        const groupSelection = buildGroupShapeSelection(groupShapes);
+        // We use the first shape as the primary ref for simplicity
+        ref = makeShapeRef(groupShapes[0].id);
+
+        if (shiftKey) {
+          let nextRefs = [...selection.refs];
+          for (const sRef of groupSelection.refs) {
+            if (!nextRefs.some((r) => r.kind === sRef.kind && r.id === sRef.id)) {
+              nextRefs.push(sRef);
+            }
+          }
+          return { ref, nextSelection: toState(nextRefs, ref) };
+        } else {
+          return { ref, nextSelection: groupSelection };
+        }
+      }
+    }
+  }
 
   const nextSelection = shiftKey
     ? toggleSelection(selection, ref)

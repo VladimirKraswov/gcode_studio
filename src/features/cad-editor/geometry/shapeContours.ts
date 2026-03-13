@@ -64,7 +64,7 @@ function rectangleToContours(shape: SketchRectangle, points: SketchPoint[]): Geo
   const rotated = rotation
     ? (() => {
         const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
-        return rectPoints.map((p) => rotatePoint(p, center, rotation));
+        return rectPoints.map((p) => rotatePoint(p, center, -rotation));
       })()
     : rectPoints;
 

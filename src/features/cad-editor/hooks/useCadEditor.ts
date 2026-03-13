@@ -20,11 +20,11 @@ import {
   createArcShape,
   createCircleShape,
   createLineShape,
+  createRectangleShape,
   createSvgShape,
   createTextShape,
   createEllipseShape,
 } from "../model/shapeFactory";
-import { createId } from "../model/ids";
 import { hitTestShapes } from "../geometry/hitTest";
 import type {
   SketchDocument,
@@ -69,7 +69,6 @@ import {
   isPointSelectionId,
   resolveDragSelectionIds,
   resolveSelectionOnPointerDown,
-  buildGroupShapeSelection,
   getEntitiesInBox,
 } from "../model/selectionFacade";
 import { toState } from "../model/selection";
@@ -86,6 +85,7 @@ type UseCadEditorParams = {
   setDocumentSilently: React.Dispatch<React.SetStateAction<SketchDocument>>;
   onGenerateGCode: (gcode: string) => void;
   selection: SelectionState;
+  selectionMode: "primitive" | "object";
   onSelectionChange: (selection: SelectionState) => void;
   onSelectionChangeSilently: (selection: SelectionState) => void;
   view: ViewTransform;
@@ -112,6 +112,7 @@ export function useCadEditor({
   setDocumentSilently,
   onGenerateGCode,
   selection,
+  selectionMode,
   onSelectionChange,
   onSelectionChangeSilently,
   view,
@@ -181,7 +182,7 @@ export function useCadEditor({
     event.stopPropagation();
 
     const { ref, nextSelection } = resolveSelectionOnPointerDown({
-      selection, rawId, shiftKey: event.shiftKey,
+      document, selection, rawId, shiftKey: event.shiftKey, selectionMode,
     });
 
     const rawCad = getCadPoint(event);
@@ -343,46 +344,21 @@ export function useCadEditor({
 
   const addRectangle = useCallback((x1: number, y1: number, x2: number, y2: number) => {
     if (Math.abs(x1 - x2) < 0.5 || Math.abs(y1 - y2) < 0.5) return;
-    const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
 
     let nextDoc = { ...document };
-    const p1Res = materializeSnappedPoint(nextDoc, { x: minX, y: minY });
+    const p1Res = materializeSnappedPoint(nextDoc, { x: x1, y: y1 });
     nextDoc = p1Res.document;
-    const p2Res = materializeSnappedPoint(nextDoc, { x: maxX, y: minY });
+    const p2Res = materializeSnappedPoint(nextDoc, { x: x2, y: y2 });
     nextDoc = p2Res.document;
-    const p3Res = materializeSnappedPoint(nextDoc, { x: maxX, y: maxY });
-    nextDoc = p3Res.document;
-    const p4Res = materializeSnappedPoint(nextDoc, { x: minX, y: maxY });
-    nextDoc = p4Res.document;
 
-    const groupId = createId("group");
     const rectLabel = i18next.t("cad.tools.rectangle");
-    const rectIndex = document.groups.filter((g) => g.name.startsWith(rectLabel)).length + 1;
-    const l1 = { ...createLineShape(`${rectLabel} ${rectIndex} - Bottom`, p1Res.pointId, p2Res.pointId), groupId };
-    const l2 = { ...createLineShape(`${rectLabel} ${rectIndex} - Right`, p2Res.pointId, p3Res.pointId), groupId };
-    const l3 = { ...createLineShape(`${rectLabel} ${rectIndex} - Top`, p3Res.pointId, p4Res.pointId), groupId };
-    const l4 = { ...createLineShape(`${rectLabel} ${rectIndex} - Left`, p4Res.pointId, p1Res.pointId), groupId };
-
-    const nextConstraints = [
-      createConstraint("horizontal", [p1Res.pointId, p2Res.pointId]),
-      createConstraint("vertical", [p2Res.pointId, p3Res.pointId]),
-      createConstraint("horizontal", [p3Res.pointId, p4Res.pointId]),
-      createConstraint("vertical", [p4Res.pointId, p1Res.pointId])
-    ];
+    const rectIndex = document.shapes.filter((s) => s.type === "rectangle").length + 1;
+    const shape = createRectangleShape(`${rectLabel} ${rectIndex}`, p1Res.pointId, p2Res.pointId);
 
     checkpointHistory();
-    const finalDoc = updateGeometry({
-      ...nextDoc,
-      shapes: [...nextDoc.shapes, l1, l2, l3, l4],
-      groups: [...nextDoc.groups, { id: groupId, name: `${rectLabel} ${rectIndex}`, collapsed: false }],
-      constraints: [...nextDoc.constraints, ...nextConstraints]
-    });
-    setDocument(finalDoc);
-    setTool("select");
-    onSelectionChange(buildGroupShapeSelection([l1, l2, l3, l4]));
-    resetDrafts();
-    setIsSelectionHover(false);
-  }, [document, checkpointHistory, setDocument, onSelectionChange, setTool, resetDrafts]);
+    setDocument(updateGeometry(addShape(nextDoc, shape)));
+    focusCreatedShape(shape.id);
+  }, [document, checkpointHistory, setDocument, focusCreatedShape]);
 
   const addEllipse = useCallback((cx: number, cy: number, mx: number, my: number) => {
     let nextDoc = { ...document };
