@@ -14,7 +14,16 @@ export function isPointSelectionId(id: string): boolean {
   return id.startsWith("pt_") || id.startsWith("pt-");
 }
 
-export function normalizeSelectionRef(rawId: string): SketchSelectionRef {
+export function normalizeSelectionRef(rawId: string, selectionMode: "primitive" | "object" = "primitive"): SketchSelectionRef {
+  if (selectionMode === "object" && rawId.startsWith("point:")) {
+    // Treat clicks on points as clicks on the shape itself in object mode
+    // We expect the rawId to be something like "point:shapeId:pointId" or similar
+    // Actually, in our system, rawId for points is usually just "point:pointId"
+    // We need to map point back to shape if we want to be precise,
+    // but for now, the UI usually passes the shapeId if it was a shape hit.
+    return makeShapeRef(rawId.slice(6));
+  }
+
   return rawId.startsWith("point:")
     ? makePointRef(rawId.slice(6))
     : makeShapeRef(rawId);
@@ -34,7 +43,23 @@ export function resolveSelectionOnPointerDown(params: {
   nextSelection: SelectionState;
 } {
   const { document, selection, rawId, shiftKey, selectionMode = "primitive" } = params;
-  let ref = normalizeSelectionRef(rawId);
+
+  let refId = rawId;
+  if (selectionMode === "object" && rawId.startsWith("point:")) {
+      // Find the shape that uses this point
+      const pointId = rawId.slice(6);
+      const ownerShape = document.shapes.find(s => {
+          if (s.type === 'line') return s.p1 === pointId || s.p2 === pointId;
+          if (s.type === 'polyline') return s.pointIds.includes(pointId);
+          if (s.type === 'circle' || s.type === 'arc' || s.type === 'ellipse' || s.type === 'ellipse-arc') return s.center === pointId || (s as any).p1 === pointId || (s as any).p2 === pointId || (s as any).majorAxisPoint === pointId;
+          if (s.type === 'rectangle') return s.p1 === pointId || s.p2 === pointId;
+          if (s.type === 'bspline') return s.controlPointIds.includes(pointId);
+          return false;
+      });
+      if (ownerShape) refId = ownerShape.id;
+  }
+
+  let ref = normalizeSelectionRef(refId, selectionMode);
 
   // In 'object' mode, if we select a shape that belongs to a group, select the entire group
   if (selectionMode === "object" && ref.kind === "shape") {

@@ -6,6 +6,14 @@ const ROUND_ARC_STEPS_PER_90 = 8;
 const DEFAULT_MITER_LIMIT = 4;
 
 type Vec2 = { x: number; y: number };
+type Segment = { a: Point; b: Point };
+type DirectedEdge = {
+  from: number;
+  to: number;
+  angle: number;
+  used: boolean;
+};
+type Node = Point;
 
 function round(value: number): number {
   return Number(value.toFixed(4));
@@ -49,12 +57,17 @@ function normalize(v: Vec2): Vec2 {
   return { x: v.x / l, y: v.y / l };
 }
 
+function angleOf(v: Vec2): number {
+  return Math.atan2(v.y, v.x);
+}
+
 function signedArea(points: Point[]): number {
   if (points.length < 3) return 0;
   let area = 0;
-  for (let i = 0; i < points.length; i++) {
+  const n = points.length;
+  for (let i = 0; i < n; i++) {
     const a = points[i];
-    const b = points[(i + 1) % points.length];
+    const b = points[(i + 1) % n];
     area += a.x * b.y - b.x * a.y;
   }
   return area / 2;
@@ -76,6 +89,7 @@ function dedupeSequential(points: Point[]): Point[] {
 function closeLoop(points: Point[]): Point[] {
   const clean = dedupeSequential(points);
   if (clean.length < 3) return clean;
+  if (eq(clean[0], clean[clean.length-1])) return clean;
   return [...clean, clean[0]];
 }
 
@@ -91,6 +105,20 @@ function lineIntersection(
   const t = cross(qmp, s) / rxs;
   const u = cross(qmp, r) / rxs;
   return { point: { x: p.x + r.x * t, y: p.y + r.y * t }, t, u };
+}
+
+function segmentIntersection(
+  a1: Point,
+  a2: Point,
+  b1: Point,
+  b2: Point
+): { point: Point; ta: number; tb: number } | null {
+  const r = sub(a2, a1);
+  const s = sub(b2, b1);
+  const hit = lineIntersection(a1, r, b1, s);
+  if (!hit) return null;
+  if (hit.t < -1e-6 || hit.t > 1 + 1e-6 || hit.u < -1e-6 || hit.u > 1 + 1e-6) return null;
+  return { point: hit.point, ta: hit.t, tb: hit.u };
 }
 
 function appendArc(
@@ -115,7 +143,7 @@ function appendArc(
 
 function rawOffsetLoop(
   polyline: Point[],
-  offset: number, // offset > 0 is INWARD
+  offset: number, // offset > 0 is OUTWARD
   joinType: JoinType,
   miterLimit: number
 ): Point[] {
@@ -138,25 +166,25 @@ function rawOffsetLoop(
     const v1 = normalize(d1);
     const v2 = normalize(d2);
 
-    // Normal that always points INSIDE the polygon
-    const n1 = clockwise ? { x: v1.y, y: -v1.x } : { x: -v1.y, y: v1.x };
-    const n2 = clockwise ? { x: v2.y, y: -v2.x } : { x: -v2.y, y: v2.x };
+    // CCW (standard): OUTWARD normal is Right turn (dy, -dx)
+    // CW: OUTWARD normal is Left turn (-dy, dx)
+    const n1 = clockwise ? { x: -v1.y, y: v1.x } : { x: v1.y, y: -v1.x };
+    const n2 = clockwise ? { x: -v2.y, y: v2.x } : { x: v2.y, y: -v2.x };
 
-    // Move along normal by 'offset'
-    const s1p = add(pCurr, mul(n1, offset));
-    const s2p = add(pCurr, mul(n2, offset));
+    const s1a = add(pPrev, mul(n1, offset));
+    const s1b = add(pCurr, mul(n1, offset));
+    const s2a = add(pCurr, mul(n2, offset));
+    const s2b = add(pNext, mul(n2, offset));
 
-    const hit = lineIntersection(s1p, v1, s2p, v2);
+    const hit = lineIntersection(s1a, v1, s2a, v2);
+
     const turn = cross(v1, v2);
     const convex = clockwise ? turn < 0 : turn > 0;
 
-    // Gapping if we move "away" from the corner.
-    // Inward (+offset): concave corners gap.
-    // Outward (-offset): convex corners gap.
-    const gapping = offset > 0 ? !convex : convex;
+    const gapping = offset > 0 ? convex : !convex;
 
     if (Math.abs(turn) < 1e-8) {
-      out.push(s2p);
+      out.push(s1b);
       continue;
     }
 
@@ -166,37 +194,129 @@ function rawOffsetLoop(
         if (miterLen / Math.abs(offset) <= miterLimit) {
             out.push(hit.point);
         } else {
-            out.push(s1p, s2p);
+            out.push(s1b, s2a);
         }
       } else if (joinType === "round") {
-        out.push(s1p);
-        const a0 = Math.atan2(s1p.y - pCurr.y, s1p.x - pCurr.x);
-        const a1 = Math.atan2(s2p.y - pCurr.y, s2p.x - pCurr.x);
-        // If CCW and inward, concave gaps. Normal turn is RIGHT. CW arc.
-        const ccw = offset > 0 ? clockwise : !clockwise;
+        out.push(s1b);
+        const a0 = Math.atan2(s1b.y - pCurr.y, s1b.x - pCurr.x);
+        const a1 = Math.atan2(s2a.y - pCurr.y, s2a.x - pCurr.x);
+        const ccw = offset > 0 ? !clockwise : clockwise;
         appendArc(out, pCurr, Math.abs(offset), a0, a1, ccw);
-        out.push(s2p);
+        out.push(s2a);
       } else {
-        out.push(s1p, s2p);
+        out.push(s1b, s2a);
       }
     } else {
       if (hit) out.push(hit.point);
-      else out.push(s1p, s2p);
+      else out.push(s1b, s2a);
     }
   }
 
   return closeLoop(out.map(rp));
 }
 
+function splitSegmentsAtIntersections(loop: Point[]): Segment[] {
+  const closed = closeLoop(loop);
+  if (closed.length < 4) return [];
+
+  const baseSegments: Segment[] = [];
+  for (let i = 0; i < closed.length - 1; i++) {
+    const a = closed[i], b = closed[i + 1];
+    if (!eq(a, b)) baseSegments.push({ a, b });
+  }
+
+  const cuts: number[][] = baseSegments.map(() => [0, 1]);
+  for (let i = 0; i < baseSegments.length; i++) {
+    for (let j = i + 1; j < baseSegments.length; j++) {
+      const adjacent = j === i + 1 || (i === 0 && j === baseSegments.length - 1);
+      if (adjacent) continue;
+      const hit = segmentIntersection(baseSegments[i].a, baseSegments[i].b, baseSegments[j].a, baseSegments[j].b);
+      if (!hit) continue;
+      if (hit.ta > 1e-6 && hit.ta < 1 - 1e-6) cuts[i].push(hit.ta);
+      if (hit.tb > 1e-6 && hit.tb < 1 - 1e-6) cuts[j].push(hit.tb);
+    }
+  }
+
+  const out: Segment[] = [];
+  for (let i = 0; i < baseSegments.length; i++) {
+    const seg = baseSegments[i];
+    const ts = Array.from(new Set(cuts[i].map(round))).sort((a, b) => a - b);
+    for (let k = 0; k < ts.length - 1; k++) {
+      const a = rp(add(seg.a, mul(sub(seg.b, seg.a), ts[k])));
+      const b = rp(add(seg.a, mul(sub(seg.b, seg.a), ts[k+1])));
+      if (!eq(a, b)) out.push({ a, b });
+    }
+  }
+  return out;
+}
+
+function buildGraph(segments: Segment[]) {
+  const nodeMap = new Map<string, number>();
+  const nodes: Node[] = [];
+  const getNodeId = (p: Point) => {
+    const key = `${round(p.x)}:${round(p.y)}`;
+    let id = nodeMap.get(key);
+    if (id === undefined) { id = nodes.length; nodes.push(rp(p)); nodeMap.set(key, id); }
+    return id;
+  };
+  const edges: DirectedEdge[] = [];
+  for (const s of segments) {
+    const a = getNodeId(s.a), b = getNodeId(s.b);
+    if (a === b) continue;
+    edges.push({ from: a, to: b, angle: angleOf(sub(nodes[b], nodes[a])), used: false });
+    edges.push({ from: b, to: a, angle: angleOf(sub(nodes[a], nodes[b])), used: false });
+  }
+  const outgoing: number[][] = Array.from({ length: nodes.length }, () => []);
+  for (let i = 0; i < edges.length; i++) outgoing[edges[i].from].push(i);
+  for (const arr of outgoing) arr.sort((ia, ib) => edges[ia].angle - edges[ib].angle);
+  return { nodes, edges, outgoing };
+}
+
+function traceFace(startIdx: number, nodes: Node[], edges: DirectedEdge[], outgoing: number[][]) {
+  const cycle: number[] = [];
+  let currIdx = startIdx;
+  const startNode = edges[startIdx].from;
+
+  while (true) {
+    const e = edges[currIdx];
+    if (e.used) break;
+    e.used = true;
+    cycle.push(e.from);
+
+    if (e.to === startNode) break;
+
+    let arrivalAngle = e.angle + Math.PI;
+    while (arrivalAngle < 0) arrivalAngle += Math.PI * 2;
+    while (arrivalAngle >= Math.PI * 2) arrivalAngle -= Math.PI * 2;
+
+    const outs = outgoing[e.to];
+    let bestIdx = -1, bestTurn = Infinity;
+    for (const candIdx of outs) {
+      if (edges[candIdx].used) continue;
+      // Rightmost turn: smallest (Arrival - Departure) mod 2PI
+      let d = arrivalAngle - edges[candIdx].angle;
+      while (d < 1e-9) d += Math.PI * 2;
+      while (d > Math.PI * 2 + 1e-9) d -= Math.PI * 2;
+      if (d < bestTurn) {
+        bestTurn = d;
+        bestIdx = candIdx;
+      }
+    }
+    if (bestIdx === -1) break;
+    currIdx = bestIdx;
+  }
+  return cycle;
+}
+
 export function pointInPolygon(point: Point, polygon: Point[]): boolean {
   let inside = false;
   const n = polygon.length;
   if (n < 3) return false;
+  const x = point.x, y = point.y;
   for (let i = 0, j = n - 1; i < n; j = i++) {
     const xi = polygon[i].x, yi = polygon[i].y;
     const xj = polygon[j].x, yj = polygon[j].y;
-    const intersect = ((yi > point.y) !== (yj > point.y)) &&
-        (point.x < (xj - xi) * (point.y - yi) / ((yj - yi) || 1e-10) + xi);
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi || 1e-10) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -204,44 +324,71 @@ export function pointInPolygon(point: Point, polygon: Point[]): boolean {
 
 function centroid(points: Point[]): Point {
   let cx = 0, cy = 0, area = 0;
-  const n = points.length;
-  if (n === 0) return { x: 0, y: 0 };
-  for (let i = 0; i < n - 1; i++) {
-    const p = points[i], q = points[i + 1];
+  const poly = closeLoop(points);
+  for (let i = 0; i < poly.length - 1; i++) {
+    const p = poly[i], q = poly[i + 1];
     const f = p.x * q.y - q.x * p.y;
-    area += f;
-    cx += (p.x + q.x) * f;
-    cy += (p.y + q.y) * f;
+    area += f; cx += (p.x + q.x) * f; cy += (p.y + q.y) * f;
   }
-  if (Math.abs(area) < 1e-10) return points[0];
+  if (Math.abs(area) < 1e-10) return points[0] || { x: 0, y: 0 };
   return { x: cx / (3 * area), y: cy / (3 * area) };
 }
 
 export function buildOffset(
   polyline: Point[],
-  offset: number,
+  offset: number, // offset > 0 is OUTWARD
   joinType: JoinType = "round",
   miterLimit = DEFAULT_MITER_LIMIT
 ): Point[][] {
-  const src = dedupeSequential(polyline);
-  if (src.length < 3) return [];
+  const src = closeLoop(dedupeSequential(polyline));
+  if (src.length < 4) return [];
+  if (Math.abs(offset) < 1e-8) return [src];
 
   const raw = rawOffsetLoop(src, offset, joinType, miterLimit);
-  if (raw.length < 4) return [];
+  if (raw.length < 3) return [];
 
-  const loop = closeLoop(dedupeSequential(raw));
-  if (loop.length < 4) return [];
+  const rawClosed = closeLoop(raw);
+  const pieces = splitSegmentsAtIntersections(rawClosed);
 
-  if (offset > 0) { // inward
-     const srcClosed = closeLoop(src);
-     const c = centroid(loop);
-     // Try centroid first, then vertices
-     if (pointInPolygon(c, srcClosed)) return [loop];
-     for (const p of loop) {
-         if (pointInPolygon(p, srcClosed)) return [loop];
-     }
-     return [];
+  if (pieces.length === 0) {
+      const c = centroid(rawClosed);
+      const inside = pointInPolygon(c, src);
+      if (offset > 0 && !inside) return [rawClosed];
+      if (offset < 0 && inside) return [rawClosed];
+      return [];
   }
 
-  return [loop];
+  const { nodes, edges, outgoing } = buildGraph(pieces);
+  const cycles: Point[][] = [];
+  for (let i = 0; i < edges.length; i++) {
+    if (edges[i].used) continue;
+    const ids = traceFace(i, nodes, edges, outgoing);
+    if (ids.length < 3) continue;
+    const pts = ids.map(id => nodes[id]);
+    if (Math.abs(signedArea(pts)) > 1e-9) cycles.push(closeLoop(pts));
+  }
+
+  return cycles.filter(loop => {
+    if (loop.length < 3) return false;
+
+    const area = signedArea(loop);
+    // traceFace with rightmost turns extracts faces CCW (positive area).
+    // The infinite "exterior" face will be traced CW (negative area).
+    if (area < 1e-9) return false;
+
+    // To verify if this CCW loop is a valid offset, we check if a point
+    // just inside it satisfies the offset condition.
+    const p1 = loop[0];
+    const p2 = loop[1];
+    const v = normalize(sub(p2, p1));
+    const n = { x: -v.y, y: v.x }; // Left normal (pointing inside the CCW loop)
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+
+    const testPt = add(mid, mul(n, 0.01));
+    const inside = pointInPolygon(testPt, src);
+
+    if (offset > 0) return !inside;
+    if (offset < 0) return inside;
+    return true;
+  });
 }

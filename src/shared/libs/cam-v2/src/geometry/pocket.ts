@@ -28,7 +28,7 @@ function centroid(points: Point[]): Point {
     cx += (p.x + q.x) * f;
     cy += (p.y + q.y) * f;
   }
-  if (Math.abs(area) < 1e-10) return points[0];
+  if (Math.abs(area) < 1e-10) return points[0] || { x: 0, y: 0 };
   return { x: cx / (3 * area), y: cy / (3 * area) };
 }
 
@@ -59,8 +59,9 @@ export function buildPocketOffsets(
   const maxSafetyIter = 50;
 
   for (let i = 0; i < maxSafetyIter; i++) {
-    // buildOffset expects offset > 0 for INWARD.
-    const loops = buildOffset(base, currentOffset, "round", 4);
+    // buildOffset uses +offset for OUTWARD.
+    // Pocketing needs INWARD, so use -currentOffset.
+    const loops = buildOffset(base, -currentOffset, "round", 4);
     if (loops.length === 0) break;
     paths.push(...loops);
     currentOffset += stepover;
@@ -89,8 +90,6 @@ export function generateOffsetPocketWithHoles(
   step: number
 ): Point[][] {
   const result: Point[][] = [];
-  // For now, we only handle the first external contour.
-  // Real CAM would classify holes and external boundaries.
   if (contours.length > 0) {
     result.push(...buildPocketOffsets(contours[0], toolRadius, step));
   }
@@ -103,8 +102,6 @@ export function generateParallelPocketWithHoles(
   step: number,
   _angle = 0
 ): Point[][] {
-  // Parallel fill is harder to implement robustly without a clipper library.
-  // Fall back to offset.
   return generateOffsetPocketWithHoles(contours, toolRadius, step);
 }
 

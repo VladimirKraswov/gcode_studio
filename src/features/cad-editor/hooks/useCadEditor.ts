@@ -181,8 +181,11 @@ export function useCadEditor({
     }
     event.stopPropagation();
 
+    // In CAM mode, we normalize IDs to ensure object-level selection
+    const normalizedId = selectionMode === "object" ? rawId.replace(/^point:/, "") : rawId;
+
     const { ref, nextSelection } = resolveSelectionOnPointerDown({
-      document, selection, rawId, shiftKey: event.shiftKey, selectionMode,
+      document, selection, rawId: normalizedId, shiftKey: event.shiftKey, selectionMode,
     });
 
     const rawCad = getCadPoint(event);

@@ -215,7 +215,7 @@ export function CadCanvas({
         textPreviewMap={textPreviewMap}
       />
 
-      {selectionMode === "primitive" && tool === "select" && (
+      {selectionMode === "primitive" && (
         <CadConstraintOverlay
           document={document}
           documentHeight={document.height}

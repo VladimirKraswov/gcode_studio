@@ -177,7 +177,7 @@
     },
     "selection_mode": {
       "primitive": "Скетч",
-      "object": "CAD"
+      "object": "ЧПУ/CAM"
     },
     "actions": {
       "undo": "Отменить",

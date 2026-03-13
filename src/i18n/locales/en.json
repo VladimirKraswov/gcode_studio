@@ -177,7 +177,7 @@
     },
     "selection_mode": {
       "primitive": "Sketch",
-      "object": "CAD"
+      "object": "CAM"
     },
     "actions": {
       "undo": "Undo",
