@@ -30,13 +30,16 @@ export function useAppState() {
   // --- UI State ---
   const [activeTab, setActiveTab] = useState<MainTab>("view");
   const [hint, setHint] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const ui: UIContextValue = useMemo(() => ({
     activeTab,
     setActiveTab,
     hint,
     setHint,
-  }), [activeTab, hint]);
+    isSettingsOpen,
+    setIsSettingsOpen,
+  }), [activeTab, hint, isSettingsOpen]);
 
   // --- Settings State ---
   const [settings, setSettings] = useState<UserSettings>(() => loadSettings());

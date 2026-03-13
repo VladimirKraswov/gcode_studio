@@ -8,6 +8,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { LeftPanelContainer } from "@/containers/LeftPanelContainer";
 import { CenterPanelContainer } from "@/containers/CenterPanelContainer";
 import { RightPanelContainer } from "@/containers/RightPanelContainer";
+import { SettingsModal } from "@/components/SettingsModal";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { NotificationToast } from "@/components/NotificationToast";
 import { ThemeProvider } from "@/shared/hooks/useTheme";
@@ -51,7 +52,7 @@ function AppContent() {
     setSpeed,
   } = useGCode();
 
-  const { activeTab, setActiveTab } = useUI();
+  const { activeTab, setActiveTab, isSettingsOpen, setIsSettingsOpen } = useUI();
   const { settings, updateSettings } = useSettings();
 
   const tabMeta = TAB_META[activeTab as keyof typeof TAB_META];
@@ -92,6 +93,7 @@ function AppContent() {
   const isConsole = activeTab === "console";
 
   return (
+    <>
     <MainLayout
       header={
         <AppHeader
@@ -128,6 +130,8 @@ function AppContent() {
         ) : undefined
       }
     />
+    <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+    </>
   );
 }
 
