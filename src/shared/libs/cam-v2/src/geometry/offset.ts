@@ -311,6 +311,23 @@ function traceFace(startIdx: number, nodes: Node[], edges: DirectedEdge[], outgo
   return cycle;
 }
 
+function pointToSegmentDistanceSq(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const l2 = dx * dx + dy * dy;
+  if (l2 === 0) return (p.x - a.x) ** 2 + (p.y - a.y) ** 2;
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return (p.x - (a.x + t * dx)) ** 2 + (p.y - (a.y + t * dy)) ** 2;
+}
+
+function minDistanceToPolyline(p: Point, polyline: Point[]): number {
+  let minD2 = Infinity;
+  for (let i = 0; i < polyline.length - 1; i++) {
+    minD2 = Math.min(minD2, pointToSegmentDistanceSq(p, polyline[i], polyline[i + 1]));
+  }
+  return Math.sqrt(minD2);
+}
+
 export function pointInPolygon(point: Point, polygon: Point[]): boolean {
   let inside = false;
   const n = polygon.length;
@@ -399,8 +416,16 @@ export function buildOffset(
     const testPt = add(mid, mul(n, 0.01));
     const inside = pointInPolygon(testPt, src);
 
-    if (offset > 0) return !inside;
-    if (offset < 0) return inside;
+    if (offset > 0) {
+        if (inside) return false;
+    } else {
+        if (!inside) return false;
+        // Strict distance check for inward offsets to prevent cross-overs
+        // Each point on the offset path must be at least |offset| away from boundary
+        const d = minDistanceToPolyline(mid, src);
+        if (d < Math.abs(offset) - 1e-4) return false;
+    }
+
     return true;
   });
 }
