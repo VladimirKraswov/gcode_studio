@@ -89,4 +89,20 @@ describe('buildOffset validation', () => {
         expect(p.y).toBeLessThanOrEqual(86.6);
     }
   });
+
+  it('should prevent cross-overs in narrow rectangles', () => {
+    // Narrow 4mm rect
+    const narrow = [
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 100 },
+        { x: 0, y: 100 },
+        { x: 0, y: 0 }
+    ];
+
+    // Offset by 2.1mm inward (exceeds half-width)
+    const inv = buildOffset(narrow, -2.1);
+    // Should be empty or at least not have a loop that crossed over
+    expect(inv.length).toBe(0);
+  });
 });

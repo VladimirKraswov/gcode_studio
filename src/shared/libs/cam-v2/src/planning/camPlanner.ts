@@ -56,7 +56,9 @@ function orientPath(
 
   const open = normalizeClosed(points);
   const ccw = signedArea(open) > 0;
-  const wantCCW = insideLike ? !wantConventional : wantConventional;
+  // Outside + Climb = CCW, Outside + Conventional = CW
+  // Inside + Climb = CW, Inside + Conventional = CCW
+  const wantCCW = insideLike ? wantConventional : !wantConventional;
   const oriented = ccw === wantCCW ? open : [...open].reverse();
   return closeIfNeeded(oriented);
 }
