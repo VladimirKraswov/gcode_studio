@@ -10,6 +10,7 @@ import type {
 import { updateShape } from "../model/document";
 import { Label } from "@/shared/components/ui/Label";
 import type { SelectionState } from "../model/selection";
+import { isShapeClosed } from "../geometry/shapeContours";
 
 export type IndividualCamPanelProps = {
   document: SketchDocument;
@@ -122,9 +123,9 @@ export function IndividualCamPanel({
             className="flex h-9 w-full rounded-md border border-border bg-panel-solid px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <option value="follow-path">{t("cad.properties.op_follow")}</option>
-            <option value="profile-inside">{t("cad.properties.op_inside")}</option>
-            <option value="profile-outside">{t("cad.properties.op_outside")}</option>
-            <option value="pocket">{t("cad.properties.op_pocket")}</option>
+            <option value="profile-inside" disabled={!isShapeClosed(selectedShape)}>{t("cad.properties.op_inside")}</option>
+            <option value="profile-outside" disabled={!isShapeClosed(selectedShape)}>{t("cad.properties.op_outside")}</option>
+            <option value="pocket" disabled={!isShapeClosed(selectedShape)}>{t("cad.properties.op_pocket")}</option>
           </select>
         </div>
 

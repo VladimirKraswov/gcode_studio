@@ -230,6 +230,23 @@ function svgToContours(shape: SketchSvg): GeometryContour[] {
     .filter((c) => c.points.length >= 2);
 }
 
+export function isShapeClosed(shape: SketchShape): boolean {
+  switch (shape.type) {
+    case "rectangle":
+    case "circle":
+    case "ellipse":
+    case "text":
+    case "svg":
+      return true;
+    case "polyline":
+      return (shape as SketchPolyline).closed;
+    case "bspline":
+      return (shape as SketchBSpline).periodic;
+    default:
+      return false;
+  }
+}
+
 export async function extractShapeContours(
   shape: SketchShape,
   points: SketchPoint[],

@@ -232,16 +232,10 @@ export function generateBestPocket(
   const normalized = contours.map(normalizeClosed).filter((c) => c.length >= 3);
   if (normalized.length === 0 || step <= EPS) return [];
 
-  const classified = classifyContours(normalized);
-  const hasHoles = Array.from(classified.holes.values()).some((items) => items.length > 0);
-
-  if (hasHoles) {
-    const parallel = generateParallelPocketWithHoles(normalized, toolRadius, step, angle);
-    if (parallel.length > 0) return parallel;
-  }
-
+  // Try offset strategy first as it's usually cleaner for pockets
   const offsetPocket = generateOffsetPocketWithHoles(normalized, toolRadius, step);
   if (offsetPocket.length > 0) return offsetPocket;
 
+  // Fallback to parallel if offset failed (e.g. self-intersections or complex holes that offset couldn't handle)
   return generateParallelPocketWithHoles(normalized, toolRadius, step, angle);
 }

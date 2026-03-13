@@ -45,3 +45,4 @@ export * from "./geometry/hitTest";
 export * from "./geometry/snap";
 export { parseSvgToContours } from "./geometry/svgImport";
 export { getTextPolylines, type CadPoint } from "./geometry/textGeometry";
+export { isShapeClosed } from "./geometry/shapeContours";
