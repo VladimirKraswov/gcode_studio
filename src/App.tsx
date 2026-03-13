@@ -90,7 +90,7 @@ function AppContent() {
     );
   }
 
-  const isConsole = activeTab === "console";
+  const isFullWidth = activeTab === "console" || activeTab === "gcode";
 
   return (
     <>
@@ -103,9 +103,9 @@ function AppContent() {
           tabMeta={tabMeta}
         />
       }
-      leftPanel={!isConsole && <LeftPanelContainer />}
+      leftPanel={!isFullWidth && <LeftPanelContainer />}
       centerPanel={<CenterPanelContainer />}
-      rightPanel={!isConsole && <RightPanelContainer />}
+      rightPanel={!isFullWidth && <RightPanelContainer />}
       bottomBar={
         activeTab === "view" ? (
           <PlaybackFooter

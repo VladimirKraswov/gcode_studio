@@ -203,38 +203,6 @@ export function GCodeEditor({
       {/* Editor & Command Palette Container */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
 
-        {/* Command Sidebar (Optional / Inline) */}
-        <div className="w-[200px] border-r border-border bg-panel-muted/30 flex flex-col hidden lg:flex">
-          <div className="p-3 space-y-3">
-            <div className="flex items-center gap-2 text-[11px] font-bold uppercase text-text-muted">
-              <FiCommand size={12} />
-              <span>Команды</span>
-            </div>
-            <div className="relative">
-              <FiSearch className="absolute left-2 top-1/2 -translate-y-1/2 text-text-muted" size={12} />
-              <Input
-                value={commandSearch}
-                onChange={(e) => setCommandSearch(e.target.value)}
-                placeholder="Поиск..."
-                className="h-7 pl-7 text-[11px] bg-panel-solid"
-              />
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 scrollbar-thin">
-            <div className="grid grid-cols-2 gap-1.5">
-              {filteredCommands.map((cmd) => (
-                <button
-                  key={cmd}
-                  onClick={() => insertTextAtCursor(cmd)}
-                  className="px-2 py-1.5 text-[12px] font-bold bg-panel-solid border border-border rounded hover:bg-primary-soft hover:text-primary-text hover:border-primary transition-all text-center"
-                >
-                  {cmd}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* Main Editor */}
         <div className="flex-1 min-h-0 flex flex-col bg-panel-solid relative">
           <div className="flex-1 min-h-0 overflow-hidden text-[13px]">
