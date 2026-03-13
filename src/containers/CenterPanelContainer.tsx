@@ -7,6 +7,7 @@ import { PathScene } from "@/features/preview/components/PathScene";
 
 const GCodeEditorPanel = React.lazy(() => import("@/features/gcode-editor/components/GCodeEditorPanel"));
 const EditTab = React.lazy(() => import("@/components/EditTab"));
+const ConsolePanel = React.lazy(() => import("@/components/ConsolePanel").then(m => ({ default: m.ConsolePanel })));
 
 function Loader() {
   return (
@@ -111,6 +112,14 @@ export function CenterPanelContainer() {
               canRedo={canRedo}
               panButtonMode={settings.cad.panButton}
             />
+          </div>
+        </Suspense>
+      )}
+
+      {activeTab === "console" && (
+        <Suspense fallback={<Loader />}>
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            <ConsolePanel />
           </div>
         </Suspense>
       )}

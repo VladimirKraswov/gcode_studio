@@ -1,6 +1,7 @@
 import type { SketchDocument, SketchShape } from "../model/types";
 import { collectVisibleShapes } from "../model/grouping";
 import { extractShapeContours } from "../geometry/shapeContours";
+import { logger } from "@/shared/utils/logger";
 
 import {
   generateGCode,
@@ -226,10 +227,21 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
   const visibleShapes = collectVisibleShapes(doc).filter((s) => !s.isConstruction);
   const rawToolpaths: Toolpath[] = [];
 
+  logger.info("CAD", "Starting toolpath planning", {
+    visibleShapes: visibleShapes.length,
+    toolDiameter: doc.toolDiameter,
+    units: doc.units
+  });
+
   for (const shape of visibleShapes) {
     const geometryContours = await extractShapeContours(shape, doc.points);
     const contours = geometryContours.map((c) => toContour(c.points));
     const cam = resolveCam(shape, doc);
+
+    logger.debug("CAD", `Extracted ${contours.length} contours from ${shape.type} "${shape.name}"`, {
+      shapeId: shape.id,
+      contours: contours.map(c => c.length)
+    });
 
     if (cam.operation === "pocket") {
       rawToolpaths.push(...buildPocketToolpaths(shape, doc, contours));
@@ -241,7 +253,10 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
     }
   }
 
-  if (rawToolpaths.length === 0) return [];
+  if (rawToolpaths.length === 0) {
+    logger.warn("CAM", "No toolpaths generated from visible shapes");
+    return [];
+  }
 
   const oriented = optimizeTravel(
     rawToolpaths.map((tp) => ({
@@ -261,6 +276,11 @@ async function planDocumentToolpaths(doc: SketchDocument): Promise<Toolpath[]> {
         z: 0,
       })),
     };
+  });
+
+  logger.success("CAM", "Toolpath planning complete", {
+    totalToolpaths: reordered.length,
+    totalPoints: reordered.reduce((acc, tp) => acc + tp.points.length, 0)
   });
 
   return renumberToolpaths(reordered);

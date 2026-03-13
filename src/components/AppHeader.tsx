@@ -1,4 +1,4 @@
-import { FiDownload, FiFolder, FiMenu, FiMoon, FiSettings, FiSun, FiEye, FiCode, FiTool } from "react-icons/fi";
+import { FiDownload, FiFolder, FiMenu, FiMoon, FiSettings, FiSun, FiEye, FiCode, FiTool, FiTerminal } from "react-icons/fi";
 import { useTheme } from "@/shared/hooks/useTheme";
 import { type MainTab } from "@/types/ui";
 
@@ -35,7 +35,7 @@ export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) 
       </div>
 
       <div className="flex items-center gap-1 bg-panel-muted p-1 rounded-xl border border-border">
-        {(["view", "gcode", "edit"] as const).map((tab) => (
+        {(["view", "gcode", "edit", "console"] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabChange(tab)}
@@ -49,7 +49,8 @@ export function AppHeader({ fileName, activeTab, onTabChange }: AppHeaderProps) 
             {tab === "view" && <FiEye size={14} />}
             {tab === "gcode" && <FiCode size={14} />}
             {tab === "edit" && <FiTool size={14} />}
-            {tab === "view" ? "Превью" : tab === "gcode" ? "G-code" : "Конструктор"}
+            {tab === "console" && <FiTerminal size={14} />}
+            {tab === "view" ? "Превью" : tab === "gcode" ? "G-code" : tab === "edit" ? "Конструктор" : "Консоль"}
           </button>
         ))}
       </div>

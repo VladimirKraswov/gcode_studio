@@ -1,4 +1,4 @@
-import { FiCode, FiEye, FiLoader, FiTool } from "react-icons/fi";
+import { FiCode, FiEye, FiLoader, FiTool, FiTerminal } from "react-icons/fi";
 import { AppProvider } from "@/contexts/AppContext";
 import { useGCode } from "@/contexts/GCodeContext";
 import { useUI } from "@/contexts/UIContext";
@@ -28,6 +28,11 @@ const TAB_META = {
     title: "Конструктор",
     subtitle: "Создание геометрии и генерация G-code",
     icon: <FiTool size={18} />,
+  },
+  console: {
+    title: "Консоль",
+    subtitle: "Логирование и диагностика системы",
+    icon: <FiTerminal size={18} />,
   },
 };
 

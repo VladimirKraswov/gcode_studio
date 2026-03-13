@@ -218,7 +218,11 @@ export function CadCanvas({
         />
       )}
 
-      <SelectionBoxOverlay box={selectionBox} />
+      <SelectionBoxOverlay
+        box={selectionBox}
+        documentHeight={document.height}
+        view={view}
+      />
 
       <DraftOverlay
         draft={draft}

@@ -169,6 +169,10 @@ function parseGCode(text: string): ParsedGCode {
     return totalLength;
   });
 
+  if (workMoves > 0 && cuttingMoves === 0) {
+     console.warn("[PARSER] G1 commands found but none identified as cutting (Z <= 0)");
+  }
+
   const renderStep = Math.max(1, Math.ceil(segments.length / MAX_RENDER_SEGMENTS));
   const renderSegments =
     renderStep === 1

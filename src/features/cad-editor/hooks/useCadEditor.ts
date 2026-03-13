@@ -14,14 +14,13 @@ import {
   getCircleFromDraft,
   getLineFromDraft,
 } from "../geometry/draftGeometry";
-import { addShape, addPoint } from "../model/document";
+import { addShape } from "../model/document";
 import {
   createArcShape,
   createCircleShape,
   createLineShape,
   createSvgShape,
   createTextShape,
-  createPoint,
   createEllipseShape,
 } from "../model/shapeFactory";
 import { createId } from "../model/ids";
@@ -277,9 +276,11 @@ export function useCadEditor({
 
   const addCircle = useCallback((cx: number, cy: number, radius: number) => {
     if (radius < 1) return;
-    const center = createPoint(cx, cy);
-    const nextDoc = addPoint(document, center);
-    const shape = createCircleShape(`Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`, center.id, radius);
+    let nextDoc = { ...document };
+    const centerRes = materializeSnappedPoint(nextDoc, { x: cx, y: cy });
+    nextDoc = centerRes.document;
+
+    const shape = createCircleShape(`Circle ${document.shapes.filter((s) => s.type === "circle").length + 1}`, centerRes.pointId, radius);
     checkpointHistory();
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
@@ -308,15 +309,32 @@ export function useCadEditor({
     focusCreatedShape(shape.id);
   }, [document, checkpointHistory, setDocument, focusCreatedShape]);
 
-  const addArc = useCallback((cx: number, cy: number, radius: number, startAngle: number, endAngle: number, clockwise = false) => {
+  const addArc = useCallback((cx: number, cy: number, radius: number, _startAngle: number, _endAngle: number, p1x: number, p1y: number, p2x: number, p2y: number, clockwise = false) => {
     if (radius < 1) return;
-    const center = createPoint(cx, cy);
-    const p1 = createPoint(cx + radius * Math.cos((startAngle * Math.PI) / 180), cy + radius * Math.sin((startAngle * Math.PI) / 180));
-    const p2 = createPoint(cx + radius * Math.cos((endAngle * Math.PI) / 180), cy + radius * Math.sin((endAngle * Math.PI) / 180));
-    let nextDoc = addPoint(document, center);
-    nextDoc = addPoint(nextDoc, p1);
-    nextDoc = addPoint(nextDoc, p2);
-    const shape = createArcShape({ name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`, center: center.id, p1: p1.id, p2: p2.id, clockwise, radius });
+
+    let nextDoc = { ...document };
+    const centerRes = materializeSnappedPoint(nextDoc, { x: cx, y: cy });
+    nextDoc = centerRes.document;
+
+    const p1Res = materializeSnappedPoint(nextDoc, { x: p1x, y: p1y });
+    nextDoc = p1Res.document;
+
+    const p2Res = materializeSnappedPoint(nextDoc, { x: p2x, y: p2y });
+    nextDoc = p2Res.document;
+
+    const shape = createArcShape({
+      name: `Arc ${document.shapes.filter((s) => s.type === "arc").length + 1}`,
+      center: centerRes.pointId,
+      p1: p1Res.pointId,
+      p2: p2Res.pointId,
+      clockwise,
+      radius
+    });
+
+    // Add constraints to maintain radius
+    nextDoc.constraints.push(createConstraint("distance", [centerRes.pointId, p1Res.pointId], radius));
+    nextDoc.constraints.push(createConstraint("distance", [centerRes.pointId, p2Res.pointId], radius));
+
     checkpointHistory();
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
@@ -325,17 +343,39 @@ export function useCadEditor({
   const addRectangle = useCallback((x1: number, y1: number, x2: number, y2: number) => {
     if (Math.abs(x1 - x2) < 0.5 || Math.abs(y1 - y2) < 0.5) return;
     const minX = Math.min(x1, x2), maxX = Math.max(x1, x2), minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-    const p1 = createPoint(minX, minY), p2 = createPoint(maxX, minY), p3 = createPoint(maxX, maxY), p4 = createPoint(minX, maxY);
+
+    let nextDoc = { ...document };
+    const p1Res = materializeSnappedPoint(nextDoc, { x: minX, y: minY });
+    nextDoc = p1Res.document;
+    const p2Res = materializeSnappedPoint(nextDoc, { x: maxX, y: minY });
+    nextDoc = p2Res.document;
+    const p3Res = materializeSnappedPoint(nextDoc, { x: maxX, y: maxY });
+    nextDoc = p3Res.document;
+    const p4Res = materializeSnappedPoint(nextDoc, { x: minX, y: maxY });
+    nextDoc = p4Res.document;
+
     const groupId = createId("group");
     const rectIndex = document.groups.filter((g) => g.name.startsWith("Rectangle")).length + 1;
-    const l1 = { ...createLineShape(`Rectangle ${rectIndex} - Bottom`, p1.id, p2.id), groupId };
-    const l2 = { ...createLineShape(`Rectangle ${rectIndex} - Right`, p2.id, p3.id), groupId };
-    const l3 = { ...createLineShape(`Rectangle ${rectIndex} - Top`, p3.id, p4.id), groupId };
-    const l4 = { ...createLineShape(`Rectangle ${rectIndex} - Left`, p4.id, p1.id), groupId };
-    const nextConstraints = [createConstraint("horizontal", [p1.id, p2.id]), createConstraint("vertical", [p2.id, p3.id]), createConstraint("horizontal", [p3.id, p4.id]), createConstraint("vertical", [p4.id, p1.id])];
+    const l1 = { ...createLineShape(`Rectangle ${rectIndex} - Bottom`, p1Res.pointId, p2Res.pointId), groupId };
+    const l2 = { ...createLineShape(`Rectangle ${rectIndex} - Right`, p2Res.pointId, p3Res.pointId), groupId };
+    const l3 = { ...createLineShape(`Rectangle ${rectIndex} - Top`, p3Res.pointId, p4Res.pointId), groupId };
+    const l4 = { ...createLineShape(`Rectangle ${rectIndex} - Left`, p4Res.pointId, p1Res.pointId), groupId };
+
+    const nextConstraints = [
+      createConstraint("horizontal", [p1Res.pointId, p2Res.pointId]),
+      createConstraint("vertical", [p2Res.pointId, p3Res.pointId]),
+      createConstraint("horizontal", [p3Res.pointId, p4Res.pointId]),
+      createConstraint("vertical", [p4Res.pointId, p1Res.pointId])
+    ];
+
     checkpointHistory();
-    const nextDoc = updateGeometry({ ...document, points: [...document.points, p1, p2, p3, p4], shapes: [...document.shapes, l1, l2, l3, l4], groups: [...document.groups, { id: groupId, name: `Rectangle ${rectIndex}`, collapsed: false }], constraints: [...document.constraints, ...nextConstraints] });
-    setDocument(nextDoc);
+    const finalDoc = updateGeometry({
+      ...nextDoc,
+      shapes: [...nextDoc.shapes, l1, l2, l3, l4],
+      groups: [...nextDoc.groups, { id: groupId, name: `Rectangle ${rectIndex}`, collapsed: false }],
+      constraints: [...nextDoc.constraints, ...nextConstraints]
+    });
+    setDocument(finalDoc);
     setTool("select");
     onSelectionChange(buildGroupShapeSelection([l1, l2, l3, l4]));
     resetDrafts();
@@ -343,12 +383,20 @@ export function useCadEditor({
   }, [document, checkpointHistory, setDocument, onSelectionChange, setTool, resetDrafts]);
 
   const addEllipse = useCallback((cx: number, cy: number, mx: number, my: number) => {
-    const center = createPoint(cx, cy), major = createPoint(mx, my);
-    const dist = distance(center, major);
+    let nextDoc = { ...document };
+    const centerRes = materializeSnappedPoint(nextDoc, { x: cx, y: cy });
+    nextDoc = centerRes.document;
+    const majorRes = materializeSnappedPoint(nextDoc, { x: mx, y: my });
+    nextDoc = majorRes.document;
+
+    const p1 = nextDoc.points.find(p => p.id === centerRes.pointId);
+    const p2 = nextDoc.points.find(p => p.id === majorRes.pointId);
+    if (!p1 || !p2) return;
+
+    const dist = distance(p1, p2);
     if (dist < 1) return;
-    let nextDoc = addPoint(document, center);
-    nextDoc = addPoint(nextDoc, major);
-    const shape = createEllipseShape(`Ellipse ${document.shapes.filter((s) => s.type === "ellipse").length + 1}`, center.id, major.id, dist * 0.6);
+
+    const shape = createEllipseShape(`Ellipse ${document.shapes.filter((s) => s.type === "ellipse").length + 1}`, centerRes.pointId, majorRes.pointId, dist * 0.6);
     checkpointHistory();
     setDocument(updateGeometry(addShape(nextDoc, shape)));
     focusCreatedShape(shape.id);
@@ -383,7 +431,12 @@ export function useCadEditor({
       }
       if (draft.type === "arc" && draft.stage === "sweep") {
         const committed = getArcFromDraft({ ...draft, endX: cad.x, endY: cad.y });
-        if (committed) addArc(committed.cx, committed.cy, committed.radius, committed.startAngle, committed.endAngle, committed.clockwise);
+        if (committed) addArc(
+          committed.cx, committed.cy, committed.radius,
+          committed.startAngle, committed.endAngle,
+          draft.startX, draft.startY, cad.x, cad.y,
+          committed.clockwise
+        );
         setDraft(null); return;
       }
     }
@@ -428,7 +481,6 @@ export function useCadEditor({
         Math.pow(event.clientY - selectionBox.startClientY, 2)
       );
       setSelectionBox((prev) => prev ? { ...prev, endX: cad.x, endY: cad.y, moved: prev.moved || dist > 5 } : null);
-      return;
     }
     handleDrag(cad);
   }, [panState, tool, draft, getCadPoint, document, onViewChangeSilently, handleDrag, setPanState, setPolylineHoverPoint, setDraft, selectionBox]);
@@ -440,7 +492,8 @@ export function useCadEditor({
       if (tool === "ellipse") addEllipse(draft.startX, draft.startY, draft.endX, draft.endY);
       else { const line = getLineFromDraft(draft); addLine(line.x1, line.y1, line.x2, line.y2); }
     }
-    if (draft) setDraft(null);
+
+    if (draft && draft.type !== "arc") setDraft(null);
 
     if (selectionBox) {
       if (selectionBox.moved) {

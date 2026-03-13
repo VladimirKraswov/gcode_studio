@@ -12,6 +12,7 @@ import {
 import { fmt } from "./format";
 import { generateRampingPass } from "../toolpath/ramping";
 import { buildBridgeSpans, contourLength, isInsideAnyBridge, pointAtLength } from "../toolpath/bridges";
+import { logger } from "@/shared/utils/logger";
 
 const EPS = 1e-6;
 
@@ -141,6 +142,8 @@ export function generateGCode(input: GCodeGeneratorInput): string {
   const { toolpaths, machine } = input;
   const lines: string[] = [...emitProgramPreamble(machine)];
 
+  let hasNegativeZ = false;
+
   for (const toolpath of toolpaths) {
     if (!toolpath || toolpath.points.length < 2) continue;
 
@@ -150,6 +153,8 @@ export function generateGCode(input: GCodeGeneratorInput): string {
     }
 
     const cutZ = toolpath.cutZ;
+    if (cutZ < 0) hasNegativeZ = true;
+
     const passDepth = Math.max(0.001, Math.abs(toolpath.stepdown ?? 1));
     const passes = buildDepthPasses(cutZ, passDepth);
 
@@ -159,6 +164,17 @@ export function generateGCode(input: GCodeGeneratorInput): string {
       previousZ = passZ;
     }
   }
+
+  if (!hasNegativeZ && machine.units !== "inch") {
+    // Basic heuristic: for most jobs we expect some cutting below surface (Z < 0)
+    logger.warn("GCODE", "No negative Z values found in toolpaths. Tool will not cut material surface.");
+  }
+
+  logger.info("GCODE", "G-code generation summary", {
+    lines: lines.length,
+    toolpaths: toolpaths.length,
+    hasNegativeZ
+  });
 
   lines.push(...emitProgramPostamble(machine));
   return lines.join("\n") + "\n";

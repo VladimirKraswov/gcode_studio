@@ -1,1 +1,1 @@
-export type MainTab = "view" | "gcode" | "edit";
+export type MainTab = "view" | "gcode" | "edit" | "console";
