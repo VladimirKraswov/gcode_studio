@@ -22,7 +22,7 @@ export type GeometryContour = {
 };
 
 function round(value: number): number {
-  return Number(value.toFixed(3));
+  return Number(value.toFixed(6));
 }
 
 function rotatePoint(
@@ -37,10 +37,14 @@ function ensureClosed(points: { x: number; y: number }[]): { x: number; y: numbe
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
-  if (Math.hypot(first.x - last.x, first.y - last.y) <= 0.001) {
-    return [...points];
+  const d = Math.hypot(first.x - last.x, first.y - last.y);
+  if (d <= 0.001) {
+    if (d === 0) return [...points];
+    const res = [...points];
+    res[res.length - 1] = { x: first.x, y: first.y };
+    return res;
   }
-  return [...points, { ...first }];
+  return [...points, { x: first.x, y: first.y }];
 }
 
 function rectangleToContours(shape: SketchRectangle, points: SketchPoint[]): GeometryContour[] {
@@ -162,7 +166,7 @@ function ellipseToContours(
   return [{ points: isArc ? contourPoints : ensureClosed(contourPoints), closed: !isArc }];
 }
 
-function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 300): GeometryContour[] {
+function bsplineToContours(shape: SketchBSpline, points: SketchPoint[], segments = 600): GeometryContour[] {
   const sampled = sampleBSpline(shape, points, segments);
 
   if (sampled.length < 2) return [];

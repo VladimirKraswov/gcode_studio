@@ -1,8 +1,8 @@
 // src/geometry/offset.ts
 import type { JoinType, Point } from "../types";
 
-const EPS = 1e-7;
-const ROUND_ARC_STEPS_PER_90 = 8;
+const EPS = 1e-9;
+const ROUND_ARC_STEPS_PER_90 = 16;
 const DEFAULT_MITER_LIMIT = 4;
 
 type Vec2 = { x: number; y: number };
@@ -253,12 +253,14 @@ function splitSegmentsAtIntersections(loop: Point[]): Segment[] {
 }
 
 function buildGraph(segments: Segment[]) {
-  const nodeMap = new Map<string, number>();
   const nodes: Node[] = [];
   const getNodeId = (p: Point) => {
-    const key = `${round(p.x)}:${round(p.y)}`;
-    let id = nodeMap.get(key);
-    if (id === undefined) { id = nodes.length; nodes.push(rp(p)); nodeMap.set(key, id); }
+    // Distance-based node merging to avoid precision-related "cracks"
+    for (let i = 0; i < nodes.length; i++) {
+        if (eq(nodes[i], p, 1e-6)) return i;
+    }
+    const id = nodes.length;
+    nodes.push(rp(p));
     return id;
   };
   const edges: DirectedEdge[] = [];
@@ -338,13 +340,13 @@ export function pointInPolygon(point: Point, polygon: Point[]): boolean {
 
     // Robust point-in-polygon with epsilon and boundary handling
     const intersect = ((yi > y) !== (yj > y)) &&
-                     (x < (xj - xi) * (y - yi) / (yj - yi || 1e-10) + xi);
+                     (x < (xj - xi) * (y - yi) / (yj - yi || 1e-12) + xi);
     if (intersect) inside = !inside;
 
     // Exact match on vertex or point on horizontal edge
-    const onEdge = Math.abs((xj - xi) * (y - yi) - (x - xi) * (yj - yi)) < 1e-8 &&
-                   x >= Math.min(xi, xj) - 1e-8 && x <= Math.max(xi, xj) + 1e-8 &&
-                   y >= Math.min(yi, yj) - 1e-8 && y <= Math.max(yi, yj) + 1e-8;
+    const onEdge = Math.abs((xj - xi) * (y - yi) - (x - xi) * (yj - yi)) < 1e-9 &&
+                   x >= Math.min(xi, xj) - 1e-9 && x <= Math.max(xi, xj) + 1e-9 &&
+                   y >= Math.min(yi, yj) - 1e-9 && y <= Math.max(yi, yj) + 1e-9;
     if (onEdge) return true;
   }
   return inside;
@@ -412,15 +414,24 @@ export function buildOffset(
     const n = { x: -v.y, y: v.x }; // Left normal (pointing inside the CCW loop)
     const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
 
-    const testPt = add(mid, mul(n, 0.01));
-    const inside = pointInPolygon(testPt, src);
+    // Multi-point validation for complex concave shapes
+    const testPoints = [
+        add(mid, mul(n, 0.01)),
+        add(p1, mul(n, 0.01)),
+        add(p2, mul(n, 0.01))
+    ];
 
-    if (offset > 0) {
-        if (inside) return false;
-    } else {
-        if (!inside) return false;
+    for (const testPt of testPoints) {
+        const inside = pointInPolygon(testPt, src);
+        if (offset > 0) {
+            if (inside) return false;
+        } else {
+            if (!inside) return false;
+        }
+    }
+
+    if (offset < 0) {
         // Strict distance check for inward offsets to prevent cross-overs
-        // Each point on the offset path must be at least |offset| away from boundary
         const d = minDistanceToPolyline(mid, src);
         if (d < Math.abs(offset) - 1e-4) return false;
     }
