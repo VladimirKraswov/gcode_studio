@@ -18,11 +18,13 @@ import {
 } from "../geometry/pocket";
 import { optimizeTravel } from "./travelOptimizer";
 
+const EPS = 1e-6;
+
 function closeIfNeeded(points: Point[]): Point[] {
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
-  const closed = Math.hypot(first.x - last.x, first.y - last.y) <= 1e-6;
+  const closed = Math.hypot(first.x - last.x, first.y - last.y) <= EPS;
   return closed ? [...points] : [...points, { ...first }];
 }
 
@@ -40,8 +42,15 @@ function normalizeClosed(points: Point[]): Point[] {
   if (points.length < 2) return [...points];
   const first = points[0];
   const last = points[points.length - 1];
-  if (Math.hypot(first.x - last.x, first.y - last.y) <= 1e-6) return points.slice(0, -1);
+  if (Math.hypot(first.x - last.x, first.y - last.y) <= EPS) return points.slice(0, -1);
   return [...points];
+}
+
+function isClosedPath(points: Point[]): boolean {
+  if (points.length < 2) return false;
+  const first = points[0];
+  const last = points[points.length - 1];
+  return Math.hypot(first.x - last.x, first.y - last.y) <= EPS;
 }
 
 function orientPath(
@@ -56,8 +65,6 @@ function orientPath(
 
   const open = normalizeClosed(points);
   const ccw = signedArea(open) > 0;
-  // Outside + Climb = CCW, Outside + Conventional = CW
-  // Inside + Climb = CW, Inside + Conventional = CCW
   const wantCCW = insideLike ? wantConventional : !wantConventional;
   const oriented = ccw === wantCCW ? open : [...open].reverse();
   return closeIfNeeded(oriented);
@@ -113,7 +120,6 @@ export function planProfile(input: ProfilePlanInput): Toolpath[] {
     },
   } = input;
 
-  const toolRadius = Math.max(0.001, tool.diameter / 2);
   const wantConventional = direction === "conventional";
   const resolvedTabs = resolveTabs(tabs);
   const resolvedRamping = resolveRamping(ramping);
@@ -121,35 +127,45 @@ export function planProfile(input: ProfilePlanInput): Toolpath[] {
   const resolvedLeadOut = resolveLead(leadOut);
 
   if (operation === "follow-path") {
-    const points = orientPath(contour, false, wantConventional, false);
+    const closed = isClosedPath(contour);
+    const points = closed ? closeIfNeeded(contour) : [...contour];
+    const oriented = closed
+      ? orientPath(points, true, wantConventional, false)
+      : (wantConventional ? [...points].reverse() : [...points]);
+
     return [{
       name: makeName(name, "Follow Path"),
-      points: to3D(points),
-      closed: false,
+      points: to3D(oriented),
+      closed,
       cutZ,
       kind: "path",
       stepdown: tool.passDepth,
       tabs: { ...resolvedTabs, enabled: false },
-      ramping: { ...resolvedRamping, enabled: false },
+      ramping: closed ? resolvedRamping : { ...resolvedRamping, enabled: false },
       leadIn: resolvedLeadIn,
       leadOut: resolvedLeadOut,
     }];
   }
 
-  const offset = operation === "profile-outside" ? toolRadius : -toolRadius;
-  const loops = buildOffset(contour, offset, joinType, miterLimit);
-  const targetLoops = loops.length > 0 ? loops : [closeIfNeeded(contour)];
+  const distance = operation === "profile-outside"
+    ? tool.diameter / 2
+    : -tool.diameter / 2;
 
-  return targetLoops.map((loop, index) => {
-    const oriented = orientPath(
-      loop,
-      true,
-      wantConventional,
-      operation === "profile-inside"
-    );
+  const offsetLoops = buildOffset(contour, distance, joinType, miterLimit);
+  if (offsetLoops.length === 0) {
+    return [];
+  }
+
+  return offsetLoops.map((loop, index) => {
+    const insideLike = operation === "profile-inside";
+    const oriented = orientPath(closeIfNeeded(loop), true, wantConventional, insideLike);
 
     return {
-      name: makeName(name, operation === "profile-outside" ? "Profile Outside" : "Profile Inside", index),
+      name: makeName(
+        name,
+        operation === "profile-outside" ? "Profile Outside" : "Profile Inside",
+        index
+      ),
       points: to3D(oriented),
       closed: true,
       cutZ,
@@ -189,27 +205,23 @@ export function planPocket(input: PocketPlanInput): Toolpath[] {
   else if (strategy === "parallel") paths = generateParallelPocketWithHoles(contours, toolRadius, step, angle);
   else paths = generateBestPocket(contours, toolRadius, step, angle);
 
-  const oriented = optimizeTravel(
-    paths.map((points) => ({ points, closed: true })),
-    { x: 0, y: 0 }
-  );
+  const candidates = paths.map((points) => ({
+    points,
+    closed: isClosedPath(points),
+  }));
+
+  const oriented = optimizeTravel(candidates, { x: 0, y: 0 });
 
   return oriented.map((path, index) => {
-    // For pockets, generateBestPocket returns CCW loops.
-    // In CAM, Climb milling for an internal pocket (CCW path) is actually CW (if we want to keep tool to the left of the path).
-    // Wait, if the path is CCW and tool is INSIDE, then the tool is to the RIGHT of the path for Climb?
-    // Let's stick to standard:
-    // Outside + Climb = CCW
-    // Inside/Pocket + Climb = CW
-    // Our pocket generator returns CCW loops. So for Climb, we need to reverse them to get CW.
-    const ccw = signedArea(path.points) > 0;
-    const wantCCW = wantConventional; // Conventional for Pocket is CCW, Climb is CW.
-    const finalPoints = (ccw === wantCCW) ? path.points : [...path.points].reverse();
+    const closed = path.closed || isClosedPath(path.points);
+    const finalPoints = closed
+      ? orientPath(path.points, true, wantConventional, true)
+      : (wantConventional ? [...path.points].reverse() : path.points);
 
     return {
       name: makeName(name, "Pocket", index),
       points: to3D(finalPoints),
-      closed: true,
+      closed,
       cutZ,
       kind: "pocket",
       stepdown: tool.passDepth,

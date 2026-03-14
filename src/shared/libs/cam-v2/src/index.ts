@@ -1,5 +1,6 @@
 export * from "./types";
 
+export * from "./geometry/polygon";
 export * from "./geometry/offset";
 export * from "./geometry/pocket";
 export * from "./geometry/classifier";

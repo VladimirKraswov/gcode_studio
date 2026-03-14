@@ -84,6 +84,7 @@ export type PlanOptions = {
   joinType?: JoinType;
   miterLimit?: number;
   direction?: "climb" | "conventional";
+  offsetMode?: "tool-center" | "geometry";
   tabs?: Partial<TabsConfig>;
   ramping?: Partial<RampingConfig>;
   leadIn?: Partial<LeadConfig>;
