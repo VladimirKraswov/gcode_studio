@@ -10,7 +10,7 @@ import {
   polygonDifference,
   polygonUnion,
 } from "./kernel/clipperKernel";
-import { EPS } from "./polygon";
+import { EPS, pointsEqual } from "./polygon";
 
 type Paths = Point[][];
 
@@ -34,6 +34,37 @@ function rp(p: Point): Point {
 
 function dist(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function isClosedLoop(path: Point[]): boolean {
+  if (path.length < 2) return false;
+  return pointsEqual(path[0], path[path.length - 1], 1e-6);
+}
+
+function normalizeOpenPath(path: Point[]): Point[] {
+  if (path.length === 0) return [];
+  const out: Point[] = [];
+  for (const src of path) {
+    const p = rp(src);
+    if (out.length === 0 || dist(out[out.length - 1], p) > 1e-6) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function normalizeClosedLoop(path: Point[]): Point[] {
+  const open = normalizePolygon(path).map(rp);
+  if (open.length < 3) return [];
+  return ensurePolygonOrientation(open, false);
+}
+
+function cleanClosedLoop(path: Point[]): Point[] {
+  const open = normalizeClosedLoop(path);
+  if (open.length < 3) return [];
+  const closed = closePolygon(open).map(rp);
+  if (closed.length < 4) return [];
+  return closed;
 }
 
 function pointInPolygon(point: Point, polygon: Point[]): boolean {
@@ -81,20 +112,26 @@ function rotatePaths(paths: Paths, origin: Point, angleRad: number): Paths {
 
 function offsetPaths(paths: Paths, deltaMm: number): Paths {
   if (paths.length === 0) return [];
-  return inflatePolygons(paths, deltaMm, "round", 2);
+  return inflatePolygons(paths, deltaMm, "round", 2)
+    .map(normalizeClosedLoop)
+    .filter((loop) => loop.length >= 3);
 }
 
 function unionPaths(paths: Paths): Paths {
-  return polygonUnion(paths);
+  return polygonUnion(paths)
+    .map(normalizeClosedLoop)
+    .filter((loop) => loop.length >= 3);
 }
 
 function differencePaths(subject: Paths, clip: Paths): Paths {
-  return polygonDifference(subject, clip);
+  return polygonDifference(subject, clip)
+    .map(normalizeClosedLoop)
+    .filter((loop) => loop.length >= 3);
 }
 
 function regionFromLoops(loops: Paths): Region {
   const normalized = loops
-    .map((loop) => normalizePolygon(loop))
+    .map(normalizeClosedLoop)
     .filter((loop) => loop.length >= 3);
 
   if (normalized.length === 0) {
@@ -102,7 +139,9 @@ function regionFromLoops(loops: Paths): Region {
   }
 
   const classified = classifyContours(normalized);
-  const shells = classified.external.map((path) => ensurePolygonOrientation(path, false));
+  const shells = classified.external
+    .map((path) => ensurePolygonOrientation(path, false))
+    .filter((path) => path.length >= 3);
 
   const holes: Paths = [];
   classified.external.forEach((_, externalIndex) => {
@@ -121,11 +160,16 @@ function buildMachiningRegion(
   holes: Paths,
   toolRadius: number
 ): Region {
-  const safeOuter = offsetPaths([ensurePolygonOrientation(outer, false)], -toolRadius);
+  const safeOuter = offsetPaths([ensurePolygonOrientation(normalizePolygon(outer), false)], -toolRadius);
   if (safeOuter.length === 0) return { shells: [], holes: [] };
 
   const grownHoles =
-    holes.length > 0 ? offsetPaths(holes.map((h) => ensurePolygonOrientation(h, false)), toolRadius) : [];
+    holes.length > 0
+      ? offsetPaths(
+          holes.map((h) => ensurePolygonOrientation(normalizePolygon(h), false)),
+          toolRadius
+        )
+      : [];
 
   const safeArea = differencePaths(safeOuter, grownHoles);
   return regionFromLoops(safeArea);
@@ -133,15 +177,18 @@ function buildMachiningRegion(
 
 function cleanupOpenSegment(segment: Point[]): Point[] {
   if (segment.length < 2) return [];
-  const a = rp(segment[0]);
-  const b = rp(segment[segment.length - 1]);
+  const clean = normalizeOpenPath(segment);
+  if (clean.length < 2) return [];
+  const a = clean[0];
+  const b = clean[clean.length - 1];
   if (dist(a, b) <= EPS) return [];
   return [a, b];
 }
 
 function polygonIntersectionsAtY(polygon: Point[], y: number): number[] {
-  const loop = closePolygon(polygon);
+  const loop = cleanClosedLoop(polygon);
   const xs: number[] = [];
+  if (loop.length < 4) return xs;
 
   for (let i = 0; i < loop.length - 1; i++) {
     const a = loop[i];
@@ -170,7 +217,7 @@ function polygonIntersectionsAtY(polygon: Point[], y: number): number[] {
   return deduped;
 }
 
-function intervalsFromPolygonAtY(polygon: Point[], y: number) {
+function intervalsFromPolygonAtY(polygon: Point[], y: number): Interval[] {
   const xs = polygonIntersectionsAtY(polygon, y);
   const intervals: Interval[] = [];
 
@@ -235,6 +282,39 @@ function regionIntervalsAtY(region: Region, y: number): Interval[] {
   return out;
 }
 
+function segmentMidpoint(seg: Point[]): Point {
+  return {
+    x: (seg[0].x + seg[1].x) / 2,
+    y: (seg[0].y + seg[1].y) / 2,
+  };
+}
+
+function connectable(a: Point[], b: Point[], tolerance: number): boolean {
+  if (a.length < 2 || b.length < 2) return false;
+  return dist(a[a.length - 1], b[0]) <= tolerance;
+}
+
+function mergeSegmentsIntoOpenPaths(segments: Paths, bridgeTolerance: number): Paths {
+  if (segments.length === 0) return [];
+
+  const result: Paths = [];
+  let current = [...segments[0]];
+
+  for (let i = 1; i < segments.length; i++) {
+    const next = segments[i];
+    if (connectable(current, next, bridgeTolerance)) {
+      current = [...current, ...next.slice(1)];
+    } else {
+      result.push(normalizeOpenPath(current));
+      current = [...next];
+    }
+  }
+
+  result.push(normalizeOpenPath(current));
+
+  return result.filter((path) => path.length >= 2);
+}
+
 function generateScanlineSegments(region: Region, stepover: number, angleDeg = 0): Paths {
   const allLoops = [...region.shells, ...region.holes];
   if (allLoops.length === 0) return [];
@@ -257,7 +337,7 @@ function generateScanlineSegments(region: Region, stepover: number, angleDeg = 0
 
   const spacing = Math.max(0.05, stepover);
   const lineCount = Math.max(1, Math.ceil((maxY - minY) / spacing));
-  const paths: Paths = [];
+  const rows: Paths = [];
 
   for (let i = 0; i <= lineCount; i++) {
     const rawY = i === lineCount ? maxY - EPS : minY + i * spacing + EPS;
@@ -287,7 +367,6 @@ function generateScanlineSegments(region: Region, stepover: number, angleDeg = 0
     }
 
     if (rowSegments.length === 0) continue;
-
     if (i % 2 === 1) rowSegments.reverse();
 
     for (let j = 0; j < rowSegments.length; j++) {
@@ -299,21 +378,44 @@ function generateScanlineSegments(region: Region, stepover: number, angleDeg = 0
           ? oriented.map((p) => rotatePoint(p, origin, angleRad))
           : oriented.map(rp);
 
-      if (cleanupOpenSegment(restored).length === 2) {
-        paths.push(restored);
-      }
+      const cleaned = cleanupOpenSegment(restored);
+      if (cleaned.length === 2) rows.push(cleaned);
     }
   }
 
-  return paths;
+  return mergeSegmentsIntoOpenPaths(rows, Math.max(0.05, stepover * 0.75));
 }
 
 function boundaryLoops(region: Region): Paths {
   const paths: Paths = [];
   for (const shell of region.shells) {
-    const loop = closePolygon(shell);
+    const loop = cleanClosedLoop(shell);
     if (loop.length >= 4) paths.push(loop);
   }
+  return paths;
+}
+
+function generateOffsetRings(region: Region, stepover: number): Paths {
+  const paths: Paths = [];
+  if (region.shells.length === 0) return paths;
+
+  let currentShells = unionPaths(region.shells);
+  let iteration = 0;
+  const maxIterations = 10000;
+
+  while (currentShells.length > 0 && iteration < maxIterations) {
+    for (const shell of currentShells) {
+      const loop = cleanClosedLoop(shell);
+      if (loop.length >= 4) paths.push(loop);
+    }
+
+    const next = offsetPaths(currentShells, -stepover);
+    if (next.length === 0) break;
+
+    currentShells = next;
+    iteration++;
+  }
+
   return paths;
 }
 
@@ -323,10 +425,19 @@ function buildPocketPaths(
   toolRadius: number,
   stepover: number,
   angleDeg: number,
-  includeBoundary: boolean
+  includeBoundary: boolean,
+  mode: "offset" | "parallel" | "auto"
 ): Paths {
   const region = buildMachiningRegion(outer, holes, toolRadius);
   if (region.shells.length === 0) return [];
+
+  if (mode === "offset") {
+    return generateOffsetRings(region, Math.max(0.05, stepover));
+  }
+
+  if (mode === "parallel") {
+    return generateScanlineSegments(region, stepover, angleDeg);
+  }
 
   const paths: Paths = [];
   if (includeBoundary) paths.push(...boundaryLoops(region));
@@ -341,7 +452,7 @@ export function buildPocketOffsets(
   keepCenterCleanup = true
 ): Paths {
   void keepCenterCleanup;
-  return buildPocketPaths(polyline, [], toolRadius, stepover, 0, true);
+  return buildPocketPaths(polyline, [], toolRadius, stepover, 0, true, "offset");
 }
 
 export function generateOffsetPocketWithHoles(
@@ -367,7 +478,7 @@ export function generateOffsetPocketWithHoles(
       .filter((hole) => hole.length >= 3)
       .map((hole) => ensurePolygonOrientation(hole, false));
 
-    paths.push(...buildPocketPaths(outer, holes, toolRadius, step, 0, true));
+    paths.push(...buildPocketPaths(outer, holes, toolRadius, step, 0, true, "offset"));
   });
 
   return paths;
@@ -397,7 +508,7 @@ export function generateParallelPocketWithHoles(
       .filter((hole) => hole.length >= 3)
       .map((hole) => ensurePolygonOrientation(hole, false));
 
-    paths.push(...buildPocketPaths(outer, holes, toolRadius, step, angle, false));
+    paths.push(...buildPocketPaths(outer, holes, toolRadius, step, angle, false, "parallel"));
   });
 
   return paths;
@@ -438,9 +549,9 @@ export function generateBestPocket(
       Math.max(width, height) / Math.max(1e-9, Math.min(width, height)) > 1.35;
 
     if (elongated) {
-      paths.push(...buildPocketPaths(outer, holes, toolRadius, step, angle, false));
+      paths.push(...buildPocketPaths(outer, holes, toolRadius, step, angle, false, "parallel"));
     } else {
-      paths.push(...buildPocketPaths(outer, holes, toolRadius, step, 0, true));
+      paths.push(...buildPocketPaths(outer, holes, toolRadius, step, 0, true, "offset"));
     }
   });
 

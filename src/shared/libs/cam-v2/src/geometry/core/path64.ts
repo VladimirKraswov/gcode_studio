@@ -8,6 +8,20 @@ export interface IPoint64 {
   y: number;
 }
 
+export function pointsEqual64(
+  lhs: IPoint64 | undefined,
+  rhs: IPoint64 | undefined
+): boolean {
+  return !!lhs && !!rhs && lhs.x === rhs.x && lhs.y === rhs.y;
+}
+
+export function pointsNotEqual64(
+  lhs: IPoint64 | undefined,
+  rhs: IPoint64 | undefined
+): boolean {
+  return !pointsEqual64(lhs, rhs);
+}
+
 export class Path64 extends Array<IPoint64> {}
 
 export class Paths64 extends Array<Path64> {}
@@ -35,11 +49,11 @@ export class Point64 implements IPoint64 {
     }
   }
 
-  public static equals(lhs: Point64, rhs: Point64): boolean {
+  public static equals(lhs: IPoint64, rhs: IPoint64): boolean {
     return lhs.x === rhs.x && lhs.y === rhs.y;
   }
 
-  public static notEquals(lhs: Point64, rhs: Point64): boolean {
+  public static notEquals(lhs: IPoint64, rhs: IPoint64): boolean {
     return lhs.x !== rhs.x || lhs.y !== rhs.y;
   }
 

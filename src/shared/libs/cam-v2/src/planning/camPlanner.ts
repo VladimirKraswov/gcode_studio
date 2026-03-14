@@ -16,6 +16,7 @@ import {
   generateOffsetPocketWithHoles,
   generateParallelPocketWithHoles,
 } from "../geometry/pocket";
+import { closeLoop, normalizeClosed, signedArea } from "../geometry/polygon";
 import { optimizeTravel } from "./travelOptimizer";
 
 const EPS = 1e-6;
@@ -26,24 +27,6 @@ function closeIfNeeded(points: Point[]): Point[] {
   const last = points[points.length - 1];
   const closed = Math.hypot(first.x - last.x, first.y - last.y) <= EPS;
   return closed ? [...points] : [...points, { ...first }];
-}
-
-function signedArea(points: Point[]): number {
-  let area = 0;
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    area += a.x * b.y - b.x * a.y;
-  }
-  return area / 2;
-}
-
-function normalizeClosed(points: Point[]): Point[] {
-  if (points.length < 2) return [...points];
-  const first = points[0];
-  const last = points[points.length - 1];
-  if (Math.hypot(first.x - last.x, first.y - last.y) <= EPS) return points.slice(0, -1);
-  return [...points];
 }
 
 function isClosedPath(points: Point[]): boolean {
@@ -65,7 +48,11 @@ function orientPath(
 
   const open = normalizeClosed(points);
   const ccw = signedArea(open) > 0;
-  const wantCCW = insideLike ? wantConventional : !wantConventional;
+
+  // outside: climb = CW, conventional = CCW
+  // inside : climb = CCW, conventional = CW
+  const wantCCW = insideLike ? !wantConventional : wantConventional;
+
   const oriented = ccw === wantCCW ? open : [...open].reverse();
   return closeIfNeeded(oriented);
 }
@@ -102,6 +89,12 @@ function makeName(base: string | undefined, fallback: string, index?: number): s
   return `${base ?? fallback} ${index + 1}`;
 }
 
+function normalizeToolpathPoints(points: Point[], closed: boolean): Point[] {
+  const open = normalizeClosed(points);
+  if (open.length === 0) return [];
+  return closed ? closeLoop(open) : [...open];
+}
+
 export function planProfile(input: ProfilePlanInput): Toolpath[] {
   const {
     contour,
@@ -135,7 +128,7 @@ export function planProfile(input: ProfilePlanInput): Toolpath[] {
 
     return [{
       name: makeName(name, "Follow Path"),
-      points: to3D(oriented),
+      points: to3D(normalizeToolpathPoints(oriented, closed)),
       closed,
       cutZ,
       kind: "path",
@@ -152,9 +145,7 @@ export function planProfile(input: ProfilePlanInput): Toolpath[] {
     : -tool.diameter / 2;
 
   const offsetLoops = buildOffset(contour, distance, joinType, miterLimit);
-  if (offsetLoops.length === 0) {
-    return [];
-  }
+  if (offsetLoops.length === 0) return [];
 
   return offsetLoops.map((loop, index) => {
     const insideLike = operation === "profile-inside";
@@ -166,7 +157,7 @@ export function planProfile(input: ProfilePlanInput): Toolpath[] {
         operation === "profile-outside" ? "Profile Outside" : "Profile Inside",
         index
       ),
-      points: to3D(oriented),
+      points: to3D(normalizeToolpathPoints(oriented, true)),
       closed: true,
       cutZ,
       kind: "contour",
@@ -205,10 +196,13 @@ export function planPocket(input: PocketPlanInput): Toolpath[] {
   else if (strategy === "parallel") paths = generateParallelPocketWithHoles(contours, toolRadius, step, angle);
   else paths = generateBestPocket(contours, toolRadius, step, angle);
 
-  const candidates = paths.map((points) => ({
-    points,
-    closed: isClosedPath(points),
-  }));
+  const candidates = paths
+    .map((points) => {
+      const closed = isClosedPath(points);
+      const normalized = normalizeToolpathPoints(points, closed);
+      return { points: normalized, closed };
+    })
+    .filter((item) => item.points.length >= (item.closed ? 4 : 2));
 
   const oriented = optimizeTravel(candidates, { x: 0, y: 0 });
 
@@ -216,11 +210,11 @@ export function planPocket(input: PocketPlanInput): Toolpath[] {
     const closed = path.closed || isClosedPath(path.points);
     const finalPoints = closed
       ? orientPath(path.points, true, wantConventional, true)
-      : (wantConventional ? [...path.points].reverse() : path.points);
+      : (wantConventional ? [...path.points].reverse() : [...path.points]);
 
     return {
       name: makeName(name, "Pocket", index),
-      points: to3D(finalPoints),
+      points: to3D(normalizeToolpathPoints(finalPoints, closed)),
       closed,
       cutZ,
       kind: "pocket",

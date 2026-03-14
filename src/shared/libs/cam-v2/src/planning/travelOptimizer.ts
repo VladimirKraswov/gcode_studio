@@ -1,6 +1,7 @@
 // src/planning/travelOptimizer.ts
 
 import type { Point } from "../types";
+import { closeLoop, normalizeClosed } from "../geometry/polygon";
 
 export type TravelCandidate = {
   points: Point[];
@@ -23,29 +24,39 @@ function distance(a: Point, b: Point): number {
   return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
-function normalizeClosed(points: Point[]): Point[] {
-  if (points.length < 2) return [...points];
-  const first = points[0];
-  const last = points[points.length - 1];
-  if (distance(first, last) <= EPS) {
-    return points.slice(0, -1).map((p) => ({ x: round(p.x), y: round(p.y) }));
-  }
+function normalizePoints(points: Point[]): Point[] {
   return points.map((p) => ({ x: round(p.x), y: round(p.y) }));
 }
 
+function normalizeClosedPath(points: Point[]): Point[] {
+  return normalizePoints(normalizeClosed(points));
+}
+
 function closeIfNeeded(points: Point[]): Point[] {
-  if (points.length < 2) return [...points];
-  const first = points[0];
-  const last = points[points.length - 1];
-  if (distance(first, last) <= EPS) return [...points];
-  return [...points, { ...first }];
+  const normalized = normalizeClosedPath(points);
+  if (normalized.length < 2) return [...normalized];
+  return closeLoop(normalized);
 }
 
 function rotateClosedPath(points: Point[], startIndex: number): Point[] {
-  const open = normalizeClosed(points);
+  const open = normalizeClosedPath(points);
   if (open.length === 0) return [];
   const idx = ((startIndex % open.length) + open.length) % open.length;
   const rotated = [...open.slice(idx), ...open.slice(0, idx)];
+  return closeIfNeeded(rotated);
+}
+
+function reverseClosedPath(points: Point[]): Point[] {
+  const open = normalizeClosedPath(points);
+  if (open.length === 0) return [];
+  return closeIfNeeded([...open].reverse());
+}
+
+function rotateClosedPathFromReversed(points: Point[], startIndex: number): Point[] {
+  const reversed = normalizeClosed(reverseClosedPath(points));
+  if (reversed.length === 0) return [];
+  const idx = ((startIndex % reversed.length) + reversed.length) % reversed.length;
+  const rotated = [...reversed.slice(idx), ...reversed.slice(0, idx)];
   return closeIfNeeded(rotated);
 }
 
@@ -65,17 +76,30 @@ function findNearestVertexIndex(points: Point[], target: Point): number {
 }
 
 export function orientOpenPathFromNearest(points: Point[], current: Point): Point[] {
-  if (points.length <= 1) return [...points];
-  const start = points[0];
-  const end = points[points.length - 1];
-  return distance(current, end) < distance(current, start) ? [...points].reverse() : [...points];
+  const normalized = normalizePoints(points);
+  if (normalized.length <= 1) return [...normalized];
+  const start = normalized[0];
+  const end = normalized[normalized.length - 1];
+  return distance(current, end) < distance(current, start) ? [...normalized].reverse() : [...normalized];
 }
 
 export function orientClosedPathFromNearest(points: Point[], current: Point): Point[] {
-  const open = normalizeClosed(points);
+  const open = normalizeClosedPath(points);
   if (open.length <= 1) return closeIfNeeded(open);
-  const nearestIndex = findNearestVertexIndex(open, current);
-  return rotateClosedPath(open, nearestIndex);
+
+  const nearestIndexForward = findNearestVertexIndex(open, current);
+  const forward = rotateClosedPath(open, nearestIndexForward);
+
+  const reversedOpen = [...open].reverse();
+  const nearestIndexReverse = findNearestVertexIndex(reversedOpen, current);
+  const reverse = rotateClosedPathFromReversed(open, nearestIndexReverse);
+
+  if (forward.length === 0) return reverse;
+  if (reverse.length === 0) return forward;
+
+  const dForward = distance(current, forward[0]);
+  const dReverse = distance(current, reverse[0]);
+  return dReverse < dForward ? reverse : forward;
 }
 
 export function orientPathFromNearest(points: Point[], current: Point, closed: boolean): Point[] {
@@ -91,7 +115,7 @@ export function optimizeTravel(
   let current = { ...startPoint };
 
   while (pending.length > 0) {
-    let bestIndex = 0;
+    let bestIndex = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestOriented: Point[] = [];
 
@@ -101,18 +125,26 @@ export function optimizeTravel(
       if (oriented.length === 0) continue;
 
       const d = distance(current, oriented[0]);
-      if (d < bestDistance) {
+      if (d < bestDistance - EPS) {
         bestDistance = d;
         bestIndex = i;
         bestOriented = oriented;
       }
     }
 
+    if (bestIndex < 0) break;
+
     const picked = pending.splice(bestIndex, 1)[0];
-    const oriented = bestOriented.length > 0 ? bestOriented : orientPathFromNearest(picked.points, current, picked.closed);
+    const oriented =
+      bestOriented.length > 0
+        ? bestOriented
+        : orientPathFromNearest(picked.points, current, picked.closed);
 
     result.push({ index: picked.index, points: oriented, closed: picked.closed });
-    if (oriented.length > 0) current = oriented[oriented.length - 1];
+
+    if (oriented.length > 0) {
+      current = picked.closed ? oriented[0] : oriented[oriented.length - 1];
+    }
   }
 
   return result;

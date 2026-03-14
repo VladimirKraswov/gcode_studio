@@ -7,7 +7,7 @@ import {
   PathType,
 } from "../core/enums";
 import type { IPoint64 } from "../core/path64";
-import { Path64, Paths64, Point64 } from "../core/path64";
+import { Path64, Paths64, Point64, pointsEqual64 } from "../core/path64";
 import { Rect64 } from "../core/intRect";
 import { InternalClipper, midPointRound } from "../core/internalMath";
 import {
@@ -22,11 +22,8 @@ import { ClipperOffset, EndType, JoinType } from "../offset/clipperOffset";
 import { RectClip64, RectClipLines64 } from "./rectClip";
 
 export class Clipper {
-  private static invalidRect64: Rect64;
-
   public static get InvalidRect64(): Rect64 {
-    if (!Clipper.invalidRect64) Clipper.invalidRect64 = new Rect64(false);
-    return this.invalidRect64;
+    return new Rect64(false);
   }
 
   public static Intersect(subject: Paths64, clip: Paths64, fillRule: FillRule): Paths64 {
@@ -231,12 +228,12 @@ export class Clipper {
     let lastPt = path[0];
     result.push(lastPt);
     for (let i = 1; i < cnt; i++) {
-      if (lastPt !== path[i]) {
+      if (!pointsEqual64(lastPt, path[i])) {
         lastPt = path[i];
         result.push(lastPt);
       }
     }
-    if (isClosedPath && lastPt === result[0]) result.pop();
+    if (isClosedPath && result.length > 0 && pointsEqual64(lastPt, result[0])) result.pop();
     return result;
   }
 
@@ -268,7 +265,7 @@ export class Clipper {
     let idx = 0;
     let max_d = 0;
 
-    while (end > begin && path[begin] === path[end]) flags[end--] = false;
+    while (end > begin && pointsEqual64(path[begin], path[end])) flags[end--] = false;
     for (let i = begin + 1; i < end; i++) {
       const d = Clipper.perpendicDistFromLineSqrd(path[i], path[begin], path[end]);
       if (d > max_d) {
@@ -407,7 +404,7 @@ export class Clipper {
     }
 
     if (len - i < 3) {
-      if (!isOpen || len < 2 || path[0] === path[1]) return new Path64();
+      if (!isOpen || len < 2 || pointsEqual64(path[0], path[1])) return new Path64();
       return path;
     }
 

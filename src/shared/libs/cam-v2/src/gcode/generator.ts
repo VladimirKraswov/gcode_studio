@@ -12,7 +12,11 @@ import {
 import { fmt } from "./format";
 import { generateRampingPass } from "../toolpath/ramping";
 import { buildBridgeSpans, contourLength, isInsideAnyBridge, pointAtLength } from "../toolpath/bridges";
-import { logger } from "@/shared/utils/logger";
+
+const logger = {
+  info: (..._args: unknown[]) => {},
+  warn: (..._args: unknown[]) => {},
+};
 
 const EPS = 1e-6;
 
@@ -47,7 +51,6 @@ function emitLinearPath(points: Point3D[], feed: number): string[] {
     const prev = points[i - 1];
     const xPart = `X${fmt(point.x)}`;
     const yPart = `Y${fmt(point.y)}`;
-    // Only emit Z if it changed from the previous point in this segments sequence
     const zChanged =
       typeof point.z === "number" && (typeof prev.z !== "number" || Math.abs(point.z - prev.z) > EPS);
     const zPart = zChanged ? ` Z${fmt(point.z)}` : "";
@@ -97,7 +100,8 @@ function emitContourPass(
   toolpath: Toolpath,
   passZ: number,
   startZ: number,
-  machine: GCodeGeneratorInput["machine"]
+  machine: GCodeGeneratorInput["machine"],
+  spindleAlreadyRunning: boolean
 ): string[] {
   const lines: string[] = [];
   const path = toolpath.points;
@@ -107,19 +111,22 @@ function emitContourPass(
   lines.push(...emitMoveTo(base2D[0].x, base2D[0].y));
 
   if (toolpath.ramping?.enabled && toolpath.closed) {
-    lines.push(...emitToolStart(machine));
+    if (!spindleAlreadyRunning) {
+      lines.push(...emitToolStart(machine));
+    }
     const ramp = generateRampingPass(base2D, startZ, passZ, Math.max(1, toolpath.ramping.turns));
     lines.push(...emitLinearPath(ramp, machine.feedCut));
   } else {
-    lines.push(...emitCutStart(machine, passZ));
+    if (spindleAlreadyRunning) {
+      lines.push(`G1 Z${fmt(passZ)} F${fmt(machine.feedPlunge)}`);
+    } else {
+      lines.push(...emitCutStart(machine, passZ));
+    }
   }
 
   if (toolpath.tabs?.enabled && toolpath.closed) {
     lines.push(...emitClosedPathWithTabs(toolpath, passZ, toolpath.cutZ, machine.feedPlunge, machine.feedCut));
   } else {
-    // IMPORTANT: We must use passZ for all points in this contour pass.
-    // toolpath.points often contains Z=0 (from planning), which would
-    // cause G1 to move back to the surface if used directly.
     const pathAtZ = base2D.map((p) => ({ ...p, z: passZ }));
     lines.push(...emitLinearPath(pathAtZ, machine.feedCut));
 
@@ -133,18 +140,23 @@ function emitContourPass(
     }
   }
 
-  lines.push(...emitCutEnd(machine));
+  lines.push(...emitToolEnd(machine));
   return lines;
 }
 
-function emitPrebuilt3DPath(machine: GCodeGeneratorInput["machine"], toolpath: Toolpath): string[] {
+function emitPrebuilt3DPath(
+  machine: GCodeGeneratorInput["machine"],
+  toolpath: Toolpath,
+  spindleAlreadyRunning: boolean
+): string[] {
   const lines: string[] = [];
   const points = toolpath.points;
   if (points.length < 2) return lines;
 
   lines.push(...emitMoveTo(points[0].x, points[0].y));
-  lines.push(...emitToolStart(machine));
-  // Plunge to the first point's Z before starting linear segments
+  if (!spindleAlreadyRunning) {
+    lines.push(...emitToolStart(machine));
+  }
   lines.push(`G1 Z${fmt(points[0].z)} F${fmt(machine.feedPlunge)}`);
   lines.push(...emitLinearPath(points, machine.feedCut));
   lines.push(...emitToolEnd(machine));
@@ -156,12 +168,15 @@ export function generateGCode(input: GCodeGeneratorInput): string {
   const lines: string[] = [...emitProgramPreamble(machine)];
 
   let hasNegativeZ = false;
+  let spindleStarted = false;
 
   for (const toolpath of toolpaths) {
     if (!toolpath || toolpath.points.length < 2) continue;
 
     if (is3DPath(toolpath.points)) {
-      lines.push(...emitPrebuilt3DPath(machine, toolpath));
+      if (toolpath.points.some((p) => p.z < 0)) hasNegativeZ = true;
+      lines.push(...emitPrebuilt3DPath(machine, toolpath, spindleStarted));
+      spindleStarted = spindleStarted || !!machine.spindle?.enabled;
       continue;
     }
 
@@ -173,20 +188,20 @@ export function generateGCode(input: GCodeGeneratorInput): string {
 
     let previousZ = machine.safeZ;
     for (const passZ of passes) {
-      lines.push(...emitContourPass(toolpath, passZ, previousZ, machine));
+      lines.push(...emitContourPass(toolpath, passZ, previousZ, machine, spindleStarted));
+      spindleStarted = spindleStarted || !!machine.spindle?.enabled;
       previousZ = passZ;
     }
   }
 
   if (!hasNegativeZ && machine.units !== "inch") {
-    // Basic heuristic: for most jobs we expect some cutting below surface (Z < 0)
     logger.warn("GCODE", "No negative Z values found in toolpaths. Tool will not cut material surface.");
   }
 
   logger.info("GCODE", "G-code generation summary", {
     lines: lines.length,
     toolpaths: toolpaths.length,
-    hasNegativeZ
+    hasNegativeZ,
   });
 
   lines.push(...emitProgramPostamble(machine));
