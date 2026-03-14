@@ -48,7 +48,8 @@ export function buildPocketOffsets(
 
   const paths: Point[][] = [];
   let currentOffset = toolRadius;
-  const maxSafetyIter = 50;
+  const maxSafetyIter = 500;
+  let lastLoops: Point[][] = [];
 
   for (let i = 0; i < maxSafetyIter; i++) {
     // buildOffset uses +offset for OUTWARD.
@@ -56,22 +57,27 @@ export function buildPocketOffsets(
     const loops = buildOffset(base, -currentOffset, "round", 4);
     if (loops.length === 0) break;
     paths.push(...loops);
+    lastLoops = loops;
     currentOffset += stepover;
   }
 
   if (keepCenterCleanup) {
-    const c = centroid(base);
-    const d = 0.05;
-    const cleanupPath = [
-      { x: round(c.x - d), y: round(c.y - d) },
-      { x: round(c.x + d), y: round(c.y - d) },
-      { x: round(c.x + d), y: round(c.y + d) },
-      { x: round(c.x - d), y: round(c.y + d) },
-      { x: round(c.x - d), y: round(c.y - d) },
-    ];
-    // Only add if ALL points of cleanup path are inside the boundary
-    if (cleanupPath.every(p => pointInPolygon(p, base))) {
-       paths.push(cleanupPath);
+    const targets = lastLoops.length > 0 ? lastLoops : [base];
+    for (const loop of targets) {
+      const c = centroid(loop);
+      // Use a 0.5mm cleanup square (d=0.25) to ensure center coverage
+      const d = 0.25;
+      const cleanupPath = [
+        { x: round(c.x - d), y: round(c.y - d) },
+        { x: round(c.x + d), y: round(c.y - d) },
+        { x: round(c.x + d), y: round(c.y + d) },
+        { x: round(c.x - d), y: round(c.y + d) },
+        { x: round(c.x - d), y: round(c.y - d) },
+      ];
+      // Only add if ALL points of cleanup path are inside the boundary
+      if (cleanupPath.every(p => pointInPolygon(p, base))) {
+        paths.push(cleanupPath);
+      }
     }
   }
 
