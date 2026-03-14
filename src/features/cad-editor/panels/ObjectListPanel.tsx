@@ -17,6 +17,8 @@ import {
   FiType,
   FiSearch,
   FiHash,
+  FiFolder,
+  FiSave,
 } from "react-icons/fi";
 import type { SelectionState } from "../model/selection";
 import {
@@ -47,6 +49,8 @@ type ObjectListPanelProps = {
   onDeleteShape: (shapeId: string) => void;
   onDeleteConstraint?: (constraintId: string) => void;
   onReorderShapes: (orderedIds: string[]) => void;
+  onSaveProject?: () => void;
+  onLoadProject?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 };
 
 type ListItem =
@@ -474,6 +478,41 @@ export function ObjectListPanel({
 
   return (
     <div ref={rootRef} className="flex flex-col h-full overflow-hidden">
+      <div className="p-2 flex items-center justify-between border-b border-border bg-panel-muted/5">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted px-1">
+          {t("cad.objects.title")}
+        </div>
+        <div className="flex items-center gap-1">
+          {onLoadProject && (
+            <label className="cursor-pointer group">
+              <div
+                className="w-7 h-7 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-panel-muted transition-colors"
+                onMouseEnter={() => setHint(t("common.open"))}
+                onMouseLeave={() => setHint("")}
+              >
+                <FiFolder size={15} />
+              </div>
+              <input
+                type="file"
+                accept=".gs,application/json"
+                className="hidden"
+                onChange={onLoadProject}
+              />
+            </label>
+          )}
+          {onSaveProject && (
+            <button
+              onClick={onSaveProject}
+              className="w-7 h-7 flex items-center justify-center rounded-md text-text-muted hover:text-text hover:bg-panel-muted transition-colors"
+              onMouseEnter={() => setHint(t("common.save"))}
+              onMouseLeave={() => setHint("")}
+            >
+              <FiSave size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="p-1 border-b border-border bg-panel-muted/10">
         <Tabs
             tabs={[

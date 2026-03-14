@@ -9,10 +9,12 @@ import { StockSceneSection } from "@/features/preview/components/panels/StockSce
 import { FiFolder, FiSliders } from "react-icons/fi";
 import { ObjectListPanel } from "@/features/cad-editor";
 import type { SketchDocument } from "@/features/cad-editor/model/types";
+import { useProject } from "@/hooks/useProject";
 
 export function LeftPanelContainer() {
   const { t } = useTranslation();
   const { activeTab } = useUI();
+  const { saveProject, loadProject } = useProject();
   const {
     fileName,
     handleFileChange,
@@ -43,6 +45,8 @@ export function LeftPanelContainer() {
             document={editDocument}
             selection={selection}
             onSelectionChange={setSelection}
+            onSaveProject={saveProject}
+            onLoadProject={loadProject}
             onDeleteConstraint={deleteConstraintById}
             onRenameShape={(id, name) => {
               setEditDocument(prev => ({
@@ -92,8 +96,8 @@ export function LeftPanelContainer() {
         <FileProjectSection
           fileName={fileName}
           onFileChange={handleFileChange}
-          onProjectFileChange={() => {}}
-          onSaveProject={() => {}}
+          onProjectFileChange={loadProject}
+          onSaveProject={saveProject}
           onLoadDemo={() => {}}
           onResetCamera={resetCamera}
         />

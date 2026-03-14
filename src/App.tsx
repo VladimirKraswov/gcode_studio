@@ -1,4 +1,4 @@
-import { FiCode, FiEye, FiLoader, FiTool, FiTerminal } from "react-icons/fi";
+import { FiCode, FiEye, FiLoader, FiTool, FiTerminal, FiFolder } from "react-icons/fi";
 import { useTranslation } from "react-i18next";
 import { AppProvider } from "@/contexts/AppContext";
 import { useGCode } from "@/contexts/GCodeContext";
@@ -38,8 +38,11 @@ const TAB_META = {
   },
 };
 
+import { useProject } from "@/hooks/useProject";
+
 function AppContent() {
   const { t } = useTranslation();
+  const { loadProject } = useProject();
   const {
     parsed,
     isParsing,
@@ -83,12 +86,31 @@ function AppContent() {
             </p>
 
             {!isParsing && (
-              <input
-                type="file"
-                accept=".gcode,.nc,.tap,.txt"
-                onChange={handleFileChange}
-                className="ui-input"
-              />
+              <div className="space-y-3">
+                <input
+                  type="file"
+                  accept=".gcode,.nc,.tap,.txt"
+                  onChange={handleFileChange}
+                  className="ui-input"
+                />
+
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border/50" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted/50">или</span>
+                  <div className="h-px flex-1 bg-border/50" />
+                </div>
+
+                <label className="ui-button ui-button-outline w-full cursor-pointer flex items-center justify-center gap-2 py-3">
+                  <FiFolder size={18} />
+                  <span className="font-bold">{t("common.open_project")}</span>
+                  <input
+                    type="file"
+                    accept=".json,.gs"
+                    onChange={loadProject}
+                    className="hidden"
+                  />
+                </label>
+              </div>
             )}
           </div>
         </div>

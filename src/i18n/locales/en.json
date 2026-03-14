@@ -29,6 +29,7 @@
     "statistics": "Statistics",
     "upload_gcode": "Upload G-code",
     "open": "Open",
+    "open_project": "Open Project",
     "current_file": "Current File",
     "demo": "Demo",
     "camera": "Camera",
@@ -292,6 +293,7 @@
       "pass_depth": "Pass Depth (Stepdown)"
     },
     "objects": {
+      "title": "Objects",
       "tabs": {
         "objects": "Objects",
         "constraints": "Constraints"

@@ -29,6 +29,7 @@
     "statistics": "Статистика",
     "upload_gcode": "Загрузить G-code",
     "open": "Открыть",
+    "open_project": "Открыть проект",
     "current_file": "Текущий файл",
     "demo": "Демо",
     "camera": "Камера",
@@ -292,6 +293,7 @@
       "pass_depth": "Шаг по Z (Pass depth)"
     },
     "objects": {
+      "title": "Объекты",
       "tabs": {
         "objects": "Объекты",
         "constraints": "Ограничения"
