@@ -7,10 +7,6 @@ export type CadPoint = {
 
 const EPS = 1e-9;
 
-function round(value: number): number {
-  return Number(value.toFixed(6));
-}
-
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }

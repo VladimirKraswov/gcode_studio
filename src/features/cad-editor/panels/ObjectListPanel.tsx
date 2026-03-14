@@ -180,6 +180,8 @@ export function ObjectListPanel({
   onDeleteShape,
   onDeleteConstraint = () => {},
   onReorderShapes,
+  onSaveProject,
+  onLoadProject,
 }: ObjectListPanelProps) {
   const { t } = useTranslation();
   const getConstraintLabel = useConstraintLabel();

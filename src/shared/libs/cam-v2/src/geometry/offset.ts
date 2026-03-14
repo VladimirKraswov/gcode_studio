@@ -174,7 +174,6 @@ function rawOffsetLoop(
     const s1a = add(pPrev, mul(n1, offset));
     const s1b = add(pCurr, mul(n1, offset));
     const s2a = add(pCurr, mul(n2, offset));
-    const s2b = add(pNext, mul(n2, offset));
 
     const hit = lineIntersection(s1a, v1, s2a, v2);
 
@@ -275,7 +274,7 @@ function buildGraph(segments: Segment[]) {
   return { nodes, edges, outgoing };
 }
 
-function traceFace(startIdx: number, nodes: Node[], edges: DirectedEdge[], outgoing: number[][]) {
+function traceFace(startIdx: number, _nodes: Node[], edges: DirectedEdge[], outgoing: number[][]) {
   const cycle: number[] = [];
   let currIdx = startIdx;
   const startNode = edges[startIdx].from;

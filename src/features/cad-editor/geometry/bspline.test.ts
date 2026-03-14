@@ -86,14 +86,16 @@ describe('BSpline Geometry', () => {
     };
 
     const sampled = sampleBSpline(shape, points, 100);
+    let foundHighPrecision = false;
     for (const p of sampled) {
         const sX = p.x.toString();
         const sY = p.y.toString();
         // Check if we have more than 3 decimal places (if not exactly round)
-        if (sX.includes('.') && sX.split('.')[1].length > 3) return;
-        if (sY.includes('.') && sY.split('.')[1].length > 3) return;
+        if (sX.includes('.') && sX.split('.')[1].length > 3) foundHighPrecision = true;
+        if (sY.includes('.') && sY.split('.')[1].length > 3) foundHighPrecision = true;
+        if (foundHighPrecision) break;
     }
-    // Note: If all points happen to be round, this test might be weak,
-    // but typically B-spline evaluation produces many decimals.
+
+    expect(foundHighPrecision).toBe(true);
   });
 });
